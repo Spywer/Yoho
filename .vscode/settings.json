@@ -1,0 +1,21 @@
+{
+  "java.jdt.ls.java.home": "C:\\Program Files\\Android\\Android Studio\\jbr",
+  "java.import.gradle.java.home": "C:\\Program Files\\Android\\Android Studio\\jbr",
+  "java.configuration.runtimes": [
+    {
+      "name": "JavaSE-25",
+      "path": "C:\\Program Files\\Android\\Android Studio\\jbr",
+      "default": true
+    },
+    {
+      "name": "JavaSE-24",
+      "path": "C:\\Program Files\\Java\\jdk-24"
+    }
+  ],
+  "java.configuration.checkProjectSettingsExclusions": false,
+  "java.compile.nullAnalysis.mode": "disabled",
+  "java.import.gradle.wrapper.enabled": true,
+  "terminal.integrated.env.windows": {
+    "JAVA_HOME": "C:\\Program Files\\Android\\Android Studio\\jbr"
+  }
+}

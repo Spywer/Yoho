@@ -1,0 +1,2911 @@
+openapi: 3.1.0
+info:
+  title: YoHo API
+  description: |
+    Программный интерфейс каталога аудиовизуального контента YoHo.
+    База: более 1 677 921 единицы контента с метаданными из Kinopoisk, TMDB, IMDb, Rotten Tomatoes.
+  version: 0.1.41
+  contact:
+    name: YoHo API Support
+    email: reyoho@proton.me
+  license:
+    name: MIT
+
+servers:
+  - url: https://reyoho.com
+    description: Основной сервер
+  - url: https://reyoho.ru
+    description: Зеркало
+
+tags:
+  - name: auth
+  - name: profile
+  - name: films
+  - name: series
+  - name: search
+  - name: trending
+  - name: trailers
+  - name: collections
+  - name: comments
+  - name: ratings
+  - name: diary
+  - name: favorites
+  - name: sync
+  - name: wishlist
+  - name: history
+  - name: marathon
+  - name: calendar
+  - name: players
+  - name: images
+  - name: badges
+  - name: ideas
+  - name: warmup
+  - name: statistics
+
+security:
+  - cookieAuth: []
+
+paths:
+  # ============================================================
+  # AUTH
+  # ============================================================
+  /api/auth/sign-in/email:
+    post:
+      tags: [auth]
+      summary: Вход по email/паролю
+      operationId: signInEmail
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string, format: email }
+                password: { type: string, format: password, minLength: 8 }
+                callbackURL: { type: string }
+      responses:
+        '200':
+          description: Успешный вход
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
+                example: "yoho_session=...; Path=/; HttpOnly; SameSite=None; Secure"
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AuthResponse' }
+        '401':
+          description: Неверный email или пароль
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              example: { message: "Invalid email or password", code: "INVALID_EMAIL_OR_PASSWORD" }
+
+  /api/auth/sign-up/email:
+    post:
+      tags: [auth]
+      summary: Регистрация
+      operationId: signUpEmail
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password, username]
+              properties:
+                email: { type: string, format: email }
+                password: { type: string, minLength: 8 }
+                username: { type: string, minLength: 3, maxLength: 32, pattern: '^[a-zA-Z0-9_]+$' }
+                name: { type: string }
+      responses:
+        '201':
+          description: Создано
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AuthResponse' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /api/auth/sign-in/{provider}:
+    post:
+      tags: [auth]
+      summary: OAuth (Twitch/Kick/Google)
+      operationId: signInSocial
+      parameters:
+        - name: provider
+          in: path
+          required: true
+          schema: { type: string, enum: [twitch, kick, google] }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                callbackURL: { type: string }
+      responses:
+        '200': { description: Редирект на провайдера }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /api/auth/sign-out:
+    post:
+      tags: [auth]
+      summary: Выход
+      operationId: signOut
+      responses:
+        '200': { description: Успешный выход }
+
+  /api/auth/session:
+    get:
+      tags: [auth]
+      summary: Текущая сессия (legacy)
+      operationId: getSession
+      responses:
+        '200':
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Session' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /api/auth/get-session:
+    get:
+      tags: [auth]
+      summary: Текущая сессия (Better Auth)
+      operationId: authGetSession
+      description: Без cookie — 200 с пустым/null body.
+      responses:
+        '200':
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Session' }
+
+  /api/auth/forgot-password:
+    post:
+      tags: [auth]
+      summary: Запрос сброса пароля
+      operationId: forgotPassword
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email: { type: string, format: email }
+                redirectTo: { type: string }
+      responses:
+        '200': { description: Письмо отправлено }
+
+  /api/auth/reset-password:
+    post:
+      tags: [auth]
+      summary: Сброс пароля по токену
+      operationId: resetPassword
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token, newPassword]
+              properties:
+                token: { type: string }
+                newPassword: { type: string, minLength: 8 }
+      responses:
+        '200': { description: Пароль изменён }
+
+  /api/auth/verify-email:
+    get:
+      tags: [auth]
+      summary: Подтверждение email
+      operationId: verifyEmail
+      parameters:
+        - name: token
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: Email подтверждён }
+
+  # ============================================================
+  # PROFILE
+  # ============================================================
+  /api/profile/me:
+    get:
+      tags: [profile]
+      summary: Текущий пользователь
+      operationId: getCurrentProfile
+      responses:
+        '200':
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Profile' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    patch:
+      tags: [profile]
+      summary: Обновить профиль
+      operationId: updateProfile
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                display_name: { type: string }
+                bio: { type: string }
+                is_private: { type: boolean }
+      responses:
+        '200': { description: Обновлено }
+
+  /api/profile/{username}:
+    get:
+      tags: [profile]
+      summary: Публичный профиль
+      operationId: getProfile
+      parameters:
+        - name: username
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Profile' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /api/profile/{username}/films:
+    get:
+      tags: [profile]
+      summary: Оценки пользователя
+      operationId: getUserFilms
+      parameters:
+        - name: username
+          in: path
+          required: true
+          schema: { type: string }
+        - $ref: '#/components/parameters/PageParam'
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/UserRating' }
+
+  /api/profile/{username}/diary:
+    get:
+      tags: [profile]
+      summary: Дневник пользователя
+      operationId: getUserDiary
+      parameters:
+        - name: username
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/DiaryEntry' }
+
+  /api/profile/{username}/activity:
+    get:
+      tags: [profile]
+      summary: Лента активности
+      operationId: getUserActivity
+      parameters:
+        - name: username
+          in: path
+          required: true
+          schema: { type: string }
+        - $ref: '#/components/parameters/PageParam'
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/ActivityItem' }
+
+  /api/profile/{username}/friends:
+    get:
+      tags: [profile]
+      summary: Друзья/подписки
+      operationId: getUserFriends
+      parameters:
+        - name: username
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  followers: { type: array, items: { $ref: '#/components/schemas/UserShort' } }
+                  following: { type: array, items: { $ref: '#/components/schemas/UserShort' } }
+
+  # ============================================================
+  # FILMS
+  # ============================================================
+  /api/films:
+    get:
+      tags: [films]
+      summary: Список фильмов
+      operationId: listFilms
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/LimitParam'
+        - name: genre
+          in: query
+          schema: { $ref: '#/components/schemas/GenreSlug' }
+        - name: country
+          in: query
+          schema: { $ref: '#/components/schemas/CountryCode' }
+        - name: year
+          in: query
+          schema: { type: integer }
+        - name: sort
+          in: query
+          schema: { $ref: '#/components/schemas/SortOption' }
+        - name: order
+          in: query
+          schema: { $ref: '#/components/schemas/SortOrder' }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/FilmListResponse' }
+
+  /api/films/{id}:
+    get:
+      tags: [films]
+      summary: Детали фильма
+      operationId: getFilm
+      parameters:
+        - $ref: '#/components/parameters/FilmIdParam'
+      responses:
+        '200':
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Film' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /api/films/{id}/timings:
+    get:
+      tags: [films]
+      summary: Тайминги фильма
+      operationId: getFilmTimings
+      parameters:
+        - $ref: '#/components/parameters/FilmIdParam'
+      responses:
+        '200':
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TimingsResponse' }
+    post:
+      tags: [films]
+      summary: Добавить тайминг
+      operationId: addFilmTiming
+      parameters:
+        - $ref: '#/components/parameters/FilmIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [timestamp, type]
+              properties:
+                timestamp: { type: string, pattern: '^HH:MM:SS$' }
+                type: { type: string, enum: [explicit, violence, scene] }
+                description: { type: string }
+                spoiler: { type: boolean, default: false }
+      responses:
+        '201': { description: Тайминг добавлен }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /api/film/watchers:
+    get:
+      tags: [films]
+      summary: Зрители тайтла с их оценками
+      description: Возвращает список пользователей, которые оценили тайтл, с их реакциями и статусами
+      operationId: getFilmWatchers
+      parameters:
+        - name: tmdbId
+          in: query
+          required: true
+          schema: { type: integer }
+        - name: kinopoiskId
+          in: query
+          required: true
+          schema: { type: integer }
+        - name: mediaType
+          in: query
+          required: true
+          schema: { $ref: '#/components/schemas/ContentMediaType' }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WatchersResponse' }
+
+  # ============================================================
+  # SERIES
+  # ============================================================
+  /api/series:
+    get:
+      tags: [series]
+      summary: Список сериалов
+      operationId: listSeries
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/LimitParam'
+        - name: genre
+          in: query
+          schema: { $ref: '#/components/schemas/GenreSlug' }
+        - name: status
+          in: query
+          schema: { $ref: '#/components/schemas/SeriesStatus' }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SeriesListResponse' }
+
+  /api/series/{id}:
+    get:
+      tags: [series]
+      summary: Детали сериала
+      operationId: getSeries
+      parameters:
+        - $ref: '#/components/parameters/SeriesIdParam'
+      responses:
+        '200':
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Series' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /api/series/{id}/seasons:
+    get:
+      tags: [series]
+      summary: Сезоны сериала
+      operationId: getSeriesSeasons
+      parameters:
+        - $ref: '#/components/parameters/SeriesIdParam'
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Season' }
+
+  /api/series/{id}/seasons/{seasonNumber}:
+    get:
+      tags: [series]
+      summary: Эпизоды сезона
+      operationId: getSeasonEpisodes
+      parameters:
+        - $ref: '#/components/parameters/SeriesIdParam'
+        - name: seasonNumber
+          in: path
+          required: true
+          schema: { type: integer, minimum: 1 }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Season' }
+
+  /api/tv-schedule:
+    get:
+      tags: [series]
+      summary: Полное расписание серий сериала
+      description: Возвращает детальное расписание всех сезонов и эпизодов. Эпизоды отсортированы от новых к старым.
+      operationId: getTvSchedule
+      parameters:
+        - name: tmdbId
+          in: query
+          required: true
+          schema: { type: integer }
+        - name: kinopoiskId
+          in: query
+          schema: { type: integer }
+        - name: release
+          in: query
+          description: "Флаг 1 для включения данных о релизах и платформах"
+          schema: { type: integer, enum: [0, 1] }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TvScheduleResponse' }
+
+  /api/tv-last-air:
+    get:
+      tags: [series]
+      summary: Последняя вышедшая серия сериала
+      operationId: getTvLastAir
+      parameters:
+        - name: tmdbId
+          in: query
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TvLastAirResponse' }
+
+  /api/tv-last-air/batch:
+    post:
+      tags: [series]
+      summary: Батч последних серий для нескольких сериалов
+      description: Возвращает информацию о последней вышедшей серии и следующем эпизоде для списка сериалов
+      operationId: getTvLastAirBatch
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [tmdbIds]
+              properties:
+                tmdbIds:
+                  type: array
+                  items: { type: integer }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TvLastAirBatchResponse' }
+
+  # ============================================================
+  # SEARCH
+  # ============================================================
+  /api/search:
+    get:
+      tags: [search]
+      summary: Поиск с фильтрами
+      description: |
+        Основной эндпоинт поиска. Параметры в CSV-формате через запятую.
+        Страны — ISO 3166-1 alpha-2 (GB, AU, US, RU).
+        Типы: movie, tv, anime, animation.
+      operationId: searchApi
+      parameters:
+        - name: q
+          in: query
+          schema: { type: string }
+        - name: type
+          in: query
+          schema: { $ref: '#/components/schemas/ContentTypeFilter' }
+        - name: genres
+          in: query
+          description: CSV-формат (через запятую)
+          schema: { type: string }
+          style: form
+          explode: false
+        - name: country
+          in: query
+          description: ISO 3166-1 alpha-2 коды через запятую
+          schema: { type: string }
+          style: form
+          explode: false
+        - name: region
+          in: query
+          schema: { $ref: '#/components/schemas/RegionFilter' }
+          style: form
+          explode: false
+        - name: year_from
+          in: query
+          schema: { type: integer, minimum: 1900, maximum: 2030 }
+        - name: year_to
+          in: query
+          schema: { type: integer, minimum: 1900, maximum: 2030 }
+        - name: rating_min
+          in: query
+          schema: { type: number, minimum: 0, maximum: 10 }
+        - name: rating_max
+          in: query
+          schema: { type: number, minimum: 0, maximum: 10 }
+        - name: sort
+          in: query
+          schema: { $ref: '#/components/schemas/SortOption' }
+        - name: sort_order
+          in: query
+          schema: { $ref: '#/components/schemas/SortOrder' }
+        - name: language
+          in: query
+          schema: { type: string, enum: [ru, en, original, any] }
+        - name: only_with_player
+          in: query
+          schema: { type: boolean, default: false }
+        - name: exclude_watched
+          in: query
+          schema: { type: boolean, default: false }
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/LimitParam'
+      responses:
+        '200':
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SearchResponse' }
+
+  /api/search/suggest:
+    get:
+      tags: [search]
+      summary: Автодополнение
+      operationId: searchSuggest
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 10 }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/SearchSuggestion' }
+
+  /api/search/facets:
+    get:
+      tags: [search]
+      summary: Доступные значения фильтров
+      operationId: getSearchFacets
+      responses:
+        '200':
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SearchFacets' }
+
+  /api/search/regions:
+    get:
+      tags: [search]
+      summary: Маппинг регионов на страны
+      operationId: getRegionMapping
+      responses:
+        '200':
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RegionMapping' }
+
+  /api/search/filters:
+    get:
+      tags: [search]
+      summary: Полный каталог фильтров для поиска
+      description: |
+        Возвращает полный каталог доступных фильтров: типы контента (kinds),
+        теги (subgenre/adjective/keyword), платформы и студии-производители.
+      operationId: getSearchFilters
+      responses:
+        '200':
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SearchFiltersResponse' }
+
+  /api/search/recent:
+    get:
+      tags: [search]
+      summary: Недавние поиски и добавления
+      operationId: getRecentSearches
+      responses:
+        '200':
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RecentResponse' }
+
+  /api/search/discover:
+    get:
+      tags: [search]
+      summary: Обнаружение контента (рекомендации)
+      operationId: discoverContent
+      parameters:
+        - name: source
+          in: query
+          schema:
+            type: string
+            enum: [catalog, trending, popular]
+            default: catalog
+        - name: type
+          in: query
+          description: |
+            CSV-список типов контента.
+            Доступные: movie, series, mini_series, cartoon, anime, tv_show, short
+          schema: { type: string }
+          style: form
+          explode: false
+        - $ref: '#/components/parameters/LimitParam'
+      responses:
+        '200':
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DiscoverResponse' }
+
+  # ============================================================
+  # TRENDING
+  # ============================================================
+  /api/trending:
+    get:
+      tags: [trending]
+      summary: Трендовые и популярные тайтлы
+      description: |
+        Возвращает список трендовых/популярных тайтлов.
+        
+        **Фильтры:**
+        - без параметра: общий тренд (movie + tv)
+        - `movie`: трендовые фильмы (свежие)
+        - `popular_movie`: популярные фильмы (по рейтингу/голосам)
+        - `tv`: трендовые сериалы
+        - `popular_tv`: популярные сериалы
+        - `animation`: трендовая анимация (movie + tv)
+        - `popular_animation`: популярная анимация
+      operationId: getTrending
+      parameters:
+        - name: filter
+          in: query
+          schema: { $ref: '#/components/schemas/TrendingFilter' }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TrendingResponse' }
+
+  # ============================================================
+  # TRAILERS
+  # ============================================================
+  /api/latest-trailers:
+    get:
+      tags: [trailers]
+      summary: Последние трейлеры
+      operationId: getLatestTrailers
+      parameters:
+        - name: start
+          in: query
+          description: Индекс для пагинации (из предыдущего ответа `nextStart`)
+          schema: { type: integer, default: 0 }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 6 }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TrailerListResponse' }
+
+  # ============================================================
+  # RANDOMIZER
+  # ============================================================
+  /api/getlucky:
+    post:
+      tags: [search]
+      summary: Рандомайзер
+      operationId: getRandomFilm
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RandomizerRequest' }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RandomizerResponse' }
+
+  # ============================================================
+  # COLLECTIONS
+  # ============================================================
+  /api/collections/counters:
+    get:
+      tags: [collections]
+      summary: Счётчики для навигации
+      operationId: getCollectionCounters
+      responses:
+        '200':
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CollectionCounters' }
+
+  /api/collections/movies:
+    get:
+      tags: [collections]
+      summary: Коллекции фильмов
+      operationId: getMovieCollections
+      parameters:
+        - name: type
+          in: query
+          schema: { type: string, enum: [best, genre, country, year] }
+        - name: value
+          in: query
+          schema: { type: string }
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/LimitParam'
+      responses:
+        '200':
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/FilmListResponse' }
+
+  /api/collections/tv:
+    get:
+      tags: [collections]
+      summary: Коллекции сериалов
+      operationId: getTvCollections
+      parameters:
+        - name: type
+          in: query
+          schema: { type: string, enum: [best, genre, country, year] }
+        - name: value
+          in: query
+          schema: { type: string }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SeriesListResponse' }
+
+  /api/collections/franchises:
+    get:
+      tags: [collections]
+      summary: Франшизы
+      operationId: getFranchises
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Franchise' }
+
+  /api/collections/marvel:
+    get:
+      tags: [collections]
+      summary: Marvel по хронологии
+      operationId: getMarvelChronology
+      responses:
+        '200':
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MarvelChronology' }
+
+  /api/collections/anime-top:
+    get:
+      tags: [collections]
+      summary: Топ-100 аниме
+      operationId: getAnimeTop
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Series' }
+
+  # ============================================================
+  # COMMENTS
+  # ============================================================
+  /api/{type}/{id}/comments:
+    get:
+      tags: [comments]
+      summary: Комментарии к тайтлу
+      operationId: getComments
+      parameters:
+        - $ref: '#/components/parameters/ContentTypeParam'
+        - $ref: '#/components/parameters/ContentIdParam'
+        - $ref: '#/components/parameters/PageParam'
+      responses:
+        '200':
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CommentListResponse' }
+    post:
+      tags: [comments]
+      summary: Добавить комментарий
+      operationId: addComment
+      parameters:
+        - $ref: '#/components/parameters/ContentTypeParam'
+        - $ref: '#/components/parameters/ContentIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [text]
+              properties:
+                text: { type: string, maxLength: 2000 }
+                spoiler: { type: boolean, default: false }
+                parent_id: { type: string }
+      responses:
+        '201':
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Comment' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /api/comments/{id}/react:
+    post:
+      tags: [comments]
+      summary: Emoji-реакция
+      operationId: reactToComment
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reaction]
+              properties:
+                reaction:
+                  type: string
+                  enum: [laugh, poop, clown, fire, heart]
+                  description: "laugh=😂, poop=💩, clown=🤡, fire=🔥, heart=❤️"
+                remove: { type: boolean, default: false }
+      responses:
+        '200': { description: Реакция обновлена }
+
+  # ============================================================
+  # RATINGS
+  # ============================================================
+  /api/{type}/{id}/rate:
+    post:
+      tags: [ratings]
+      summary: Поставить оценку
+      operationId: rateContent
+      parameters:
+        - $ref: '#/components/parameters/ContentTypeParam'
+        - $ref: '#/components/parameters/ContentIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [rating]
+              properties:
+                rating: { type: number, minimum: 1, maximum: 10 }
+                review: { type: string, maxLength: 5000 }
+                spoiler: { type: boolean }
+      responses:
+        '200': { description: Оценка сохранена }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    delete:
+      tags: [ratings]
+      summary: Удалить оценку
+      operationId: deleteRating
+      parameters:
+        - $ref: '#/components/parameters/ContentTypeParam'
+        - $ref: '#/components/parameters/ContentIdParam'
+      responses:
+        '204': { description: Удалено }
+
+  /api/ratings:
+    get:
+      tags: [ratings]
+      summary: Все оценки текущего пользователя
+      description: Возвращает список всех оценок, поставленных текущим авторизованным пользователем
+      operationId: getUserRatings
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ratings:
+                    type: array
+                    items: { $ref: '#/components/schemas/UserRating' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  # ============================================================
+  # FILM INFO (карточка тайтла)
+  # ============================================================
+  /api/film-info:
+    get:
+      tags: [films]
+      summary: Метаданные тайтла (как на /film|/series)
+      operationId: filmInfo
+      parameters:
+        - name: kinopoiskId
+          in: query
+          schema: { type: integer }
+        - name: tmdbId
+          in: query
+          schema: { type: integer }
+        - name: mediaType
+          in: query
+          schema: { type: string, enum: [movie, tv, anime] }
+      responses:
+        '200':
+          description: details + related + recommendations + …
+          content:
+            application/json:
+              schema: { type: object }
+
+  /api/person/{id}:
+    get:
+      tags: [films]
+      summary: Персона Kinopoisk
+      operationId: person
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema: { type: object }
+
+  # ============================================================
+  # DIARY (reyoho.com — statusLabel на русском)
+  # ============================================================
+  /api/diary:
+    post:
+      tags: [diary]
+      summary: Добавить / обновить статус в дневнике
+      operationId: addToDiary
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [itemId, href, title, mediaType, statusLabel]
+              properties:
+                itemId: { type: string, example: "kp:5512084" }
+                href: { type: string, example: "/series/5512084" }
+                title: { type: string }
+                year: { type: string, example: "2025" }
+                mediaType: { type: string, enum: [movie, tv, anime] }
+                sourceReaction: { type: string, example: manual }
+                statusLabel:
+                  type: string
+                  description: Русская метка статуса UI
+                  example: Хочу посмотреть
+                updateStatusIfItemExists: { type: boolean, default: true }
+      responses:
+        '201':
+          description: Создано/обновлено
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  entry: { $ref: '#/components/schemas/DiaryEntry' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    delete:
+      tags: [diary]
+      summary: Убрать из дневника
+      operationId: removeFromDiary
+      parameters:
+        - name: itemId
+          in: query
+          required: true
+          schema: { type: string, example: "kp:6553387" }
+      responses:
+        '200':
+          description: Удалено
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  removed: { type: boolean }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /api/diary/contains:
+    get:
+      tags: [diary]
+      summary: Есть ли тайтл в дневнике
+      operationId: diaryContains
+      parameters:
+        - name: itemId
+          in: query
+          required: true
+          schema: { type: string, example: "kp:5512084" }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  inDiary: { type: boolean }
+                  statusLabel: { type: string, nullable: true }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  # ============================================================
+  # FAVORITES / ACTIVITY / SYNC
+  # ============================================================
+  /api/me/activity:
+    post:
+      tags: [favorites]
+      summary: Избранное (addFavorite / removeFavorite)
+      operationId: meActivity
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [op, item]
+              properties:
+                op: { type: string, enum: [addFavorite, removeFavorite] }
+                item: { $ref: '#/components/schemas/ActivityItem' }
+      responses:
+        '204': { description: OK }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /api/sync:
+    get:
+      tags: [sync]
+      summary: Избранное + история просмотров
+      operationId: syncShelves
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  favorites:
+                    type: array
+                    items: { $ref: '#/components/schemas/FavoriteItem' }
+                  watchHistory:
+                    type: array
+                    items: { $ref: '#/components/schemas/FavoriteItem' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  # ============================================================
+  # WISHLIST
+  # ============================================================
+  /api/wishlist:
+    get:
+      tags: [wishlist]
+      summary: Вишлист
+      operationId: getWishlist
+      parameters:
+        - name: f
+          in: query
+          description: Base64-encoded JSON фильтр
+          schema: { type: string }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/WishlistItem' }
+    post:
+      tags: [wishlist]
+      summary: Добавить в вишлист
+      operationId: addToWishlist
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [content_id, content_type]
+              properties:
+                content_id: { type: integer }
+                content_type: { $ref: '#/components/schemas/ContentMediaType' }
+      responses:
+        '201': { description: Добавлено }
+
+  # ============================================================
+  # HISTORY
+  # ============================================================
+  /api/history:
+    get:
+      tags: [history]
+      summary: История просмотров
+      operationId: getHistory
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/LimitParam'
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/HistoryItem' }
+    post:
+      tags: [history]
+      summary: Добавить в историю
+      operationId: addToHistory
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [content_id, content_type]
+              properties:
+                content_id: { type: integer }
+                content_type: { $ref: '#/components/schemas/ContentMediaType' }
+                progress:
+                  type: object
+                  properties:
+                    percentage: { type: integer, minimum: 0, maximum: 100 }
+                    season: { type: integer }
+                    episode: { type: integer }
+      responses:
+        '201': { description: Добавлено }
+
+  # ============================================================
+  # MARATHON
+  # ============================================================
+  /api/marathon:
+    get:
+      tags: [marathon]
+      summary: Текущий марафон
+      operationId: getMarathon
+      responses:
+        '200':
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Marathon' }
+
+  /api/marathon/progress:
+    get:
+      tags: [marathon]
+      summary: Прогресс пользователя
+      operationId: getMarathonProgress
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  completed_count: { type: integer }
+                  current_position: { type: integer }
+                  completed_items: { type: array, items: { type: integer } }
+
+  /api/marathon/items/{position}/complete:
+    post:
+      tags: [marathon]
+      summary: Отметить позицию как просмотренную
+      operationId: completeMarathonItem
+      parameters:
+        - name: position
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '200': { description: Отмечено }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  # ============================================================
+  # CALENDAR
+  # ============================================================
+  /api/calendar:
+    get:
+      tags: [calendar]
+      summary: Календарь выхода серий
+      operationId: getCalendar
+      parameters:
+        - name: month
+          in: query
+          schema: { type: string, format: date-time }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/CalendarItem' }
+
+  # ============================================================
+  # PLAYERS
+  # ============================================================
+  /api/player/{type}/{id}:
+    get:
+      tags: [players]
+      summary: Источники видео для тайтла
+      operationId: getPlayerSources
+      parameters:
+        - $ref: '#/components/parameters/ContentTypeParam'
+        - $ref: '#/components/parameters/ContentIdParam'
+      responses:
+        '200':
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PlayerResponse' }
+
+  /api/player-config:
+    get:
+      tags: [players]
+      summary: Конфигурация плеера и проверка доступности
+      description: Возвращает 451 для тайтлов, удалённых по DMCA
+      operationId: getPlayerConfig
+      parameters:
+        - name: kinopoiskId
+          in: query
+          required: true
+          schema: { type: integer }
+        - name: mediaType
+          in: query
+          required: true
+          schema: { $ref: '#/components/schemas/ContentMediaType' }
+      responses:
+        '200':
+          description: Плеер доступен
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  available: { type: boolean }
+                  primaryPlayer: { type: string }
+                  qualities:
+                    type: array
+                    items: { type: string }
+                  dubs:
+                    type: array
+                    items: { type: string }
+                  iframe_url: { type: string }
+        '451':
+          description: Недоступен по юридическим причинам
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error: { type: string, enum: [taken_down] }
+
+  /api/player-choice:
+    get:
+      tags: [players]
+      summary: Статистика выбора плееров для конкретного тайтла
+      description: |
+        Используется для автоматического выбора самого популярного плеера
+        среди пользователей, смотревших этот тайтл
+      operationId: getPlayerChoice
+      parameters:
+        - name: itemId
+          in: query
+          required: true
+          description: "Идентификатор в формате {source}:{id}. Примеры: kp:111543, tmdb:155"
+          schema:
+            type: string
+            pattern: '^(kp|tmdb|imdb):\d+$'
+      responses:
+        '200':
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PlayerChoiceResponse' }
+        '400':
+          description: Неверный формат itemId
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  # ============================================================
+  # IMAGES
+  # ============================================================
+  /api/img/t/p/w{size}/{path}:
+    get:
+      tags: [images]
+      summary: Прокси постеров TMDB
+      operationId: getTmdbImage
+      parameters:
+        - name: size
+          in: path
+          required: true
+          schema: { type: string, enum: [w45, w185, w300, w500, w780, w1280] }
+        - name: path
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          content:
+            image/jpeg:
+              schema: { type: string, format: binary }
+
+  /api/img/kp-mds/get-kinopoisk-image/{id}/{hash}/{size}:
+    get:
+      tags: [images]
+      summary: Прокси постеров Кинопоиска
+      operationId: getKinopoiskImage
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+        - name: hash
+          in: path
+          required: true
+          schema: { type: string }
+        - name: size
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          content:
+            image/jpeg:
+              schema: { type: string, format: binary }
+
+  /api/img/kp/posters/kp_small/{id}.jpg:
+    get:
+      tags: [images]
+      summary: Маленький постер Кинопоиска
+      operationId: getKinopoiskSmallPoster
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          content:
+            image/jpeg:
+              schema: { type: string, format: binary }
+
+  /api/profile/avatar/{id}:
+    get:
+      tags: [images]
+      summary: Аватар пользователя
+      operationId: getUserAvatar
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+        - name: v
+          in: query
+          schema: { type: integer }
+      responses:
+        '200':
+          content:
+            image/webp:
+              schema: { type: string, format: binary }
+
+  /api/og/title:
+    get:
+      tags: [images]
+      summary: Динамическое OG-изображение
+      operationId: getOgImage
+      parameters:
+        - name: kind
+          in: query
+          required: true
+          schema: { type: string, enum: [film, series, profile] }
+        - name: id
+          in: query
+          required: true
+          schema: { type: integer }
+        - name: v
+          in: query
+          schema: { type: integer }
+      responses:
+        '200':
+          content:
+            image/png:
+              schema: { type: string, format: binary }
+
+  /emoji/{code}.svg:
+    get:
+      tags: [images]
+      summary: Эмодзи для реакций
+      operationId: getEmoji
+      parameters:
+        - name: code
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [1f602, 1f4a9, 1f921, 1f525, 2764_fe0f]
+      responses:
+        '200':
+          content:
+            image/svg+xml:
+              schema: { type: string, format: binary }
+
+  # ============================================================
+  # BADGES
+  # ============================================================
+  /api/badges/public:
+    get:
+      tags: [badges]
+      summary: Публичные счётчики
+      operationId: getPublicBadges
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ideas: { type: integer }
+                  dubs: { type: integer }
+
+  /api/badges/{username}:
+    get:
+      tags: [badges]
+      summary: Бейджи пользователя
+      operationId: getUserBadges
+      parameters:
+        - name: username
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/UserBadges' }
+
+  # ============================================================
+  # IDEAS
+  # ============================================================
+  /api/ideas:
+    get:
+      tags: [ideas]
+      summary: Идеи сообщества
+      operationId: getIdeas
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Idea' }
+    post:
+      tags: [ideas]
+      summary: Предложить идею
+      operationId: createIdea
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [title, description]
+              properties:
+                title: { type: string, maxLength: 100 }
+                description: { type: string, maxLength: 2000 }
+      responses:
+        '201': { description: Идея создана }
+
+  # ============================================================
+  # STATISTICS
+  # ============================================================
+  /api/seen-film:
+    get:
+      tags: [statistics]
+      summary: Глобальная статистика просмотров по плеерам
+      description: Возвращает агрегированную статистику использования видеоплееров по всему сайту
+      operationId: getSeenFilmStats
+      responses:
+        '200':
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PlayerStatsResponse' }
+
+  # ============================================================
+  # WARMUP (SERVICE)
+  # ============================================================
+  /api/warm/cards:
+    post:
+      tags: [warmup]
+      summary: Прогрев RSC-кеша карточек
+      description: Сервисный эндпоинт для предварительного прогрева RSC-кеша Next.js при prefetch
+      operationId: warmCards
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [paths]
+              properties:
+                paths:
+                  type: array
+                  items:
+                    type: string
+                    pattern: '^/(film|series|movie)/\d+$'
+      responses:
+        '200':
+          description: Результат прогрева
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WarmCardsResponse' }
+
+  /api/player-tags/posters:
+    post:
+      tags: [warmup]
+      summary: Теги качества для бейджей карточек
+      description: Возвращает теги качества (camrip, dub, ads и др.) для отрисовки бейджей
+      operationId: getPlayerTags
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [itemIds]
+              properties:
+                itemIds:
+                  type: array
+                  items:
+                    type: string
+                    pattern: '^(kp|tmdb|imdb):\d+$'
+      responses:
+        '200':
+          description: Теги по item ID
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PlayerTagsResponse' }
+
+# ============================================================
+# COMPONENTS
+# ============================================================
+components:
+  securitySchemes:
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: yoho_session
+      description: Сессионная cookie Better Auth
+
+  parameters:
+    PageParam:
+      name: page
+      in: query
+      schema: { type: integer, minimum: 1, default: 1 }
+    LimitParam:
+      name: limit
+      in: query
+      schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+    FilmIdParam:
+      name: id
+      in: path
+      required: true
+      schema: { type: integer }
+    SeriesIdParam:
+      name: id
+      in: path
+      required: true
+      schema: { type: integer }
+    ContentTypeParam:
+      name: type
+      in: path
+      required: true
+      schema: { $ref: '#/components/schemas/ContentMediaType' }
+    ContentIdParam:
+      name: id
+      in: path
+      required: true
+      schema: { type: integer }
+
+  responses:
+    Unauthorized:
+      description: Требуется авторизация
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    NotFound:
+      description: Не найдено
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Conflict:
+      description: Конфликт
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+
+  headers:
+    X-Cache-Status:
+      schema:
+        type: string
+        enum: [HIT, MISS, BYPASS, EXPIRED, STALE, REVALIDATED]
+    X-Nextjs-Stale-Time:
+      schema: { type: integer, example: 300 }
+    X-Nextjs-Postponed:
+      schema: { type: string, enum: ['0', '1', '2'] }
+    X-Nextjs-Cache:
+      schema: { type: string, enum: [HIT, MISS, STALE] }
+    X-Yoho-Pathname:
+      schema: { type: string }
+    X-Request-Id:
+      schema: { type: string, format: uuid }
+
+  schemas:
+    Error:
+      type: object
+      required: [message, code]
+      properties:
+        message: { type: string }
+        code: { type: string }
+
+    # ==================== ENUMS ====================
+    ContentMediaType:
+      type: string
+      enum: [movie, tv, anime, animation]
+
+    ContentTypeFilter:
+      type: string
+      enum: [all, movie, tv, anime, animation]
+
+    TrendingFilter:
+      type: string
+      enum: [movie, popular_movie, tv, popular_tv, animation, popular_animation]
+
+    DiaryStatus:
+      type: string
+      description: Legacy enum; на сайте в API используется русская statusLabel
+      enum: [want_to_watch, watching, watched, dropped, rewatching, on_hold]
+
+    DiaryStatusLabel:
+      type: string
+      description: Метка статуса как на UI сайта
+      enum:
+        - Просмотрено
+        - Смотрю
+        - Хочу посмотреть
+        - Пересматриваю
+        - Отложено
+        - Бросил
+
+    SeriesStatus:
+      type: string
+      enum: [SERIAL_ONGOING, SERIAL_COMPLETE, SEASON_COMPLETE]
+
+    ShowStatus:
+      type: string
+      enum: [Returning Series, Ended, In Production, Canceled]
+
+    AirPrecision:
+      type: string
+      enum: [exact, estimated]
+
+    SortOption:
+      type: string
+      enum: [rating, year, popularity, date_added]
+      default: popularity
+
+    SortOrder:
+      type: string
+      enum: [asc, desc]
+      default: desc
+
+    GenreSlug:
+      type: string
+      pattern: '^[a-z][a-z0-9_]*$'
+      enum:
+        - action
+        - adventure
+        - biography
+        - comedy
+        - crime
+        - documentary
+        - drama
+        - family
+        - fantasy
+        - film_noir
+        - history
+        - horror
+        - kids
+        - music
+        - musical
+        - mystery
+        - mysticism
+        - romance
+        - speculative_fiction
+        - sport
+        - thriller
+        - war
+        - western
+
+    CountryCode:
+      type: string
+      pattern: '^[A-Z]{2}$'
+
+    RegionFilter:
+      type: string
+      enum: [cis, europe, asia, america, africa, oceania]
+
+    QualityTag:
+      type: string
+      enum:
+        - camrip
+        - good_quality
+        - bad_voice
+        - dub
+        - ad_inserts
+        - ad_overlay
+        - no_ads
+        - need_timings
+        - ads
+
+    ContentKind:
+      type: string
+      enum: [movie, short, series, cartoon, tv_show, anime, mini_series]
+      description: "Полный внутренний каталог типов контента"
+
+    TagKind:
+      type: string
+      enum: [subgenre, adjective, keyword]
+
+    # ==================== USERS ====================
+    User:
+      type: object
+      properties:
+        id: { type: string }
+        username: { type: string }
+        user_code: { type: string }
+        email: { type: string, format: email }
+        display_name: { type: string }
+        role:
+          type: string
+          enum: [user, moderator, admin, streamer]
+          default: user
+        avatar: { type: string }
+        avatar_source:
+          type: string
+          enum: [internal, twitch, kick]
+        registered_at: { type: string, format: date-time }
+        is_private: { type: boolean }
+
+    UserShort:
+      type: object
+      properties:
+        id: { type: string }
+        username: { type: string }
+        avatar: { type: string }
+
+    Session:
+      type: object
+      properties:
+        user: { $ref: '#/components/schemas/User' }
+        session:
+          type: object
+          properties:
+            token: { type: string }
+            expiresAt: { type: string, format: date-time }
+
+    AuthResponse:
+      type: object
+      properties:
+        user: { $ref: '#/components/schemas/User' }
+        session: { $ref: '#/components/schemas/Session/properties/session' }
+        redirectTo: { type: string }
+
+    # ==================== CONTENT ====================
+    Rating:
+      type: object
+      properties:
+        score: { type: number, nullable: true }
+        votes: { type: integer, nullable: true }
+        url: { type: string, nullable: true }
+
+    Ratings:
+      type: object
+      properties:
+        kinopoisk: { $ref: '#/components/schemas/Rating' }
+        imdb: { $ref: '#/components/schemas/Rating' }
+        tmdb: { $ref: '#/components/schemas/Rating' }
+        rottentomatoes:
+          type: object
+          properties:
+            score: { type: string }
+            url: { type: string }
+
+    Film:
+      type: object
+      required: [id_kp, title, year]
+      properties:
+        id_kp: { type: integer }
+        id_tmdb: { type: integer }
+        media_type: { const: movie }
+        title:
+          type: object
+          properties:
+            ru: { type: string }
+            original: { type: string }
+        year: { type: integer }
+        description: { type: string }
+        tagline: { type: string }
+        duration:
+          type: object
+          properties:
+            minutes: { type: integer }
+            formatted: { type: string }
+        age_rating: { type: string }
+        ratings: { $ref: '#/components/schemas/Ratings' }
+        genres: { type: array, items: { type: string } }
+        countries: { type: array, items: { type: string } }
+        director: { type: string }
+        cast: { type: array, items: { $ref: '#/components/schemas/CastMember' } }
+        crew:
+          type: object
+          properties:
+            screenplay: { type: array, items: { type: string } }
+            producer: { type: array, items: { type: string } }
+            cinematography: { type: string }
+            composer: { type: string }
+        production:
+          type: object
+          properties:
+            distributor: { type: string }
+            rights_holder: { type: string }
+            budget: { type: string }
+        poster: { type: string }
+        trailer: { $ref: '#/components/schemas/Trailer' }
+        similar: { type: array, items: { type: integer } }
+        sequels: { type: array, items: { type: integer } }
+        prequels: { type: array, items: { type: integer } }
+        remakes: { type: array, items: { type: integer } }
+
+    Series:
+      type: object
+      required: [id_kp, title, year_start]
+      properties:
+        id_kp: { type: integer }
+        id_tmdb: { type: integer }
+        media_type: { const: tv }
+        title:
+          type: object
+          properties:
+            ru: { type: string }
+            original: { type: string }
+        year_start: { type: integer }
+        year_end: { type: integer, nullable: true }
+        status: { $ref: '#/components/schemas/SeriesStatus' }
+        age_rating: { type: string }
+        ratings: { $ref: '#/components/schemas/Ratings' }
+        genres: { type: array, items: { type: string } }
+        countries: { type: array, items: { type: string } }
+        directors: { type: array, items: { type: string } }
+        composer: { type: string }
+        cast: { type: array, items: { $ref: '#/components/schemas/CastMember' } }
+        cast_total: { type: integer }
+        awards_count: { type: integer }
+        totals:
+          type: object
+          properties:
+            seasons: { type: integer }
+            episodes: { type: integer }
+        seasons: { type: array, items: { $ref: '#/components/schemas/Season' } }
+        poster: { type: string }
+        trailer: { $ref: '#/components/schemas/Trailer' }
+        similar: { type: array, items: { type: integer } }
+
+    Season:
+      type: object
+      properties:
+        number: { type: integer }
+        name: { type: string }
+        episodes_count: { type: integer }
+        date_start: { type: string, format: date }
+        period: { type: string }
+        status: { type: string, enum: [completed, ongoing, upcoming] }
+        episodes: { type: array, items: { $ref: '#/components/schemas/Episode' } }
+
+    Episode:
+      type: object
+      properties:
+        number: { type: integer }
+        title: { type: string }
+        title_original: { type: string }
+        air_date: { type: string, format: date }
+        air_time: { type: string }
+        duration: { type: integer }
+        description: { type: string }
+        poster: { type: string }
+        status: { type: string, enum: [released, upcoming] }
+
+    CastMember:
+      type: object
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        role: { type: string }
+        poster: { type: string }
+
+    Trailer:
+      type: object
+      properties:
+        url: { type: string }
+        title: { type: string }
+        date: { type: string, format: date }
+        thumbnail: { type: string }
+
+    # ==================== TV SCHEDULE ====================
+    TvLastAirResponse:
+      type: object
+      properties:
+        fp:
+          type: string
+          description: "Fingerprint в формате season|episode|date"
+          example: "8|6|2019-05-19"
+        meta: { $ref: '#/components/schemas/TvLastAirMeta' }
+        badge:
+          type: string
+          description: "Готовый текст для UI"
+          example: "СЕРИАЛ ЗАВЕРШЁН"
+
+    TvLastAirMeta:
+      type: object
+      properties:
+        tmdbId: { type: integer }
+        seasonNumber: { type: integer }
+        episodeNumber: { type: integer }
+        airDate: { type: string, format: date }
+        fingerprint: { type: string }
+        showStatus: { $ref: '#/components/schemas/ShowStatus' }
+        inProduction: { type: boolean }
+        airAt:
+          type: integer
+          description: Unix-timestamp выхода серии (мс)
+        airPrecision: { $ref: '#/components/schemas/AirPrecision' }
+        nextSeasonNumber: { type: integer }
+        nextEpisodeNumber: { type: integer }
+        nextAirDate: { type: string, format: date }
+        nextAirAt:
+          type: integer
+          description: Unix-timestamp следующей серии (мс)
+        nextAirPrecision: { $ref: '#/components/schemas/AirPrecision' }
+
+    TvScheduleResponse:
+      type: object
+      properties:
+        tmdbId: { type: integer }
+        seasons:
+          type: array
+          items:
+            type: object
+            properties:
+              seasonNumber: { type: integer }
+              episodes:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    seasonNumber: { type: integer }
+                    episodeNumber: { type: integer }
+                    title: { type: string }
+                    airDate: { type: string, format: date }
+        release:
+          type: object
+          properties:
+            context:
+              type: object
+              properties:
+                networks:
+                  type: array
+                  items: { type: string }
+                originCountry:
+                  type: array
+                  items: { type: string }
+                airTimes: { type: object }
+                shikimoriNextAt: { type: integer, nullable: true }
+            dubs: { type: object }
+            journal:
+              type: object
+              properties:
+                since: { type: integer }
+                updatedAt: { type: integer }
+
+    TvLastAirBatchResponse:
+      type: object
+      properties:
+        items:
+          type: object
+          additionalProperties: { $ref: '#/components/schemas/TvLastAirBatchItem' }
+
+    TvLastAirBatchItem:
+      type: object
+      properties:
+        tmdbId: { type: integer }
+        fp: { type: string }
+        badge: { type: string }
+        posterUrl: { type: string }
+        meta: { $ref: '#/components/schemas/TvLastAirMeta' }
+
+    # ==================== WATCHERS ====================
+    WatchersResponse:
+      type: object
+      properties:
+        watchers:
+          type: array
+          items: { $ref: '#/components/schemas/Watcher' }
+
+    Watcher:
+      type: object
+      properties:
+        id: { type: string }
+        code: { type: string, description: "Публичный код (#12345)" }
+        name: { type: string }
+        avatar: { type: string, nullable: true }
+        isStreamer: { type: boolean }
+        isLive: { type: boolean }
+        score: { type: number, nullable: true, minimum: 1, maximum: 10 }
+        rating:
+          type: string
+          enum: [like, dislike]
+        subscribed: { type: boolean }
+
+    # ==================== COMMENTS ====================
+    Comment:
+      type: object
+      properties:
+        id: { type: string }
+        user: { $ref: '#/components/schemas/UserShort' }
+        text: { type: string }
+        created_at: { type: string, format: date-time }
+        edited: { type: boolean, default: false }
+        has_spoilers: { type: boolean, default: false }
+        reactions:
+          type: object
+          properties:
+            laugh: { type: integer }
+            poop: { type: integer }
+            clown: { type: integer }
+            fire: { type: integer }
+            heart: { type: integer }
+            total: { type: integer }
+        replies: { type: array, items: { $ref: '#/components/schemas/Comment' } }
+
+    CommentListResponse:
+      type: object
+      properties:
+        comments: { type: array, items: { $ref: '#/components/schemas/Comment' } }
+        total: { type: integer }
+        page: { type: integer }
+        has_next: { type: boolean }
+
+    # ==================== USER DATA ====================
+    DiaryEntry:
+      type: object
+      description: Запись дневника (ответ POST /api/diary → entry)
+      properties:
+        id: { type: string }
+        itemId: { type: string, example: "kp:5512084" }
+        href: { type: string, example: "/series/5512084" }
+        title: { type: string }
+        year: { type: string }
+        mediaType: { type: string, enum: [movie, tv, anime] }
+        tmdbId: { type: integer, nullable: true }
+        kinopoiskId: { type: string, nullable: true }
+        posterUrl: { type: string, nullable: true }
+        sourceReaction: { type: string }
+        statusLabel: { $ref: '#/components/schemas/DiaryStatusLabel' }
+        kpRating: { type: number, nullable: true }
+        imdbRating: { type: number, nullable: true }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    ActivityItem:
+      type: object
+      required: [id, href, title]
+      properties:
+        id: { type: string, example: "kp:5512084" }
+        href: { type: string, example: "/series/5512084" }
+        title: { type: string }
+        year: { type: string }
+        posterUrl: { type: string, example: "/api/img/t/p/w185/….jpg" }
+        mediaType: { type: string, enum: [movie, tv, anime] }
+        ts: { type: integer, format: int64 }
+
+    FavoriteItem:
+      type: object
+      description: Элемент favorites / watchHistory из GET /api/sync
+      properties:
+        id: { type: string, example: "kp:5512084" }
+        content_id: { type: integer }
+        content_type: { type: string }
+        href: { type: string }
+        title: { type: string }
+        year: { type: string }
+        posterUrl: { type: string }
+        mediaType: { type: string }
+        ts: { type: integer, format: int64 }
+        tmdbTvId: { type: integer, nullable: true }
+
+    WishlistItem: { $ref: '#/components/schemas/FavoriteItem' }
+
+    HistoryItem:
+      type: object
+      properties:
+        content_id: { type: integer }
+        content_type: { $ref: '#/components/schemas/ContentMediaType' }
+        watched_at: { type: string, format: date-time }
+        progress:
+          type: object
+          properties:
+            percentage: { type: integer }
+            season: { type: integer, nullable: true }
+            episode: { type: integer, nullable: true }
+        content:
+          oneOf:
+            - $ref: '#/components/schemas/Film'
+            - $ref: '#/components/schemas/Series'
+
+    UserRating:
+      type: object
+      properties:
+        content_id: { type: integer }
+        content_type: { $ref: '#/components/schemas/ContentMediaType' }
+        rating: { type: number }
+        review: { type: string }
+        spoiler: { type: boolean }
+        created_at: { type: string, format: date-time }
+        content:
+          oneOf:
+            - $ref: '#/components/schemas/Film'
+            - $ref: '#/components/schemas/Series'
+
+    ActivityItem:
+      type: object
+      properties:
+        id: { type: string }
+        type: { type: string, enum: [rating, comment, diary, favorite, timing] }
+        action: { type: string }
+        target:
+          type: object
+          properties:
+            content_type: { type: string }
+            content_id: { type: integer }
+            title: { type: string }
+        created_at: { type: string, format: date-time }
+
+    Profile:
+      type: object
+      properties:
+        user: { $ref: '#/components/schemas/User' }
+        stats:
+          type: object
+          properties:
+            profile_views: { type: integer }
+            yoho_coins: { type: integer }
+            timings_count: { type: integer }
+            favorites_count: { type: integer }
+            ratings_count: { type: integer }
+            votes_count: { type: integer }
+        followers_count: { type: integer }
+        following_count: { type: integer }
+        favorite_films:
+          type: array
+          maxItems: 4
+          items: { $ref: '#/components/schemas/Film' }
+        wishlist: { type: array, items: { $ref: '#/components/schemas/WishlistItem' } }
+        tag_cloud: { type: array, items: { $ref: '#/components/schemas/TagCloudItem' } }
+        badges: { $ref: '#/components/schemas/UserBadges' }
+
+    TagCloudItem:
+      type: object
+      properties:
+        name: { type: string }
+        category: { type: string, enum: [years, genres, countries] }
+        count: { type: integer }
+        weight: { type: integer, minimum: 1, maximum: 100 }
+
+    UserBadges:
+      type: object
+      properties:
+        ideas: { type: integer }
+        dubs: { type: integer }
+        reviews: { type: integer }
+        timings: { type: integer }
+        marathon_completed: { type: integer }
+        ratings: { type: integer }
+
+    Idea:
+      type: object
+      properties:
+        id: { type: integer }
+        title: { type: string }
+        description: { type: string }
+        votes: { type: integer }
+        status: { type: string, enum: [open, in_progress, implemented, rejected] }
+        author: { $ref: '#/components/schemas/UserShort' }
+        created_at: { type: string, format: date-time }
+
+    # ==================== TIMINGS ====================
+    TimingsResponse:
+      type: object
+      properties:
+        status: { type: string, enum: [clean, unknown, has_content] }
+        total: { type: integer }
+        items:
+          type: array
+          items:
+            type: object
+            properties:
+              id: { type: string }
+              timestamp: { type: string }
+              type: { type: string, enum: [explicit, violence, scene] }
+              description: { type: string }
+              spoiler: { type: boolean }
+              author: { $ref: '#/components/schemas/UserShort' }
+              created_at: { type: string, format: date-time }
+
+    # ==================== PLAYERS ====================
+    PlayerResponse:
+      type: object
+      properties:
+        players: { type: array, items: { $ref: '#/components/schemas/PlayerSource' } }
+        quality_tags:
+          type: array
+          items: { $ref: '#/components/schemas/QualityTag' }
+
+    PlayerSource:
+      type: object
+      properties:
+        name:
+          type: string
+          enum: [Alloha, Kodik, Collaps, Vibix, VideoSeed, Kinescope, Stravers, Kinoserial, Ortified, NextEmbed, Turbo, CVH]
+        quality: { type: string }
+        active: { type: boolean }
+        share: { type: integer }
+        dub: { type: string, nullable: true }
+        iframe_url: { type: string }
+        tokens:
+          type: object
+          properties:
+            token_movie:
+              type: string
+              description: MD5-хэш ID тайтла (постоянен)
+            token:
+              type: string
+              description: Сессионный токен (MD5 от yoho_session)
+            expires_at: { type: string, format: date-time }
+        uses_storage_access: { type: boolean }
+        provider_number: { type: integer }
+
+    PlayerChoiceResponse:
+      type: object
+      properties:
+        total: { type: integer }
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/PlayerSourceStat' }
+
+    PlayerSourceStat:
+      type: object
+      properties:
+        source: { type: string }
+        count: { type: integer }
+        share: { type: number, minimum: 0, maximum: 1 }
+
+    PlayerStatsResponse:
+      type: object
+      properties:
+        total: { type: integer }
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/PlayerSourceStat' }
+
+    # ==================== SEARCH ====================
+    SearchResponse:
+      type: object
+      properties:
+        total: { type: integer }
+        page: { type: integer }
+        limit: { type: integer }
+        results:
+          type: array
+          items:
+            oneOf:
+              - $ref: '#/components/schemas/Film'
+              - $ref: '#/components/schemas/Series'
+
+    SearchSuggestion:
+      type: object
+      properties:
+        id: { type: integer }
+        type: { $ref: '#/components/schemas/ContentMediaType' }
+        title: { type: string }
+        year: { type: integer }
+        poster: { type: string }
+
+    SearchFacets:
+      type: object
+      properties:
+        types:
+          type: array
+          items:
+            type: object
+            properties:
+              value: { $ref: '#/components/schemas/ContentTypeFilter' }
+              label: { type: string }
+              count: { type: integer }
+              available: { type: boolean }
+        genres: { type: array, items: { $ref: '#/components/schemas/FacetItem' } }
+        countries: { type: array, items: { $ref: '#/components/schemas/FacetItem' } }
+        regions: { type: array, items: { $ref: '#/components/schemas/FacetItem' } }
+        years:
+          type: object
+          properties:
+            min: { type: integer }
+            max: { type: integer }
+
+    FacetItem:
+      type: object
+      properties:
+        value: { type: string }
+        label: { type: string }
+        count: { type: integer }
+        available: { type: boolean }
+
+    RegionMapping:
+      type: object
+      properties:
+        regions:
+          type: array
+          items:
+            type: object
+            properties:
+              slug: { $ref: '#/components/schemas/RegionFilter' }
+              label: { type: string }
+              countries: { type: array, items: { $ref: '#/components/schemas/CountryCode' } }
+              countries_count: { type: integer }
+
+    SearchFiltersResponse:
+      type: object
+      description: Полный каталог фильтров для поиска
+      properties:
+        kinds:
+          type: object
+          description: Типы контента с количеством
+          properties:
+            movie: { type: integer }
+            short: { type: integer }
+            series: { type: integer }
+            cartoon: { type: integer }
+            tv_show: { type: integer }
+            anime: { type: integer }
+            mini_series: { type: integer }
+        tags:
+          type: array
+          items:
+            type: object
+            properties:
+              tag: { type: string }
+              kind: { $ref: '#/components/schemas/TagKind' }
+        platforms:
+          type: array
+          items:
+            type: object
+            properties:
+              slug: { type: string }
+              name: { type: string }
+        companies:
+          type: array
+          items: { type: string }
+
+    RecentResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+            properties:
+              id: { type: integer }
+              media_type: { $ref: '#/components/schemas/ContentMediaType' }
+              title: { type: string }
+              year: { type: integer }
+              poster: { type: string }
+              added_at: { type: string, format: date-time }
+        total: { type: integer }
+
+    DiscoverResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+            properties:
+              id: { type: integer }
+              media_type: { $ref: '#/components/schemas/ContentMediaType' }
+              title: { type: string }
+              year: { type: integer }
+              poster: { type: string }
+              ratings: { $ref: '#/components/schemas/Ratings' }
+              genres: { type: array, items: { type: string } }
+              discovery_reason: { type: string }
+        total: { type: integer }
+        source: { type: string }
+
+    RandomizerRequest:
+      type: object
+      properties:
+        type: { $ref: '#/components/schemas/ContentTypeFilter' }
+        known_only: { type: boolean, default: true }
+        exclude_watched: { type: boolean, default: false }
+        filters:
+          type: object
+          properties:
+            genres: { type: array, items: { $ref: '#/components/schemas/GenreSlug' } }
+            countries: { type: array, items: { $ref: '#/components/schemas/CountryCode' } }
+            year_from: { type: integer }
+            year_to: { type: integer }
+
+    RandomizerResponse:
+      type: object
+      properties:
+        film:
+          oneOf:
+            - $ref: '#/components/schemas/Film'
+            - $ref: '#/components/schemas/Series'
+        roulette_items:
+          type: array
+          maxItems: 32
+          items:
+            type: object
+            properties:
+              id: { type: integer }
+              title: { type: string }
+              year: { type: integer }
+              poster: { type: string }
+        sound_enabled: { type: boolean, default: true }
+
+    # ==================== TRENDING ====================
+    TrendingResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/TrendingItem' }
+        ratings:
+          type: object
+          additionalProperties: { $ref: '#/components/schemas/TrendingRating' }
+          description: Рейтинги по ключу {mediaType}:{tmdbId}
+        builtAt:
+          type: integer
+          description: Unix-timestamp сборки данных (мс)
+
+    TrendingItem:
+      type: object
+      properties:
+        id:
+          type: integer
+          description: TMDB ID
+        title: { type: string }
+        originalTitle: { type: string }
+        posterUrl: { type: string }
+        backdropUrl: { type: string, nullable: true }
+        year: { type: string }
+        mediaType: { $ref: '#/components/schemas/ContentMediaType' }
+        kinopoiskFilmId: { type: integer, nullable: true }
+
+    TrendingRating:
+      type: object
+      properties:
+        kp: { type: number, nullable: true }
+        imdb: { type: number, nullable: true }
+        kinopoiskFilmId: { type: integer }
+
+    # ==================== TRAILERS ====================
+    TrailerListResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/TrailerItem' }
+        nextStart: { type: integer }
+        hasMore: { type: boolean }
+        feedVersion: { type: integer }
+
+    TrailerItem:
+      type: object
+      properties:
+        mediaType: { $ref: '#/components/schemas/ContentMediaType' }
+        tmdbId: { type: integer }
+        title: { type: string }
+        releaseYear: { type: integer }
+        backdropUrl: { type: string }
+        youtubeKey:
+          type: string
+          description: ID видео на YouTube
+        trailerTitle: { type: string }
+        publishedAt: { type: string, format: date-time }
+
+    # ==================== WARMUP ====================
+    WarmCardsResponse:
+      type: object
+      properties:
+        warmed: { type: integer }
+        cached: { type: integer }
+        skipped: { type: integer }
+        deferred:
+          type: array
+          items: { type: string }
+
+    PlayerTagsResponse:
+      type: object
+      properties:
+        tags:
+          type: object
+          additionalProperties:
+            type: array
+            items: { $ref: '#/components/schemas/QualityTag' }
+
+    # ==================== COLLECTIONS ====================
+    CollectionCounters:
+      type: object
+      properties:
+        movies:
+          type: object
+          properties:
+            best: { type: integer }
+            genres:
+              type: object
+              additionalProperties: { type: integer }
+            countries:
+              type: object
+              additionalProperties: { type: integer }
+        series:
+          type: object
+          properties:
+            best: { type: integer }
+            genres:
+              type: object
+              additionalProperties: { type: integer }
+
+    Franchise:
+      type: object
+      properties:
+        id: { type: string }
+        title: { type: string }
+        items_count: { type: integer }
+        poster: { type: string }
+        chronology_url: { type: string }
+
+    MarvelChronology:
+      type: object
+      properties:
+        title: { type: string }
+        total: { type: integer }
+        items:
+          type: array
+          items:
+            type: object
+            properties:
+              position: { type: integer }
+              content_id: { type: integer }
+              content_type: { $ref: '#/components/schemas/ContentMediaType' }
+              title: { type: string }
+              year: { type: integer }
+              poster: { type: string }
+
+    # ==================== MARATHON ====================
+    Marathon:
+      type: object
+      properties:
+        id: { type: string }
+        title: { type: string }
+        description: { type: string }
+        deadline: { type: string, format: date-time }
+        days_left: { type: integer }
+        countdown:
+          type: object
+          properties:
+            days: { type: integer }
+            hours: { type: integer }
+            minutes: { type: integer }
+            seconds: { type: integer }
+        totals:
+          type: object
+          properties:
+            items: { type: integer }
+            films: { type: integer }
+            series: { type: integer }
+        items: { type: array, items: { $ref: '#/components/schemas/MarathonItem' } }
+
+    MarathonItem:
+      type: object
+      properties:
+        position: { type: integer }
+        content_id: { type: integer }
+        content_type: { $ref: '#/components/schemas/ContentMediaType' }
+        title: { type: string }
+        completed: { type: boolean }
+        completed_at: { type: string, format: date-time, nullable: true }
+
+    CalendarItem:
+      type: object
+      properties:
+        series_id: { type: integer }
+        title: { type: string }
+        season: { type: integer }
+        episode: { type: integer }
+        air_date: { type: string, format: date }
+        poster: { type: string }
+
+    FilmListResponse:
+      type: object
+      properties:
+        total: { type: integer }
+        page: { type: integer }
+        limit: { type: integer }
+        items: { type: array, items: { $ref: '#/components/schemas/Film' } }
+
+    SeriesListResponse:
+      type: object
+      properties:
+        total: { type: integer }
+        page: { type: integer }
+        limit: { type: integer }
+        items: { type: array, items: { $ref: '#/components/schemas/Series' } }
+
+# ============================================================
+# EXTENSIONS
+# ============================================================
+x-architecture:
+  framework:
+    name: Next.js
+    version: "15+"
+    features: [App Router, RSC, Suspense Streaming, Turbopack, Partial Prerendering]
+  auth:
+    library: better-auth
+    methods: [email, twitch, kick, google]
+    session_type: cookie
+    cookie_name: yoho_session
+  rendering:
+    homepage: "SSR + edge cache (HIT, 5 min)"
+    search_page: "CSR shell + client-side fetch to /api/search"
+    content_pages: "SSR per-request (BYPASS) + RSC streaming"
+    warmup: "Client-side prefetch via /api/warm/cards"
+  pwa:
+    service_worker: true
+    manifest: /manifest.json
+    theme: dark
+
+x-caching-strategy:
+  edge_cached:
+    description: Публичные страницы кешируются на edge
+    ttl_seconds: 300
+    header: "x-cache-status: HIT"
+    routes: ["/", "/movie", "/tv", "/anime", "/getlucky", "/marathon", "/franchises", "/movie/genre/*", "/collections/*", "/calendar"]
+  bypass:
+    description: Персонализированные страницы per-request
+    header: "x-cache-status: BYPASS"
+    cache_control: "private, no-cache, no-store, max-age=0, must-revalidate"
+    routes: ["/search", "/film/{id}", "/series/{id}", "/name/{id}", "/{username}/*", "/api/*"]
+  client_cached:
+    description: Эндпоинты с коротким клиентским кешем
+    routes:
+      - path: "/api/player-tags/posters"
+        ttl: 60
+        scope: private
+      - path: "/api/tv-last-air/batch"
+        ttl: 300
+        swr: 3600
+        scope: public
+
+x-frontend-config:
+  iframe_settings:
+    sandbox: "allow-scripts allow-same-origin allow-presentation allow-popups"
+    allow: "autoplay; fullscreen; picture-in-picture; storage-access"
+    referrerPolicy: "strict-origin-when-cross-origin"
+    loading: "lazy"
+    credentialless: false
+  cross_site_cookies:
+    SameSite: "None"
+    Secure: true
+    Partitioned: false
+  youtube:
+    watch_url: "https://www.youtube.com/watch?v={youtubeKey}"
+    embed_url: "https://www.youtube-nocookie.com/embed/{youtubeKey}"
+  hotkeys:
+    notifications: "Alt+T"
+    submit_search: "Enter"
+    report_bug: "Shift+Enter"
+
+x-integrations:
+  video_players:
+    - { name: Alloha, domain: "*.alloha.tv" }
+    - { name: Kodik, domains: ["*.kodik.info", "*.kodik.biz", "*.kodik.cc", "*.kodik.online", "kodikplayer.com"] }
+    - { name: Collaps, domains: ["*.collaps.org", "*.collaps.cc", "*.collaps.ink"] }
+    - { name: Vibix, domain: "vibix.org" }
+    - { name: VideoSeed, domain: "*.videoseed.tv" }
+    - { name: Kinescope, domains: ["*.kinescope.io", "*.kinescopecdn.net"] }
+    - { name: Stravers, domain: "*.stravers.live", auth: "token_movie + token (MD5)" }
+    - { name: Kinoserial, domains: ["tv-1-kinoserial.net", "tv-2-kinoserial.net", "tv-3-kinoserial.net", "tv-4-kinoserial.net", "tv-5-kinoserial.net"] }
+    - { name: Ortified, domain: "*.ortified.ws" }
+    - { name: NextEmbed, domain: "api.nextembed.ws" }
+    - { name: Turbo }
+    - { name: CVH }
+  posters:
+    tmdb: "image.tmdb.org"
+    kinopoisk: "st.kp.yandex.net"
+    api: "kinopoiskapiunofficial.tech"
+  analytics:
+    yandex_metrika: "mc.yandex.ru (with WebSocket)"
+  ads:
+    yandex: "yandexadexchange.net"
+    google: "googlesyndication.com"
+  security:
+    recaptcha: "www.recaptcha.net"
+  social:
+    telegram: ["https://t.me/yohoru", "https://t.me/yohopw"]
+    discord: "https://discord.gg/VeghBZykCJ"
+  donations:
+    boosty: "https://boosty.to/yohoru"
+    cloudtips: "https://pay.cloudtips.ru/p/ccd12038"
+
+x-client-localstorage:
+  "yoho:wh:v1": "История просмотра"
+  "yoho:fav:v1": "Избранное"
+  "yoho:auth-slot-w:v1": "Ширина слота аватара"
+  "yoho:shelves-tab:v1": "Активная вкладка полок"
+  "yoho:shelves-h:v2:{tab}": "Высота полки"
+  "yoho:poster-col-w:v1": "Ширина колонки постеров"
+  "yoho:tv-mode:v1": "Режим ТВ"
+  "wf-ann-dismissed": "Скрытое объявление"
+  "wf-streamer-dismissed": "Скрытый баннер"
+  "wf-ads-blocked": "Флаг блокировщика рекламы"
+
+x-regions-mapping:
+  cis:
+    label: "СНГ"
+    countries: [RU, BY, KZ, KG, AM, AZ, MD, TJ, TM, UZ, UA]
+  europe:
+    label: "Европа"
+    countries: [GB, DE, FR, IT, ES, AT, BE, NL, PT, GR, DK, SE, NO, FI, PL, CZ, SK, HU, RO, BG, HR, SI, RS, BA, ME, MK, AL, LT, LV, EE, IS, IE, LU, MT, CY, CH]
+  asia:
+    label: "Азия"
+    countries: [CN, JP, KR, IN, ID, TH, VN, MY, PH, SG, PK, BD, LK, NP, AF, MM, KH, LA, MN, TW, HK, IL, SA, AE, TR, IR, IQ, SY, JO, LB, YE, OM, QA, KW, BH, KZ, UZ, KG, TJ, TM, AZ, GE, AM]
+  america:
+    label: "Америка"
+    countries: [US, CA, MX, BR, AR, CL, CO, PE, VE, EC, BO, PY, UY, CR, PA, GT, HN, SV, NI, CU, DO, HT, JM, TT, BS, BB, GY, SR]
+  africa:
+    label: "Африка"
+    countries: [EG, ZA, NG, KE, GH, DZ, MA, TN, ET, TZ, UG, ZW, AO, BW, CM, CI, SN, ML, BF, NE, TD, SD, SO, MG, MZ, MW, ZM, NA, RW, BJ, TG]
+  oceania:
+    label: "Океания"
+    countries: [AU, NZ, FJ, PG, WS, TO, VU, NC, PF, GU]
+
+x-routes-map:
+  public:
+    - "/"
+    - "/search"
+    - "/getlucky"
+    - "/marathon"
+    - "/marvel"
+    - "/franchises"
+    - "/calendar"
+    - "/anime/top"
+    - "/extension"
+    - "/ideas"
+    - "/thanks"
+    - "/terms"
+    - "/privacy"
+    - "/dmca"
+  dynamic:
+    pattern: ["/film/{id}", "/series/{id}", "/name/{id}", "/{username}"]
+  catalog:
+    pattern: ["/movie", "/tv", "/anime", "/movie/best", "/tv/best", "/movie/genre/{slug}", "/tv/genre/{slug}", "/movie/country/{slug}", "/movie/year/{year}"]
