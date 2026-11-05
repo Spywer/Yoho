@@ -41,6 +41,7 @@ import com.spywer.yoho.R
 import com.spywer.yoho.data.remote.TitleDetailDto
 import com.spywer.yoho.ui.layout.HomeMetrics
 import com.spywer.yoho.ui.layout.LocalHomeMetrics
+import com.spywer.yoho.ui.layout.WidthClass
 import com.spywer.yoho.ui.theme.YohoThemeExtras
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -271,7 +272,13 @@ private fun DetailHeroTablet(
             contentDescription = titleRu,
             contentScale = ContentScale.Crop,
             modifier = Modifier
-                .width(280.dp)
+                .width(
+                    when (metrics.widthClass) {
+                        WidthClass.Expanded -> 360.dp
+                        WidthClass.Medium -> 300.dp
+                        WidthClass.Compact -> 280.dp
+                    },
+                )
                 .aspectRatio(2f / 3f)
                 .clip(RoundedCornerShape(12.dp))
                 .background(Color.White.copy(alpha = 0.12f)),
@@ -303,7 +310,9 @@ private fun DetailHeroTablet(
                         Modifier
                             .weight(1f)
                             .padding(end = 8.dp, top = 6.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(
+                            if (metrics.widthClass == WidthClass.Expanded) 24.dp else 12.dp,
+                        ),
                     ) {
                         if (showFavorite) {
                             HeroFavoriteButton(
@@ -408,8 +417,8 @@ private fun HeroFavoriteButton(
         onClick = onToggleFavorite,
         enabled = !favoriteBusy,
         contentPadding = PaddingValues(
-            horizontal = if (metrics.isTablet) 12.dp else 10.dp,
-            vertical = if (metrics.isTablet) 6.dp else 4.dp,
+            horizontal = metrics.detailFavPadH,
+            vertical = metrics.detailFavPadV,
         ),
     ) {
         Icon(
@@ -424,9 +433,9 @@ private fun HeroFavoriteButton(
             } else {
                 content
             },
-            modifier = Modifier.size(if (metrics.isTablet) 24.dp else 18.dp),
+            modifier = Modifier.size(metrics.detailFavIconSize),
         )
-        Spacer(Modifier.width(6.dp))
+        Spacer(Modifier.width(if (metrics.widthClass == WidthClass.Expanded) 10.dp else 6.dp))
         Text(
             text = stringResource(
                 if (isFavorite) {

@@ -83,6 +83,12 @@
     <string name="detail_player_pick">Выберите источник</string>
     <string name="detail_player_open">Смотреть</string>
     <string name="detail_player_no_iframe">Плеер этого источника пока недоступен в приложении</string>
+    <string name="detail_player_no_sources">Нет доступных источников для этого %1$s</string>
+    <string name="detail_player_no_sources_movie">фильма</string>
+    <string name="detail_player_no_sources_tv">сериала</string>
+    <string name="detail_player_no_sources_anime">аниме</string>
+    <string name="detail_player_no_sources_animation">мультфильма</string>
+    <string name="detail_player_no_sources_hint">Плееры ещё не опубликовали этот тайтл – загляните позже</string>
     <string name="detail_player_needs_login">Плеер доступен после входа на YoHo (как на сайте). Нужна сессия yoho_session.</string>
     <string name="detail_player_share">%1$d%% · %2$d</string>
     <string name="detail_player_fullscreen">На весь экран</string>

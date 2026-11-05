@@ -315,14 +315,28 @@ class TitleDetailViewModel : ViewModel() {
     }
 
     private fun loadPlayerBlock(detail: TitleDetailDto) {
-        val itemId = detail.playerItemId() ?: return
+        playerJob?.cancel()
+        val itemId = detail.playerItemId()
         val media = detail.mediaType?.takeIf { it.isNotBlank() } ?: "movie"
         val playerType = when {
             media.equals("tv", true) || media.equals("anime", true) -> "tv"
             else -> "movie"
         }
-        val playerId = (detail.idTmdb?.takeIf { it > 0 } ?: detail.idKp)?.toString() ?: return
-        playerJob?.cancel()
+        val playerId = (detail.idTmdb?.takeIf { it > 0 } ?: detail.idKp)?.toString()
+        if (itemId == null || playerId == null) {
+            _state.update {
+                it.copy(
+                    playerLoading = false,
+                    playerChoices = emptyList(),
+                    playerSources = emptyList(),
+                    selectedPlayerSource = null,
+                    playerIframeUrl = null,
+                    playerEmbedHtml = null,
+                    playerNeedsLogin = false,
+                )
+            }
+            return
+        }
         playerJob = viewModelScope.launch {
             _state.update { it.copy(playerLoading = true) }
             coroutineScope {

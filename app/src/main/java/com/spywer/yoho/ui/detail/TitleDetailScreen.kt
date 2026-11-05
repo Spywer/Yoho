@@ -368,34 +368,27 @@ private fun DetailContent(
             }
         }
 
-        if (
-            playerLoading ||
-            playerChoices.isNotEmpty() ||
-            !playerIframeUrl.isNullOrBlank() ||
-            !playerEmbedHtml.isNullOrBlank() ||
-            playerNeedsLogin
-        ) {
-            item {
-                PlayerBlock(
-                    choices = playerChoices,
-                    selectedSource = selectedPlayerSource,
-                    iframeUrl = playerIframeUrl,
-                    embedHtml = playerEmbedHtml,
-                    loading = playerLoading,
-                    needsLogin = playerNeedsLogin,
-                    diaryStatusLabel = diaryStatusLabel,
-                    diaryBusy = diaryBusy,
-                    diaryError = diaryError,
-                    diaryNotify = diaryNotify,
-                    onSelectSource = onSelectPlayerSource,
-                    onSetDiaryStatus = onSetDiaryStatus,
-                    onRemoveFromDiary = onRemoveFromDiary,
-                    onConsumeDiaryNotify = onConsumeDiaryNotify,
-                    padding = metrics.screenPadding,
-                    metaSize = metrics.cardMetaSize,
-                    modifier = Modifier.padding(top = metrics.sectionGap),
-                )
-            }
+        item {
+            PlayerBlock(
+                choices = playerChoices,
+                selectedSource = selectedPlayerSource,
+                iframeUrl = playerIframeUrl,
+                embedHtml = playerEmbedHtml,
+                loading = playerLoading,
+                needsLogin = playerNeedsLogin,
+                mediaType = detail.mediaType,
+                diaryStatusLabel = diaryStatusLabel,
+                diaryBusy = diaryBusy,
+                diaryError = diaryError,
+                diaryNotify = diaryNotify,
+                onSelectSource = onSelectPlayerSource,
+                onSetDiaryStatus = onSetDiaryStatus,
+                onRemoveFromDiary = onRemoveFromDiary,
+                onConsumeDiaryNotify = onConsumeDiaryNotify,
+                padding = metrics.screenPadding,
+                metaSize = metrics.cardMetaSize,
+                modifier = Modifier.padding(top = metrics.sectionGap),
+            )
         }
 
         titleDetailScheduleSection(

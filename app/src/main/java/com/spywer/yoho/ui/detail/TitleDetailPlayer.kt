@@ -94,6 +94,7 @@ internal fun PlayerBlock(
     embedHtml: String?,
     loading: Boolean,
     needsLogin: Boolean,
+    mediaType: String?,
     diaryStatusLabel: String?,
     diaryBusy: Boolean,
     diaryError: String?,
@@ -108,8 +109,17 @@ internal fun PlayerBlock(
 ) {
     val playUrl = remember(iframeUrl) { normalizePlayerUrl(iframeUrl) }
     val hasPlayer = !playUrl.isNullOrBlank() || !embedHtml.isNullOrBlank()
+    val noSources = !needsLogin && choices.isEmpty() && !hasPlayer
+    val context = LocalContext.current
     var fullscreen by remember { mutableStateOf(false) }
     var htmlFullscreen by remember { mutableStateOf(false) }
+    // Toast дневника, когда панели под плеером нет (заглушка без источников).
+    LaunchedEffect(diaryNotify, hasPlayer) {
+        if (hasPlayer) return@LaunchedEffect
+        val msg = diaryNotify ?: return@LaunchedEffect
+        Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+        onConsumeDiaryNotify()
+    }
     // WebView всегда в Compose; FS = reparent на decorView (Dialog ломал surface при возврате)
     val webHolder = remember { PlayerWebViewHolder() }
     DisposableEffect(Unit) {
@@ -152,7 +162,9 @@ internal fun PlayerBlock(
             Box(
                 Modifier
                     .fillMaxWidth()
-                    .padding(vertical = 24.dp),
+                    .aspectRatio(16f / 9f)
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(Color.Black),
                 contentAlignment = Alignment.Center,
             ) {
                 CircularProgressIndicator(
@@ -180,9 +192,9 @@ internal fun PlayerBlock(
                         )
                     }
                 }
+                Spacer(Modifier.height(LocalHomeMetrics.current.blockGap))
             }
 
-            Spacer(Modifier.height(LocalHomeMetrics.current.blockGap))
             Box(
                 Modifier
                     .fillMaxWidth()
@@ -209,6 +221,16 @@ internal fun PlayerBlock(
                                 modifier = Modifier.padding(16.dp),
                             )
                         }
+                    }
+                    noSources -> {
+                        NoSourcesPlaceholder(
+                            mediaType = mediaType,
+                            diaryStatusLabel = diaryStatusLabel,
+                            diaryBusy = diaryBusy,
+                            onSetDiaryStatus = onSetDiaryStatus,
+                            onRemoveFromDiary = onRemoveFromDiary,
+                            metaSize = metaSize,
+                        )
                     }
                     else -> {
                         Column(
@@ -259,6 +281,72 @@ internal fun PlayerBlock(
                     onCinema = { fullscreen = true },
                 )
             }
+        }
+    }
+}
+
+@Composable
+private fun NoSourcesPlaceholder(
+    mediaType: String?,
+    diaryStatusLabel: String?,
+    diaryBusy: Boolean,
+    onSetDiaryStatus: (String) -> Unit,
+    onRemoveFromDiary: () -> Unit,
+    metaSize: androidx.compose.ui.unit.TextUnit,
+) {
+    val wantLabel = stringResource(R.string.detail_diary_want)
+    val kind = stringResource(
+        when (mediaType?.lowercase()) {
+            "tv" -> R.string.detail_player_no_sources_tv
+            "anime" -> R.string.detail_player_no_sources_anime
+            "animation" -> R.string.detail_player_no_sources_animation
+            else -> R.string.detail_player_no_sources_movie
+        },
+    )
+    val wantActive = diaryStatusLabel.equals(wantLabel, ignoreCase = true)
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = Modifier.padding(horizontal = 20.dp, vertical = 24.dp),
+    ) {
+        Text(
+            text = stringResource(R.string.detail_player_no_sources, kind),
+            color = Color.White.copy(alpha = 0.88f),
+            fontSize = metaSize * 1.05f,
+            fontWeight = FontWeight.SemiBold,
+            textAlign = TextAlign.Center,
+        )
+        Text(
+            text = stringResource(R.string.detail_player_no_sources_hint),
+            color = Color(0xFF8D9EB0),
+            fontSize = metaSize,
+            textAlign = TextAlign.Center,
+        )
+        val pillBg = if (wantActive) Color(0xFF3A4A5A) else Color(0xFF242D36)
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier
+                .padding(top = 4.dp)
+                .clip(RoundedCornerShape(percent = 50))
+                .background(pillBg)
+                .border(1.dp, Color.White.copy(alpha = 0.16f), RoundedCornerShape(percent = 50))
+                .clickable(enabled = !diaryBusy) {
+                    if (wantActive) onRemoveFromDiary() else onSetDiaryStatus(wantLabel)
+                }
+                .padding(horizontal = 18.dp, vertical = 10.dp),
+        ) {
+            Icon(
+                Icons.AutoMirrored.Filled.PlaylistAdd,
+                contentDescription = null,
+                tint = Color(0xFFE8E8E8),
+                modifier = Modifier.size(16.dp),
+            )
+            Text(
+                text = wantLabel,
+                color = Color(0xFFE8E8E8),
+                fontSize = metaSize,
+            )
         }
     }
 }
