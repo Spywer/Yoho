@@ -129,7 +129,8 @@ val CompactMetrics = HomeMetrics(
 
 @Composable
 fun rememberHomeMetrics(): HomeMetrics {
-    val widthDp = LocalConfiguration.current.screenWidthDp
+    // smallestScreenWidth — стабилен при повороте (иначе телефон в альбоме → Medium и UI скачет).
+    val widthDp = LocalConfiguration.current.smallestScreenWidthDp
     return remember(widthDp) {
         when {
             widthDp >= 840 -> HomeMetrics(

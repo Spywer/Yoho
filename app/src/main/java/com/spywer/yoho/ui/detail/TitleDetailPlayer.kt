@@ -688,9 +688,23 @@ private class PlayerWebViewHolder {
             isFocusable = true
             elevation = 64f
         }
+        val playerSlot = FrameLayout(activity)
         (view.parent as? ViewGroup)?.removeView(view)
-        root.addView(view, fullscreenPlayerLayoutParams(activity))
-        bindFullscreenLayoutListener(root, view)
+        playerSlot.addView(
+            view,
+            FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT,
+            ),
+        )
+        // Сразу MATCH_PARENT — displayMetrics на повороте часто устаревшие → уезд за экран.
+        root.addView(
+            playerSlot,
+            FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT,
+            ),
+        )
         val close = android.widget.ImageButton(activity).apply {
             setImageResource(android.R.drawable.ic_menu_close_clear_cancel)
             setBackgroundColor(android.graphics.Color.TRANSPARENT)
@@ -699,6 +713,7 @@ private class PlayerWebViewHolder {
             setOnClickListener { requestExitHtmlFullscreen() }
             val pad = (8 * density).toInt()
             setPadding(pad, pad, pad, pad)
+            tag = FULLSCREEN_CLOSE_TAG
         }
         root.addView(
             close,
@@ -711,6 +726,7 @@ private class PlayerWebViewHolder {
                 it.setMargins(m, fullscreenCloseTopMargin(decor, density), m, m)
             },
         )
+        bindFullscreenLayoutListener(root, playerSlot)
         decor.addView(
             root,
             FrameLayout.LayoutParams(
@@ -820,8 +836,23 @@ private fun fullscreenCloseTopMargin(host: View, density: Float): Int {
     return status + (10 * density).toInt()
 }
 
+private const val FULLSCREEN_CLOSE_TAG = "yoho_fs_close"
+
+/** Альбом (порог 5/4) — без крестика; портрет — показать. */
+private fun syncFullscreenCloseVisibility(container: ViewGroup, width: Int, height: Int) {
+    val landscape = width > 0 && height > 0 && width * 4 >= height * 5
+    val visibility = if (landscape) View.GONE else View.VISIBLE
+    for (i in 0 until container.childCount) {
+        val child = container.getChildAt(i)
+        if (child.tag == FULLSCREEN_CLOSE_TAG) {
+            if (child.visibility != visibility) child.visibility = visibility
+        }
+    }
+}
+
 /**
  * Альбом — на весь экран; портрет — 16:9 по центру (чёрные поля сверху/снизу).
+ * Порог 5/4 — без дрожания около квадрата во время анимации поворота.
  */
 private fun fullscreenPlayerLayoutParams(
     context: android.content.Context,
@@ -840,8 +871,8 @@ private fun fullscreenPlayerLayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT,
         )
     }
-    // Альбом / квадрат → edge-to-edge
-    if (containerW >= containerH) {
+    // Явный альбом → edge-to-edge
+    if (containerW * 4 >= containerH * 5) {
         return FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT,
             ViewGroup.LayoutParams.MATCH_PARENT,
@@ -856,11 +887,78 @@ private fun fullscreenPlayerLayoutParams(
     return FrameLayout.LayoutParams(w, h, android.view.Gravity.CENTER)
 }
 
-/** Мягко подгоняет child при смене размера контейнера (поворот), без мигания surface. */
+private fun findFullscreenWebView(root: View): WebView? {
+    if (root is WebView) return root
+    if (root is ViewGroup) {
+        for (i in 0 until root.childCount) {
+            findFullscreenWebView(root.getChildAt(i))?.let { return it }
+        }
+    }
+    return null
+}
+
+/** После поворота: iframe/video часто остаются со старыми px и «уезжают» за экран. */
+private fun reflowFullscreenPlayer(playerSlot: View) {
+    val web = findFullscreenWebView(playerSlot) ?: return
+    web.post {
+        runCatching {
+            web.onResume()
+            web.resumeTimers()
+            web.requestLayout()
+            val fs = true
+            applyPlayerContentZoom(web, enabled = fs)
+            web.evaluateJavascript(
+                """
+                (function(){
+                  try {
+                    document.documentElement.style.width='100%';
+                    document.documentElement.style.height='100%';
+                    document.documentElement.style.overflow='hidden';
+                    if (document.body) {
+                      document.body.style.width='100%';
+                      document.body.style.height='100%';
+                      document.body.style.overflow='hidden';
+                      document.body.style.margin='0';
+                    }
+                    var nodes = document.querySelectorAll('iframe,video,embed,object');
+                    for (var i = 0; i < nodes.length; i++) {
+                      var n = nodes[i];
+                      n.style.maxWidth='100%';
+                      n.style.maxHeight='100%';
+                      n.style.width='100%';
+                      n.style.height='100%';
+                      n.removeAttribute('width');
+                      n.removeAttribute('height');
+                    }
+                    window.dispatchEvent(new Event('resize'));
+                  } catch (e) {}
+                })();
+                """.trimIndent(),
+                null,
+            )
+        }
+    }
+}
+
+/**
+ * Подгоняет slot при повороте:
+ * сразу MATCH_PARENT (не оставляем старые px), затем debounce → 16:9/full + reflow.
+ */
 private fun bindFullscreenLayoutListener(
     container: FrameLayout,
-    playerView: View,
+    playerSlot: View,
 ) {
+    container.clipChildren = true
+    container.clipToPadding = true
+    (playerSlot as? ViewGroup)?.let {
+        it.clipChildren = true
+        it.clipToPadding = true
+    }
+    var pending: Runnable? = null
+    fun fillParams() = FrameLayout.LayoutParams(
+        ViewGroup.LayoutParams.MATCH_PARENT,
+        ViewGroup.LayoutParams.MATCH_PARENT,
+    )
     container.addOnLayoutChangeListener { v, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom ->
         val w = right - left
         val h = bottom - top
@@ -868,17 +966,43 @@ private fun bindFullscreenLayoutListener(
         val oldH = oldBottom - oldTop
         if (w == oldW && h == oldH) return@addOnLayoutChangeListener
         if (w <= 0 || h <= 0) return@addOnLayoutChangeListener
-        val next = fullscreenPlayerLayoutParams(w, h)
-        val cur = playerView.layoutParams as? FrameLayout.LayoutParams
-        if (cur != null &&
-            cur.width == next.width &&
-            cur.height == next.height &&
-            cur.gravity == next.gravity
+        // Мгновенно на весь контейнер — иначе слот со старыми px уезжает за край.
+        val cur = playerSlot.layoutParams as? FrameLayout.LayoutParams
+        if (cur == null ||
+            cur.width != ViewGroup.LayoutParams.MATCH_PARENT ||
+            cur.height != ViewGroup.LayoutParams.MATCH_PARENT
         ) {
-            return@addOnLayoutChangeListener
+            playerSlot.layoutParams = fillParams()
         }
-        playerView.layoutParams = next
-        v.requestLayout()
+        pending?.let { v.removeCallbacks(it) }
+        val task = Runnable {
+            pending = null
+            val cw = v.width
+            val ch = v.height
+            if (cw <= 0 || ch <= 0) return@Runnable
+            syncFullscreenCloseVisibility(container, cw, ch)
+            val next = fullscreenPlayerLayoutParams(cw, ch)
+            val now = playerSlot.layoutParams as? FrameLayout.LayoutParams
+            if (now == null ||
+                now.width != next.width ||
+                now.height != next.height ||
+                now.gravity != next.gravity
+            ) {
+                playerSlot.layoutParams = next
+            }
+            reflowFullscreenPlayer(playerSlot)
+        }
+        pending = task
+        v.postDelayed(task, 64L)
+    }
+    container.post {
+        syncFullscreenCloseVisibility(container, container.width, container.height)
+        val cw = container.width
+        val ch = container.height
+        if (cw > 0 && ch > 0) {
+            playerSlot.layoutParams = fullscreenPlayerLayoutParams(cw, ch)
+            reflowFullscreenPlayer(playerSlot)
+        }
     }
 }
 
@@ -921,9 +1045,22 @@ private fun PlayerFullscreenEffect(
                 isClickable = true
                 isFocusable = true
             }
+            val playerSlot = FrameLayout(context)
             (webView.parent as? ViewGroup)?.removeView(webView)
-            overlay.addView(webView, fullscreenPlayerLayoutParams(context))
-            bindFullscreenLayoutListener(overlay, webView)
+            playerSlot.addView(
+                webView,
+                FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                ),
+            )
+            overlay.addView(
+                playerSlot,
+                FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                ),
+            )
             val close = android.widget.ImageButton(context).apply {
                 setImageResource(android.R.drawable.ic_menu_close_clear_cancel)
                 setBackgroundColor(android.graphics.Color.TRANSPARENT)
@@ -935,6 +1072,7 @@ private fun PlayerFullscreenEffect(
                 }
                 val pad = (8 * density).toInt()
                 setPadding(pad, pad, pad, pad)
+                tag = FULLSCREEN_CLOSE_TAG
             }
             overlay.addView(
                 close,
@@ -947,6 +1085,7 @@ private fun PlayerFullscreenEffect(
                     it.setMargins(m, fullscreenCloseTopMargin(decor, density), m, m)
                 },
             )
+            bindFullscreenLayoutListener(overlay, playerSlot)
             decor.addView(
                 overlay,
                 FrameLayout.LayoutParams(
@@ -1189,9 +1328,9 @@ private fun createPlayerWebView(
     }
 }
 
-/** true только Expanded (≥840dp); Compact/Medium — без zoom. */
+/** true только Expanded (≥840dp sw); Compact/Medium — без zoom. */
 private fun playerZoomAllowed(context: android.content.Context): Boolean =
-    context.resources.configuration.screenWidthDp >= 840
+    context.resources.configuration.smallestScreenWidthDp >= 840
 
 /** Масштаб оболочки плеера; только fullscreen и только Expanded. */
 private fun applyPlayerContentZoom(webView: WebView, enabled: Boolean) {
@@ -1205,10 +1344,16 @@ private fun applyPlayerContentZoom(webView: WebView, enabled: Boolean) {
           try {
             var z = '$z';
             document.documentElement.style.zoom = z;
-            if (document.body) document.body.style.zoom = z;
-            var ifr = document.querySelectorAll('iframe');
+            document.documentElement.style.overflow = 'hidden';
+            if (document.body) {
+              document.body.style.zoom = z;
+              document.body.style.overflow = 'hidden';
+            }
+            var ifr = document.querySelectorAll('iframe,video,embed,object');
             for (var i = 0; i < ifr.length; i++) {
               ifr[i].style.zoom = z;
+              ifr[i].style.maxWidth = '100%';
+              ifr[i].style.maxHeight = '100%';
             }
           } catch (e) {}
         })();
