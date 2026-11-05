@@ -358,6 +358,7 @@ private fun rememberTrailerLandscape(): Boolean {
                 landscape = newConfig.isLandscape()
             }
 
+            @Deprecated("Deprecated in Java")
             override fun onLowMemory() = Unit
         }
         activity.registerComponentCallbacks(callbacks)
