@@ -838,62 +838,61 @@ private fun fullscreenCloseTopMargin(host: View, density: Float): Int {
 
 private const val FULLSCREEN_CLOSE_TAG = "yoho_fs_close"
 
-/** Альбом (порог 5/4) — без крестика; портрет — показать. */
+private fun isFullscreenLandscape(width: Int, height: Int): Boolean =
+    width > 0 && height > 0 && width * 4 >= height * 5
+
+/** Альбом — без крестика; портрет — показать. */
 private fun syncFullscreenCloseVisibility(container: ViewGroup, width: Int, height: Int) {
-    val landscape = width > 0 && height > 0 && width * 4 >= height * 5
-    val visibility = if (landscape) View.GONE else View.VISIBLE
+    val visibility =
+        if (isFullscreenLandscape(width, height)) View.GONE else View.VISIBLE
     for (i in 0 until container.childCount) {
         val child = container.getChildAt(i)
-        if (child.tag == FULLSCREEN_CLOSE_TAG) {
-            if (child.visibility != visibility) child.visibility = visibility
+        if (child.tag == FULLSCREEN_CLOSE_TAG && child.visibility != visibility) {
+            child.visibility = visibility
         }
     }
 }
 
 /**
- * Альбом — на весь экран; портрет — 16:9 по центру.
- * Порог 5/4 — без дрожания около квадрата при повороте.
+ * Letterbox 16:9 через padding контейнера.
+ * Слот всегда MATCH_PARENT — без скачков абсолютных LayoutParams при повороте.
  */
-private fun fullscreenPlayerLayoutParams(
-    containerW: Int,
-    containerH: Int,
-): FrameLayout.LayoutParams {
-    if (containerW <= 0 || containerH <= 0) {
-        return FrameLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT,
-            ViewGroup.LayoutParams.MATCH_PARENT,
-        )
+private fun applyFullscreenLetterbox(container: FrameLayout, width: Int, height: Int) {
+    if (width <= 0 || height <= 0) return
+    if (isFullscreenLandscape(width, height)) {
+        if (container.paddingLeft != 0 || container.paddingTop != 0 ||
+            container.paddingRight != 0 || container.paddingBottom != 0
+        ) {
+            container.setPadding(0, 0, 0, 0)
+        }
+        return
     }
-    if (containerW * 4 >= containerH * 5) {
-        return FrameLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT,
-            ViewGroup.LayoutParams.MATCH_PARENT,
-        )
-    }
-    val byWidthH = (containerW * 9f / 16f).toInt()
-    val (w, h) = if (byWidthH <= containerH) {
-        containerW to byWidthH
+    val byWidthH = (width * 9f / 16f).toInt()
+    val (padV, padH) = if (byWidthH <= height) {
+        ((height - byWidthH) / 2).coerceAtLeast(0) to 0
     } else {
-        (containerH * 16f / 9f).toInt() to containerH
+        val contentW = (height * 16f / 9f).toInt()
+        0 to ((width - contentW) / 2).coerceAtLeast(0)
     }
-    return FrameLayout.LayoutParams(w, h, android.view.Gravity.CENTER)
+    if (container.paddingTop != padV || container.paddingBottom != padV ||
+        container.paddingLeft != padH || container.paddingRight != padH
+    ) {
+        container.setPadding(padH, padV, padH, padV)
+    }
 }
 
-/**
- * Slot: debounce → 16:9/full + видимость крестика.
- * Сразу MATCH_PARENT, чтобы не оставлять старые px с прошлой ориентации.
- */
+/** Debounce только padding + крестик; размер слота не трогаем. */
 private fun bindFullscreenLayoutListener(
     container: FrameLayout,
     playerSlot: View,
 ) {
     container.clipChildren = true
     container.clipToPadding = true
-    var pending: Runnable? = null
-    fun fillParams() = FrameLayout.LayoutParams(
+    playerSlot.layoutParams = FrameLayout.LayoutParams(
         ViewGroup.LayoutParams.MATCH_PARENT,
         ViewGroup.LayoutParams.MATCH_PARENT,
     )
+    var pending: Runnable? = null
     container.addOnLayoutChangeListener { v, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom ->
         val w = right - left
         val h = bottom - top
@@ -901,13 +900,6 @@ private fun bindFullscreenLayoutListener(
         val oldH = oldBottom - oldTop
         if (w == oldW && h == oldH) return@addOnLayoutChangeListener
         if (w <= 0 || h <= 0) return@addOnLayoutChangeListener
-        val cur = playerSlot.layoutParams as? FrameLayout.LayoutParams
-        if (cur == null ||
-            cur.width != ViewGroup.LayoutParams.MATCH_PARENT ||
-            cur.height != ViewGroup.LayoutParams.MATCH_PARENT
-        ) {
-            playerSlot.layoutParams = fillParams()
-        }
         pending?.let { v.removeCallbacks(it) }
         val task = Runnable {
             pending = null
@@ -915,26 +907,17 @@ private fun bindFullscreenLayoutListener(
             val ch = v.height
             if (cw <= 0 || ch <= 0) return@Runnable
             syncFullscreenCloseVisibility(container, cw, ch)
-            val next = fullscreenPlayerLayoutParams(cw, ch)
-            val now = playerSlot.layoutParams as? FrameLayout.LayoutParams
-            if (now == null ||
-                now.width != next.width ||
-                now.height != next.height ||
-                now.gravity != next.gravity
-            ) {
-                playerSlot.layoutParams = next
-            }
+            applyFullscreenLetterbox(container, cw, ch)
         }
         pending = task
-        v.postDelayed(task, 64L)
+        // Ждём конец анимации поворота — меньше промежуточных padding.
+        v.postDelayed(task, 100L)
     }
     container.post {
-        syncFullscreenCloseVisibility(container, container.width, container.height)
         val cw = container.width
         val ch = container.height
-        if (cw > 0 && ch > 0) {
-            playerSlot.layoutParams = fullscreenPlayerLayoutParams(cw, ch)
-        }
+        syncFullscreenCloseVisibility(container, cw, ch)
+        applyFullscreenLetterbox(container, cw, ch)
     }
 }
 
