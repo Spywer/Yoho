@@ -23,11 +23,12 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
@@ -37,7 +38,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -181,112 +181,144 @@ fun TrailerPlayerDialog(
                 .statusBarsPadding()
                 .navigationBarsPadding()
                 .clickable(onClick = onDismiss),
-            contentAlignment = Alignment.Center,
         ) {
+            val padH = if (metrics.isTablet) 24.dp else 8.dp
+            val cardPad = if (metrics.isTablet) 12.dp else 8.dp
+            val gapAfterHeader = if (metrics.isTablet) 10.dp else 6.dp
+            // Равные weight сверху/снизу → блок с видео всегда по центру, список не сдвигает.
             Column(
                 Modifier
-                    .fillMaxWidth()
+                    .fillMaxSize()
                     .widthIn(max = 720.dp)
-                    .padding(horizontal = if (metrics.isTablet) 24.dp else 12.dp)
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(Color(0xFF1A1A1A))
-                    .clickable(
-                        indication = null,
-                        interactionSource = remember { MutableInteractionSource() },
-                        onClick = {},
-                    )
-                    .padding(12.dp),
+                    .align(Alignment.Center)
+                    .padding(horizontal = padH),
             ) {
-                Row(
-                    Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                Spacer(Modifier.weight(1f))
+                Column(
+                    Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(if (metrics.isTablet) 16.dp else 12.dp))
+                        .background(Color(0xFF1A1A1A))
+                        .clickable(
+                            indication = null,
+                            interactionSource = remember { MutableInteractionSource() },
+                            onClick = {},
+                        )
+                        .padding(cardPad),
                 ) {
-                    if (showSourceTabs) {
-                        SourceChip(
-                            label = stringResource(R.string.detail_trailer_source_youtube),
-                            selected = source == TrailerSource.Youtube,
-                            onClick = {
-                                source = TrailerSource.Youtube
-                                selectedIndex = 0
-                            },
-                        )
-                        SourceChip(
-                            label = stringResource(R.string.detail_trailer_source_vk),
-                            selected = source == TrailerSource.Vk,
-                            onClick = {
-                                source = TrailerSource.Vk
-                                selectedIndex = 0
-                            },
-                        )
-                        Spacer(Modifier.weight(1f))
-                    } else {
-                        Text(
-                            text = title?.takeIf { it.isNotBlank() }
-                                ?: selected?.title
-                                ?: stringResource(R.string.detail_trailer),
-                            color = Color.White,
-                            fontSize = metrics.searchTextSize,
-                            fontWeight = FontWeight.SemiBold,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.weight(1f),
-                        )
-                    }
-                    IconButton(
-                        onClick = onDismiss,
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(20.dp))
-                            .background(Color(0xFF2A2A2A)),
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(
+                            if (metrics.isTablet) 8.dp else 6.dp,
+                        ),
                     ) {
-                        Icon(Icons.Filled.Close, contentDescription = null, tint = Color.White)
+                        if (showSourceTabs) {
+                            SourceChip(
+                                label = stringResource(R.string.detail_trailer_source_youtube),
+                                selected = source == TrailerSource.Youtube,
+                                onClick = {
+                                    source = TrailerSource.Youtube
+                                    selectedIndex = 0
+                                },
+                            )
+                            SourceChip(
+                                label = stringResource(R.string.detail_trailer_source_vk),
+                                selected = source == TrailerSource.Vk,
+                                onClick = {
+                                    source = TrailerSource.Vk
+                                    selectedIndex = 0
+                                },
+                            )
+                            Spacer(Modifier.weight(1f))
+                        } else {
+                            Text(
+                                text = title?.takeIf { it.isNotBlank() }
+                                    ?: selected?.title
+                                    ?: stringResource(R.string.detail_trailer),
+                                color = Color.White,
+                                fontSize = metrics.searchTextSize,
+                                fontWeight = FontWeight.SemiBold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f),
+                            )
+                        }
+                        Box(
+                            modifier = Modifier
+                                .size(if (metrics.isTablet) 40.dp else 28.dp)
+                                .clip(RoundedCornerShape(50))
+                                .background(Color(0xFF2A2A2A))
+                                .clickable(onClick = onDismiss),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Icon(
+                                Icons.Filled.Close,
+                                contentDescription = null,
+                                tint = Color.White,
+                                modifier = Modifier.size(if (metrics.isTablet) 22.dp else 16.dp),
+                            )
+                        }
+                    }
+
+                    Spacer(Modifier.padding(top = gapAfterHeader))
+
+                    Box(
+                        Modifier
+                            .fillMaxWidth()
+                            .aspectRatio(16f / 9f)
+                            .clip(RoundedCornerShape(if (metrics.isTablet) 12.dp else 8.dp))
+                            .background(Color.Black),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        when {
+                            selected == null -> {
+                                Text(
+                                    text = stringResource(R.string.detail_trailer),
+                                    color = Color.White,
+                                    modifier = Modifier.padding(24.dp),
+                                )
+                            }
+                            source == TrailerSource.Youtube && selected.hasYoutube -> {
+                                YoutubeTrailerPlayer(
+                                    videoId = selected.youtubeKey.orEmpty(),
+                                    modifier = Modifier.fillMaxSize(),
+                                )
+                            }
+                            source == TrailerSource.Vk && selected.hasVk -> {
+                                VkTrailerPlayer(
+                                    embedUrl = selected.vkEmbedUrl.orEmpty(),
+                                    modifier = Modifier.fillMaxSize(),
+                                )
+                            }
+                        }
                     }
                 }
-
-                Spacer(Modifier.padding(top = 10.dp))
-
                 Box(
                     Modifier
                         .fillMaxWidth()
-                        .aspectRatio(16f / 9f)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(Color.Black),
-                    contentAlignment = Alignment.Center,
+                        .weight(1f)
+                        .padding(top = if (metrics.isTablet) 12.dp else 8.dp),
                 ) {
-                    when {
-                        selected == null -> {
-                            Text(
-                                text = stringResource(R.string.detail_trailer),
-                                color = Color.White,
-                                modifier = Modifier.padding(24.dp),
-                            )
-                        }
-                        source == TrailerSource.Youtube && selected.hasYoutube -> {
-                            YoutubeTrailerPlayer(
-                                videoId = selected.youtubeKey.orEmpty(),
-                                modifier = Modifier.fillMaxSize(),
-                            )
-                        }
-                        source == TrailerSource.Vk && selected.hasVk -> {
-                            VkTrailerPlayer(
-                                embedUrl = selected.vkEmbedUrl.orEmpty(),
-                                modifier = Modifier.fillMaxSize(),
-                            )
-                        }
+                    if (showClipPicker) {
+                        ClipGrid(
+                            clips = sourceClips,
+                            selectedIndex = selectedIndex,
+                            onSelect = { selectedIndex = it },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .fillMaxHeight()
+                                .clip(RoundedCornerShape(if (metrics.isTablet) 12.dp else 8.dp))
+                                .background(Color(0xFF1A1A1A))
+                                .clickable(
+                                    indication = null,
+                                    interactionSource = remember { MutableInteractionSource() },
+                                    onClick = {},
+                                )
+                                .padding(if (metrics.isTablet) 10.dp else 6.dp)
+                                .verticalScroll(rememberScrollState()),
+                        )
                     }
-                }
-
-                if (showClipPicker) {
-                    ClipGrid(
-                        clips = sourceClips,
-                        selectedIndex = selectedIndex,
-                        onSelect = { selectedIndex = it },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = 12.dp)
-                            .heightIn(max = 160.dp)
-                            .verticalScroll(rememberScrollState()),
-                    )
                 }
             }
         }
@@ -307,10 +339,13 @@ private fun SourceChip(
         lineHeight = metrics.lineOf(metrics.searchTextSize),
         fontWeight = FontWeight.Medium,
         modifier = Modifier
-            .clip(RoundedCornerShape(20.dp))
+            .clip(RoundedCornerShape(if (metrics.isTablet) 20.dp else 14.dp))
             .background(if (selected) Color(0xFF333333) else Color.Transparent)
             .clickable(onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 10.dp),
+            .padding(
+                horizontal = if (metrics.isTablet) 16.dp else 10.dp,
+                vertical = if (metrics.isTablet) 10.dp else 6.dp,
+            ),
     )
 }
 
@@ -323,11 +358,13 @@ private fun ClipGrid(
     modifier: Modifier = Modifier,
 ) {
     val metrics = LocalHomeMetrics.current
+    val compact = !metrics.isTablet
+    val gap = if (compact) 4.dp else 8.dp
     FlowRow(
         modifier = modifier,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-        maxItemsInEachRow = 2,
+        horizontalArrangement = Arrangement.spacedBy(gap),
+        verticalArrangement = Arrangement.spacedBy(gap),
+        maxItemsInEachRow = if (compact) 1 else 2,
     ) {
         clips.forEachIndexed { index, clip ->
             val active = index == selectedIndex
@@ -337,15 +374,18 @@ private fun ClipGrid(
                 color = if (active) Color.White else Color(0xFFB0B0B0),
                 fontSize = metrics.cardMetaSize,
                 fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal,
-                textAlign = TextAlign.Center,
-                maxLines = 2,
+                textAlign = if (compact) TextAlign.Start else TextAlign.Center,
+                maxLines = if (compact) 1 else 2,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier
-                    .weight(1f)
-                    .clip(RoundedCornerShape(10.dp))
+                    .then(if (compact) Modifier.fillMaxWidth() else Modifier.weight(1f))
+                    .clip(RoundedCornerShape(if (compact) 8.dp else 10.dp))
                     .background(if (active) Color(0xFF2F2F2F) else Color(0xFF242424))
                     .clickable { onSelect(index) }
-                    .padding(horizontal = 10.dp, vertical = 12.dp),
+                    .padding(
+                        horizontal = if (compact) 8.dp else 10.dp,
+                        vertical = if (compact) 7.dp else 12.dp,
+                    ),
             )
         }
     }
