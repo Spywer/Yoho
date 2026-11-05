@@ -182,7 +182,7 @@ internal fun PlayerBlock(
                 }
             }
 
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(LocalHomeMetrics.current.blockGap))
             Box(
                 Modifier
                     .fillMaxWidth()

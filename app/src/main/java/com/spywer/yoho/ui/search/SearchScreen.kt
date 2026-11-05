@@ -110,20 +110,24 @@ fun SearchScreen(
                             .fillMaxWidth()
                             .statusBarsPadding()
                             .background(MaterialTheme.colorScheme.background)
-                            .padding(horizontal = metrics.screenPadding, vertical = 12.dp),
+                            .padding(
+                                horizontal = metrics.screenPadding,
+                                vertical = metrics.sectionGap,
+                            ),
                     ) {
                         if (!title.isNullOrBlank() && !showBack) {
                             Text(
                                 text = title,
                                 color = MaterialTheme.colorScheme.onBackground,
                                 fontSize = metrics.sectionTitleSize,
+                                lineHeight = metrics.lineOf(metrics.sectionTitleSize),
                                 fontWeight = FontWeight.Bold,
-                                modifier = Modifier.padding(bottom = 12.dp),
+                                modifier = Modifier.padding(bottom = metrics.sectionGap),
                             )
                         }
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            horizontalArrangement = Arrangement.spacedBy(metrics.blockGap),
                         ) {
                             if (showBack) {
                                 YohoBackButton(onClick = onBack)
@@ -144,7 +148,7 @@ fun SearchScreen(
                                 onPick = viewModel::applySuggestion,
                             )
                         }
-                        Spacer(Modifier.height(12.dp))
+                        Spacer(Modifier.height(metrics.sectionGap))
                         SearchControlsRow(
                             state = state,
                             textSize = metrics.chipTextSize,
@@ -235,9 +239,10 @@ private fun SearchControlsRow(
         }.joinToString(", ")
     }
 
+    val metrics = LocalHomeMetrics.current
     FlowRow(
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
+        horizontalArrangement = Arrangement.spacedBy(metrics.blockGap),
+        verticalArrangement = Arrangement.spacedBy(metrics.blockGap),
     ) {
         Box {
             FilterChip(

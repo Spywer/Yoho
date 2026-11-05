@@ -93,19 +93,23 @@ fun HomeScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .background(MaterialTheme.colorScheme.background)
-                            .padding(horizontal = metrics.screenPadding, vertical = 12.dp),
+                            .padding(
+                                horizontal = metrics.screenPadding,
+                                vertical = metrics.sectionGap,
+                            ),
                     ) {
                         Text(
                             text = "YH",
                             color = MaterialTheme.colorScheme.onBackground,
                             fontSize = metrics.brandSize,
+                            lineHeight = metrics.lineOf(metrics.brandSize),
                             fontWeight = FontWeight.Black,
                             modifier = Modifier.align(Alignment.CenterHorizontally),
                         )
-                        Spacer(Modifier.height(12.dp))
+                        Spacer(Modifier.height(metrics.sectionGap))
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            horizontalArrangement = Arrangement.spacedBy(metrics.blockGap),
                         ) {
                             HomeSearchEntry(
                                 height = metrics.searchHeight,
@@ -127,7 +131,7 @@ fun HomeScreen(
                                 )
                             }
                         }
-                        Spacer(Modifier.height(12.dp))
+                        Spacer(Modifier.height(metrics.sectionGap))
                         CategoryChips(
                             selected = state.filter,
                             onSelect = viewModel::setFilter,
@@ -180,7 +184,9 @@ fun HomeScreen(
                         ContentColumn(metrics) {
                             LazyColumn(
                                 modifier = Modifier.fillMaxSize(),
-                                contentPadding = PaddingValues(bottom = 32.dp),
+                                contentPadding = PaddingValues(
+                                    bottom = if (metrics.isTablet) 32.dp else 20.dp,
+                                ),
                             ) {
                                 item {
                                     PosterSection(
@@ -396,7 +402,8 @@ private fun PosterSection(
     edgePaddingEnd: Dp = padding,
 ) {
     if (items.isEmpty()) return
-    Column(modifier.padding(top = 8.dp)) {
+    val metrics = LocalHomeMetrics.current
+    Column(modifier.padding(top = metrics.blockGap)) {
         SectionTitle(title, titleSize, edgePaddingStart)
         LazyRow(
             contentPadding = PaddingValues(start = edgePaddingStart, end = edgePaddingEnd),
@@ -424,7 +431,8 @@ private fun TrailerSection(
     onOpen: (TitleDto) -> Unit,
 ) {
     if (items.isEmpty()) return
-    Column(Modifier.padding(top = 8.dp)) {
+    val metrics = LocalHomeMetrics.current
+    Column(Modifier.padding(top = metrics.blockGap)) {
         SectionTitle(title, titleSize, padding)
         LazyRow(
             contentPadding = PaddingValues(horizontal = padding),
@@ -447,11 +455,18 @@ private fun SectionTitle(
     size: TextUnit,
     padding: Dp,
 ) {
+    val metrics = LocalHomeMetrics.current
     Text(
         text = title,
         color = MaterialTheme.colorScheme.onBackground,
         fontSize = size,
+        lineHeight = metrics.lineOf(size),
         fontWeight = FontWeight.Bold,
-        modifier = Modifier.padding(start = padding, end = padding, top = 12.dp, bottom = 12.dp),
+        modifier = Modifier.padding(
+            start = padding,
+            end = padding,
+            top = metrics.sectionGap,
+            bottom = metrics.blockGap,
+        ),
     )
 }

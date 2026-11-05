@@ -86,19 +86,21 @@ fun TrailerCard(
             text = item.displayTitle().replace('\n', ' ').trim(),
             color = MaterialTheme.colorScheme.onBackground,
             fontSize = metrics.cardTitleSize,
+            lineHeight = metrics.lineOf(metrics.cardTitleSize),
             fontWeight = FontWeight.Medium,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
             softWrap = true,
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(top = 8.dp),
+                .padding(top = metrics.blockGap),
         )
         item.displayYear()?.let {
             Text(
                 text = it.toString(),
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 fontSize = metrics.cardMetaSize,
+                lineHeight = metrics.lineOf(metrics.cardMetaSize),
             )
         }
     }

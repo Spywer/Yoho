@@ -111,7 +111,10 @@ private fun NextEpisodeBlock(
         Modifier
             .fillMaxWidth()
             .padding(horizontal = padding)
-            .padding(top = 20.dp, bottom = 12.dp),
+            .padding(
+                top = metrics.sectionGap,
+                bottom = metrics.blockGap,
+            ),
     ) {
         if (nextEpisode != null && nextSeason != null && meta.inProduction != false) {
             Row(
@@ -119,7 +122,7 @@ private fun NextEpisodeBlock(
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(12.dp))
                     .background(MaterialTheme.colorScheme.surfaceVariant)
-                    .padding(if (metrics.isTablet) 16.dp else 12.dp),
+                    .padding(if (metrics.isTablet) 16.dp else metrics.sectionGap),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Box(
@@ -191,7 +194,7 @@ private fun NextEpisodeBlock(
                     )
                 }
             }
-            Spacer(Modifier.height(14.dp))
+            Spacer(Modifier.height(metrics.sectionGap))
         }
 
         if (totalCount > 0 && airedCount > 0) {
@@ -212,7 +215,7 @@ private fun NextEpisodeBlock(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     fontSize = metrics.scheduleBodySize,
                 )
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(metrics.blockGap))
                 Box(
                     Modifier
                         .fillMaxWidth()
@@ -229,7 +232,7 @@ private fun NextEpisodeBlock(
                     )
                 }
             }
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(metrics.sectionGap))
         }
 
         if (lastEpisode != null && airedDate != null) {
@@ -308,11 +311,11 @@ internal fun LazyListScope.titleDetailScheduleSection(
                 Modifier
                     .fillMaxWidth()
                     .padding(horizontal = screenPadding)
-                    .padding(top = 20.dp),
+                    .padding(top = metrics.sectionGap),
             ) {
                 Row(
                     Modifier.horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(metrics.blockGap),
                 ) {
                     schedule.seasons.forEach { season ->
                         val num = season.seasonNumber ?: return@forEach
@@ -434,10 +437,14 @@ internal fun LazyListScope.titleDetailScheduleSection(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    text = stringResource(
-                        R.string.detail_episode_n,
-                        ep.episodeNumber ?: 0,
-                    ),
+                    text = if (metrics.isTablet) {
+                        stringResource(
+                            R.string.detail_episode_n,
+                            ep.episodeNumber ?: 0,
+                        )
+                    } else {
+                        (ep.episodeNumber ?: 0).toString()
+                    },
                     color = if (aired) {
                         MaterialTheme.colorScheme.primary
                     } else {
@@ -447,7 +454,8 @@ internal fun LazyListScope.titleDetailScheduleSection(
                     fontWeight = FontWeight.SemiBold,
                     maxLines = 1,
                     softWrap = false,
-                    modifier = Modifier.width(if (metrics.isTablet) 120.dp else 56.dp),
+                    textAlign = if (metrics.isTablet) TextAlign.Start else TextAlign.Center,
+                    modifier = Modifier.width(if (metrics.isTablet) 120.dp else 28.dp),
                 )
                 Column(Modifier.weight(1f)) {
                     Text(

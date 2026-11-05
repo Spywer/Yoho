@@ -200,7 +200,9 @@ private fun DetailContent(
     }
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(bottom = 32.dp),
+        contentPadding = PaddingValues(
+            bottom = if (metrics.isTablet) 32.dp else 20.dp,
+        ),
     ) {
         item {
             DetailHero(
@@ -272,23 +274,27 @@ private fun DetailContent(
                 }
 
                 detail.trailer?.url?.let { url ->
-                    Spacer(Modifier.height(16.dp))
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(MaterialTheme.colorScheme.surfaceVariant)
-                            .clickable {
-                                context.startActivity(
-                                    Intent(Intent.ACTION_VIEW, Uri.parse(url)),
-                                )
-                            }
-                            .padding(12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
+                    Spacer(Modifier.height(metrics.sectionGap))
+                    val trailerMod = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                        .clickable {
+                            context.startActivity(
+                                Intent(Intent.ACTION_VIEW, Uri.parse(url)),
+                            )
+                        }
+                        .padding(if (metrics.isTablet) 12.dp else 10.dp)
+                    val thumb = @Composable {
                         Box(
                             Modifier
-                                .width(296.dp)
+                                .then(
+                                    if (metrics.isTablet) {
+                                        Modifier.width(296.dp)
+                                    } else {
+                                        Modifier.fillMaxWidth()
+                                    },
+                                )
                                 .aspectRatio(16f / 9f)
                                 .clip(RoundedCornerShape(10.dp))
                                 .background(Color.Black),
@@ -305,18 +311,20 @@ private fun DetailContent(
                                 contentDescription = null,
                                 tint = Color.White,
                                 modifier = Modifier
-                                    .size(48.dp)
+                                    .size(if (metrics.isTablet) 48.dp else 40.dp)
                                     .clip(RoundedCornerShape(24.dp))
                                     .background(Color.Black.copy(alpha = 0.5f))
                                     .padding(8.dp),
                             )
                         }
-                        Spacer(Modifier.width(14.dp))
-                        Column(Modifier.weight(1f)) {
+                    }
+                    val caption = @Composable { mod: Modifier ->
+                        Column(mod) {
                             Text(
                                 text = detail.trailer.title ?: trailerFallback,
                                 color = MaterialTheme.colorScheme.onBackground,
                                 fontSize = metrics.searchTextSize,
+                                lineHeight = metrics.lineOf(metrics.searchTextSize),
                                 fontWeight = FontWeight.SemiBold,
                                 maxLines = 2,
                                 overflow = TextOverflow.Ellipsis,
@@ -326,9 +334,26 @@ private fun DetailContent(
                                     text = it,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     fontSize = metrics.cardMetaSize,
-                                    modifier = Modifier.padding(top = 4.dp),
+                                    lineHeight = metrics.lineOf(metrics.cardMetaSize),
+                                    modifier = Modifier.padding(top = metrics.blockGap),
                                 )
                             }
+                        }
+                    }
+                    if (metrics.isTablet) {
+                        Row(
+                            modifier = trailerMod,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            thumb()
+                            Spacer(Modifier.width(14.dp))
+                            caption(Modifier.weight(1f))
+                        }
+                    } else {
+                        Column(modifier = trailerMod) {
+                            thumb()
+                            Spacer(Modifier.height(metrics.blockGap))
+                            caption(Modifier.fillMaxWidth())
                         }
                     }
                 }
@@ -360,7 +385,7 @@ private fun DetailContent(
                     onConsumeDiaryNotify = onConsumeDiaryNotify,
                     padding = metrics.screenPadding,
                     metaSize = metrics.cardMetaSize,
-                    modifier = Modifier.padding(top = 20.dp),
+                    modifier = Modifier.padding(top = metrics.sectionGap),
                 )
             }
         }
@@ -422,19 +447,21 @@ private fun DetailContent(
                                 text = actor.name.orEmpty(),
                                 color = MaterialTheme.colorScheme.onBackground,
                                 fontSize = metrics.castNameSize,
+                                lineHeight = metrics.lineOf(metrics.castNameSize),
                                 fontWeight = FontWeight.Medium,
                                 textAlign = TextAlign.Center,
                                 maxLines = 2,
                                 overflow = TextOverflow.Ellipsis,
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(top = 6.dp),
+                                    .padding(top = metrics.blockGap),
                             )
                             actor.role?.let {
                                 Text(
                                     text = it,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     fontSize = metrics.castRoleSize,
+                                    lineHeight = metrics.lineOf(metrics.castRoleSize),
                                     textAlign = TextAlign.Center,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis,

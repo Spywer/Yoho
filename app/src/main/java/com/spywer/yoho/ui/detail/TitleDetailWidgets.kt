@@ -24,6 +24,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.spywer.yoho.data.remote.TitleDto
 import com.spywer.yoho.ui.components.PosterCard
@@ -108,7 +109,11 @@ internal fun MetaRow(
     Row(
         Modifier
             .fillMaxWidth()
-            .padding(vertical = if (metrics.isTablet) 5.dp else 3.dp),
+            .padding(vertical = if (metrics.isTablet) 5.dp else 1.dp),
+        horizontalArrangement = Arrangement.spacedBy(
+            if (metrics.isTablet) 12.dp else 8.dp,
+        ),
+        verticalAlignment = Alignment.Top,
     ) {
         val metaSize = metrics.detailMetaSize
         val metaLine = metrics.detailMetaLine
@@ -117,7 +122,11 @@ internal fun MetaRow(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             fontSize = metaSize,
             lineHeight = metaLine,
-            modifier = Modifier.width(if (metrics.isTablet) 260.dp else 112.dp),
+            maxLines = 1,
+            softWrap = false,
+            overflow = TextOverflow.Clip,
+            // Фикс. ширина — колонка ровная; softWrap=false — без переносов; spacedBy — зазор до значения.
+            modifier = Modifier.width(if (metrics.isTablet) 260.dp else 118.dp),
         )
         if (personIds.isEmpty() && !linkPartsAsGenres) {
             Text(
@@ -132,7 +141,7 @@ internal fun MetaRow(
             FlowRow(
                 Modifier.weight(1f),
                 horizontalArrangement = Arrangement.spacedBy(0.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp),
+                verticalArrangement = Arrangement.spacedBy(metrics.blockGap),
             ) {
                 parts.forEachIndexed { index, name ->
                     val personId = personIds[name]?.takeIf { it > 0 }
@@ -173,12 +182,13 @@ internal fun SectionHeader(title: String, size: androidx.compose.ui.unit.TextUni
         text = title,
         color = MaterialTheme.colorScheme.onBackground,
         fontSize = size,
+        lineHeight = metrics.lineOf(size),
         fontWeight = FontWeight.Bold,
         modifier = Modifier.padding(
             start = padding,
             end = padding,
-            top = if (metrics.isTablet) 24.dp else 16.dp,
-            bottom = if (metrics.isTablet) 12.dp else 8.dp,
+            top = metrics.sectionGap,
+            bottom = metrics.blockGap,
         ),
     )
 }

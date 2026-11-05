@@ -102,16 +102,16 @@ fun PersonSheet(
                         .fillMaxWidth()
                         .verticalScroll(rememberScrollState())
                         .padding(horizontal = metrics.screenPadding)
-                        .padding(bottom = 28.dp),
+                        .padding(bottom = metrics.sectionGap),
                 ) {
                     Row(
                         Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(metrics.sectionGap),
                     ) {
                         Box(
                             Modifier
-                                .width(110.dp)
-                                .height(146.dp)
+                                .width(if (metrics.isTablet) 110.dp else 88.dp)
+                                .height(if (metrics.isTablet) 146.dp else 116.dp)
                                 .clip(RoundedCornerShape(12.dp))
                                 .background(MaterialTheme.colorScheme.surfaceVariant),
                         ) {
@@ -124,11 +124,15 @@ fun PersonSheet(
                                 )
                             }
                         }
-                        Column(Modifier.weight(1f)) {
+                        Column(
+                            Modifier.weight(1f),
+                            verticalArrangement = Arrangement.spacedBy(metrics.blockGap),
+                        ) {
                             Text(
                                 text = p.name.orEmpty(),
                                 color = MaterialTheme.colorScheme.onSurface,
                                 fontSize = metrics.sectionTitleSize,
+                                lineHeight = metrics.lineOf(metrics.sectionTitleSize),
                                 fontWeight = FontWeight.Bold,
                             )
                             p.profession?.takeIf { it.isNotBlank() }?.let {
@@ -136,7 +140,7 @@ fun PersonSheet(
                                     text = it,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     fontSize = metrics.cardMetaSize,
-                                    modifier = Modifier.padding(top = 6.dp),
+                                    lineHeight = metrics.lineOf(metrics.cardMetaSize),
                                 )
                             }
                             p.birthInfo?.takeIf { it.isNotBlank() }?.let {
@@ -144,7 +148,7 @@ fun PersonSheet(
                                     text = it,
                                     color = MaterialTheme.colorScheme.onSurface,
                                     fontSize = metrics.cardMetaSize,
-                                    modifier = Modifier.padding(top = 10.dp),
+                                    lineHeight = metrics.lineOf(metrics.cardMetaSize),
                                 )
                             }
                             p.birthplace?.takeIf { it.isNotBlank() }?.let {
@@ -152,7 +156,7 @@ fun PersonSheet(
                                     text = "${stringResource(R.string.person_birthplace)}: $it",
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     fontSize = metrics.cardMetaSize,
-                                    modifier = Modifier.padding(top = 4.dp),
+                                    lineHeight = metrics.lineOf(metrics.cardMetaSize),
                                 )
                             }
                         }
@@ -163,28 +167,36 @@ fun PersonSheet(
                             text = stringResource(R.string.person_known_for),
                             color = MaterialTheme.colorScheme.onSurface,
                             fontSize = metrics.searchTextSize,
+                            lineHeight = metrics.lineOf(metrics.searchTextSize),
                             fontWeight = FontWeight.SemiBold,
-                            modifier = Modifier.padding(top = 20.dp, bottom = 10.dp),
+                            modifier = Modifier.padding(
+                                top = metrics.sectionGap,
+                                bottom = metrics.blockGap,
+                            ),
                         )
                         FlowRow(
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                            horizontalArrangement = Arrangement.spacedBy(metrics.blockGap),
+                            verticalArrangement = Arrangement.spacedBy(metrics.blockGap),
                         ) {
                             p.knownFor.forEach { title ->
                                 Text(
                                     text = title,
                                     color = MaterialTheme.colorScheme.onSurface,
                                     fontSize = metrics.cardMetaSize,
+                                    lineHeight = metrics.lineOf(metrics.cardMetaSize),
                                     modifier = Modifier
                                         .clip(RoundedCornerShape(8.dp))
                                         .background(MaterialTheme.colorScheme.surfaceVariant)
-                                        .padding(horizontal = 10.dp, vertical = 6.dp),
+                                        .padding(
+                                            horizontal = 10.dp,
+                                            vertical = if (metrics.isTablet) 6.dp else 4.dp,
+                                        ),
                                 )
                             }
                         }
                     }
 
-                    Spacer(Modifier.height(8.dp))
+                    Spacer(Modifier.height(metrics.blockGap))
                 }
             }
         }

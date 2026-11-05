@@ -25,6 +25,9 @@ data class HomeMetrics(
     val poster: Dp,
     val trailer: Dp,
     val cardGap: Dp,
+    /** Вертикальный ритм: секции / мелкие блоки */
+    val sectionGap: Dp,
+    val blockGap: Dp,
     val sectionTitleSize: TextUnit,
     val brandSize: TextUnit,
     val searchHeight: Dp,
@@ -62,6 +65,14 @@ data class HomeMetrics(
     val scheduleEpSize: TextUnit,
 ) {
     val isTablet: Boolean get() = widthClass != WidthClass.Compact
+
+    /** Межстрочный для произвольного размера шрифта. */
+    fun lineOf(size: TextUnit): TextUnit =
+        if (isTablet) {
+            (size.value * 1.35f).sp
+        } else {
+            (size.value + 2f).sp
+        }
 }
 
 val LocalHomeMetrics = compositionLocalOf { CompactMetrics }
@@ -74,7 +85,9 @@ val CompactMetrics = HomeMetrics(
     posterLarge = 152.dp,
     poster = 128.dp,
     trailer = 260.dp,
-    cardGap = 10.dp,
+    cardGap = 8.dp,
+    sectionGap = 8.dp,
+    blockGap = 4.dp,
     sectionTitleSize = 20.sp,
     brandSize = 24.sp,
     searchHeight = 44.dp,
@@ -90,10 +103,10 @@ val CompactMetrics = HomeMetrics(
     detailTitleSize = 22.sp,
     detailSubtitleSize = 14.sp,
     detailBodySize = 15.sp,
-    detailBodyLine = 22.sp,
+    detailBodyLine = 18.sp,
     detailTagSize = 13.sp,
     detailMetaSize = 14.sp,
-    detailMetaLine = 20.sp,
+    detailMetaLine = 17.sp,
     detailFavTextSize = 14.sp,
     castNameSize = 13.sp,
     castRoleSize = 11.sp,
@@ -121,6 +134,8 @@ fun rememberHomeMetrics(): HomeMetrics {
                 poster = 228.dp,
                 trailer = 460.dp,
                 cardGap = 18.dp,
+                sectionGap = 16.dp,
+                blockGap = 10.dp,
                 sectionTitleSize = 32.sp,
                 brandSize = 44.sp,
                 searchHeight = 60.dp,
@@ -161,6 +176,8 @@ fun rememberHomeMetrics(): HomeMetrics {
                 poster = 188.dp,
                 trailer = 380.dp,
                 cardGap = 16.dp,
+                sectionGap = 12.dp,
+                blockGap = 8.dp,
                 sectionTitleSize = 26.sp,
                 brandSize = 36.sp,
                 searchHeight = 56.dp,

@@ -107,19 +107,21 @@ fun PosterCard(
                 text = item.displayTitle().replace('\n', ' ').trim(),
                 color = MaterialTheme.colorScheme.onBackground,
                 fontSize = metrics.cardTitleSize,
+                lineHeight = metrics.lineOf(metrics.cardTitleSize),
                 fontWeight = FontWeight.SemiBold,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
                 softWrap = true,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = 4.dp),
+                    .padding(top = metrics.blockGap),
             )
             item.displayYear()?.let { year ->
                 Text(
                     text = year.toString(),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     fontSize = metrics.cardMetaSize,
+                    lineHeight = metrics.lineOf(metrics.cardMetaSize),
                 )
             }
             item.reason?.takeIf { it.isNotBlank() }?.let { reason ->
@@ -127,6 +129,7 @@ fun PosterCard(
                     text = reason,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     fontSize = metrics.cardMetaSize,
+                    lineHeight = metrics.lineOf(metrics.cardMetaSize),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )

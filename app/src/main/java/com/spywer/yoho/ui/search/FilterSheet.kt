@@ -137,7 +137,7 @@ fun FilterSheet(
                 .fillMaxWidth()
                 .heightIn(max = sheetMax)
                 .padding(horizontal = hPad)
-                .padding(bottom = 28.dp),
+                .padding(bottom = metrics.sectionGap),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 if (nav != null) {
@@ -863,9 +863,11 @@ private fun ValueChips(
         return
     }
     FlowRow(
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-        modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
+        horizontalArrangement = Arrangement.spacedBy(LocalHomeMetrics.current.blockGap),
+        verticalArrangement = Arrangement.spacedBy(LocalHomeMetrics.current.blockGap),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = LocalHomeMetrics.current.blockGap),
     ) {
         items.forEach { item ->
             val value = item.value ?: return@forEach

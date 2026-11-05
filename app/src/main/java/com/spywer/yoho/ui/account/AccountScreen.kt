@@ -79,7 +79,10 @@ fun AccountScreen(
             .fillMaxSize()
             .statusBarsPadding()
             .verticalScroll(rememberScrollState())
-            .padding(horizontal = metrics.screenPadding, vertical = 16.dp),
+            .padding(
+                horizontal = metrics.screenPadding,
+                vertical = metrics.sectionGap,
+            ),
     ) {
         when {
             state.loading -> {
@@ -87,9 +90,10 @@ fun AccountScreen(
                     text = stringResource(R.string.nav_account),
                     color = MaterialTheme.colorScheme.onBackground,
                     fontSize = titleSize,
+                    lineHeight = metrics.lineOf(titleSize),
                     fontWeight = FontWeight.Bold,
                 )
-                Spacer(Modifier.height(20.dp))
+                Spacer(Modifier.height(metrics.sectionGap))
                 Box(
                     Modifier
                         .fillMaxWidth()
@@ -105,9 +109,10 @@ fun AccountScreen(
                     text = stringResource(R.string.nav_account),
                     color = MaterialTheme.colorScheme.onBackground,
                     fontSize = titleSize,
+                    lineHeight = metrics.lineOf(titleSize),
                     fontWeight = FontWeight.Bold,
                 )
-                Spacer(Modifier.height(20.dp))
+                Spacer(Modifier.height(metrics.sectionGap))
                 val user = state.user!!
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
@@ -140,18 +145,20 @@ fun AccountScreen(
                             )
                         }
                     }
-                    Spacer(Modifier.height(14.dp))
+                    Spacer(Modifier.height(metrics.sectionGap))
                     Text(
                         text = user.resolvedDisplayName().orEmpty(),
                         color = MaterialTheme.colorScheme.onBackground,
                         fontWeight = FontWeight.SemiBold,
                         fontSize = (metrics.cardTitleSize.value + 4f).sp,
+                        lineHeight = metrics.lineOf((metrics.cardTitleSize.value + 4f).sp),
                     )
                     if (!user.username.isNullOrBlank()) {
                         Text(
                             text = "@${user.username}${user.userCode.orEmpty()}",
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             fontSize = bodySize,
+                            lineHeight = metrics.lineOf(bodySize),
                         )
                     }
                     if (!user.email.isNullOrBlank()) {
@@ -159,20 +166,22 @@ fun AccountScreen(
                             text = user.email,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             fontSize = bodySize,
-                            modifier = Modifier.padding(top = 4.dp),
+                            lineHeight = metrics.lineOf(bodySize),
+                            modifier = Modifier.padding(top = metrics.blockGap),
                         )
                     }
-                    Spacer(Modifier.height(28.dp))
+                    Spacer(Modifier.height(if (metrics.isTablet) 28.dp else metrics.sectionGap * 2))
                     OutlinedButton(
                         onClick = viewModel::signOut,
                         enabled = !state.busy,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(52.dp),
+                            .height(if (metrics.isTablet) 52.dp else metrics.searchHeight),
                     ) {
                         Text(
                             stringResource(R.string.account_sign_out),
                             fontSize = bodySize,
+                            lineHeight = metrics.lineOf(bodySize),
                         )
                     }
                 }
@@ -221,7 +230,10 @@ private fun AuthForm(
 
     val fieldText = (metrics.searchTextSize.value + 2f).sp
     val hintText = metrics.searchTextSize
-    val fieldStyle = TextStyle(fontSize = fieldText, lineHeight = (fieldText.value + 4f).sp)
+    val fieldStyle = TextStyle(
+        fontSize = fieldText,
+        lineHeight = metrics.lineOf(fieldText),
+    )
 
     val emailErr = when {
         !showErrors -> null
@@ -267,7 +279,7 @@ private fun AuthForm(
         }
     }
 
-    Column(verticalArrangement = Arrangement.spacedBy(18.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(metrics.sectionGap)) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
@@ -300,7 +312,7 @@ private fun AuthForm(
             ),
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             fontSize = hintText,
-            lineHeight = (hintText.value + 4f).sp,
+            lineHeight = metrics.lineOf(hintText),
         )
         OutlinedTextField(
             value = email,
