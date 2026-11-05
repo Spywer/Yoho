@@ -75,6 +75,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
+import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
@@ -707,7 +708,7 @@ private class PlayerWebViewHolder {
                 android.view.Gravity.END or android.view.Gravity.TOP,
             ).also {
                 val m = (8 * density).toInt()
-                it.setMargins(m, m, m, m)
+                it.setMargins(m, fullscreenCloseTopMargin(decor, density), m, m)
             },
         )
         decor.addView(
@@ -802,6 +803,21 @@ private fun refreshWebViewSurface(webView: WebView) {
             webView.invalidate()
         }
     }
+}
+
+/** Отступ крестика от верха: status bar (и при immersive) + 10dp. */
+private fun fullscreenCloseTopMargin(host: View, density: Float): Int {
+    val inset = ViewCompat.getRootWindowInsets(host)
+        ?.getInsetsIgnoringVisibility(WindowInsetsCompat.Type.statusBars())
+        ?.top
+        ?: 0
+    val status = if (inset > 0) {
+        inset
+    } else {
+        val id = host.resources.getIdentifier("status_bar_height", "dimen", "android")
+        if (id > 0) host.resources.getDimensionPixelSize(id) else (24 * density).toInt()
+    }
+    return status + (10 * density).toInt()
 }
 
 /**
@@ -928,7 +944,7 @@ private fun PlayerFullscreenEffect(
                     android.view.Gravity.END or android.view.Gravity.TOP,
                 ).also {
                     val m = (8 * density).toInt()
-                    it.setMargins(m, m, m, m)
+                    it.setMargins(m, fullscreenCloseTopMargin(decor, density), m, m)
                 },
             )
             decor.addView(
