@@ -1,5 +1,6 @@
 package com.spywer.yoho.ui.search
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -10,6 +11,7 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -92,6 +94,13 @@ fun SearchScreen(
     val context = LocalContext.current
     var showFilterSheet by remember { mutableStateOf(false) }
 
+    BackHandler(enabled = showFilterSheet || showBack) {
+        when {
+            showFilterSheet -> showFilterSheet = false
+            else -> onBack()
+        }
+    }
+
     fun openTitle(item: TitleDto) {
         if (item.idKp == null && item.idTmdb == null) return
         onOpenTitle?.invoke(item.idKp, item.idTmdb, item.mediaType)
@@ -103,6 +112,7 @@ fun SearchScreen(
     CompositionLocalProvider(LocalHomeMetrics provides metrics) {
         Scaffold(
             containerColor = MaterialTheme.colorScheme.background,
+            contentWindowInsets = WindowInsets(0, 0, 0, 0),
             topBar = {
                 SearchContentColumn(metrics) {
                     Column(

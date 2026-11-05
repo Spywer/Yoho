@@ -29,6 +29,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
@@ -66,6 +67,14 @@ fun TitleDetailScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
     val metrics = rememberHomeMetrics()
     var selectedPersonId by remember { mutableStateOf<Int?>(null) }
+
+    BackHandler {
+        if (selectedPersonId != null) {
+            selectedPersonId = null
+        } else {
+            onBack()
+        }
+    }
 
     CompositionLocalProvider(LocalHomeMetrics provides metrics) {
         Box(

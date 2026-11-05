@@ -79,18 +79,6 @@ fun FavoritesScreen(
                 .fillMaxSize()
                 .statusBarsPadding(),
         ) {
-            Text(
-                text = stringResource(R.string.nav_favorites),
-                color = MaterialTheme.colorScheme.onBackground,
-                fontSize = metrics.sectionTitleSize,
-                lineHeight = metrics.lineOf(metrics.sectionTitleSize),
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(
-                    horizontal = metrics.screenPadding,
-                    vertical = metrics.sectionGap,
-                ),
-            )
-
             when {
                 state.loading -> {
                     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {

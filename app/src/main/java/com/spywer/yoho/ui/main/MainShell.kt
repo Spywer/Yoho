@@ -1,6 +1,7 @@
 package com.spywer.yoho.ui.main
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
@@ -10,6 +11,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.ui.Alignment
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Explore
 import androidx.compose.material.icons.filled.Favorite
@@ -26,7 +28,9 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -41,7 +45,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.spywer.yoho.R
@@ -129,6 +132,11 @@ fun MainShell() {
     )
     val metrics = rememberHomeMetrics()
 
+    // Каталог / избранное / аккаунт → на главную (карточка тайтла сама перехватывает назад).
+    BackHandler(enabled = titleStack.isEmpty() && tab != MainTab.Home) {
+        tab = MainTab.Home
+    }
+
     CompositionLocalProvider(LocalHomeMetrics provides metrics) {
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -155,32 +163,38 @@ fun MainShell() {
                                 titleStack.clear()
                                 tab = spec.tab
                             },
+                            // Иконка+подпись в одном слоте — индикатор подсветки охватывает оба.
                             icon = {
-                                Icon(
-                                    imageVector = if (selected) {
-                                        spec.selectedIcon
-                                    } else {
-                                        spec.unselectedIcon
-                                    },
-                                    contentDescription = stringResource(spec.labelRes),
-                                    modifier = Modifier.size(metrics.navIconSize),
-                                    tint = if (selected) active else inactive,
-                                )
+                                Column(
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.spacedBy(2.dp),
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                ) {
+                                    Icon(
+                                        imageVector = if (selected) {
+                                            spec.selectedIcon
+                                        } else {
+                                            spec.unselectedIcon
+                                        },
+                                        contentDescription = stringResource(spec.labelRes),
+                                        modifier = Modifier.size(metrics.navIconSize),
+                                        tint = if (selected) active else inactive,
+                                    )
+                                    Text(
+                                        text = stringResource(spec.labelRes),
+                                        fontSize = metrics.navLabelSize,
+                                        fontWeight = if (selected) {
+                                            FontWeight.SemiBold
+                                        } else {
+                                            FontWeight.Medium
+                                        },
+                                        color = if (selected) active else inactive,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                }
                             },
-                            label = {
-                                Text(
-                                    text = stringResource(spec.labelRes),
-                                    fontSize = metrics.navLabelSize,
-                                    fontWeight = if (selected) {
-                                        FontWeight.SemiBold
-                                    } else {
-                                        FontWeight.Medium
-                                    },
-                                    color = if (selected) active else inactive,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                )
-                            },
+                            label = null,
                             colors = NavigationBarItemDefaults.colors(
                                 selectedIconColor = active,
                                 selectedTextColor = active,

@@ -57,6 +57,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import com.spywer.yoho.R
 import com.spywer.yoho.ui.layout.HomeMetrics
+import androidx.activity.compose.BackHandler
 import com.spywer.yoho.ui.layout.rememberHomeMetrics
 
 @Composable
@@ -69,6 +70,15 @@ fun AccountScreen(
     var registerMode by rememberSaveable { mutableStateOf(false) }
     val titleSize = (metrics.sectionTitleSize.value + 4f).sp
     val bodySize = (metrics.searchTextSize.value + 2f).sp
+    val onAuthForm = state.user == null && !state.loading
+
+    BackHandler(enabled = onAuthForm && (registerMode || onBack != null)) {
+        if (registerMode) {
+            registerMode = false
+        } else {
+            onBack?.invoke()
+        }
+    }
 
     LaunchedEffect(Unit) {
         viewModel.refresh()
