@@ -3,6 +3,7 @@
 import android.Manifest
 import android.annotation.SuppressLint
 import android.app.Activity
+import android.content.pm.ActivityInfo
 import android.content.pm.PackageManager
 import android.os.Message
 import android.view.View
@@ -61,6 +62,7 @@ import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -111,7 +113,7 @@ internal fun PlayerBlock(
     val hasPlayer = !playUrl.isNullOrBlank() || !embedHtml.isNullOrBlank()
     val noSources = !needsLogin && choices.isEmpty() && !hasPlayer
     val context = LocalContext.current
-    var fullscreen by remember { mutableStateOf(false) }
+    var fullscreen by rememberSaveable { mutableStateOf(false) }
     var htmlFullscreen by remember { mutableStateOf(false) }
     // Toast дневника, когда панели под плеером нет (заглушка без источников).
     LaunchedEffect(diaryNotify, hasPlayer) {
@@ -137,7 +139,9 @@ internal fun PlayerBlock(
             else -> fullscreen = false
         }
     }
-    PlayerSystemBarsEffect(hidden = fullscreen || htmlFullscreen)
+    val fsActive = (fullscreen || htmlFullscreen) && hasPlayer
+    PlayerSystemBarsEffect(hidden = fsActive)
+    PlayerFullscreenOrientationEffect(active = fsActive)
     PlayerFullscreenEffect(
         enabled = fullscreen && hasPlayer,
         holder = webHolder,
@@ -680,7 +684,8 @@ private class PlayerWebViewHolder {
             elevation = 64f
         }
         (view.parent as? ViewGroup)?.removeView(view)
-        container.addView(view, centeredPlayerLayoutParams(activity))
+        container.addView(view, fullscreenPlayerLayoutParams(activity))
+        bindFullscreenLayoutListener(container, view)
         decor.addView(
             container,
             FrameLayout.LayoutParams(
@@ -769,28 +774,92 @@ private fun refreshWebViewSurface(webView: WebView) {
         runCatching {
             webView.onResume()
             webView.resumeTimers()
-            webView.visibility = View.INVISIBLE
-            webView.visibility = View.VISIBLE
             webView.requestLayout()
             webView.invalidate()
         }
     }
 }
 
-/** Максимальный 16:9 прямоугольник по центру экрана. */
-private fun centeredPlayerLayoutParams(
+/**
+ * Альбом — на весь экран; портрет — 16:9 по центру (чёрные поля сверху/снизу).
+ */
+private fun fullscreenPlayerLayoutParams(
     context: android.content.Context,
 ): FrameLayout.LayoutParams {
     val dm = context.resources.displayMetrics
-    val screenW = dm.widthPixels
-    val screenH = dm.heightPixels
-    val byWidthH = (screenW * 9f / 16f).toInt()
-    val (w, h) = if (byWidthH <= screenH) {
-        screenW to byWidthH
+    return fullscreenPlayerLayoutParams(dm.widthPixels, dm.heightPixels)
+}
+
+private fun fullscreenPlayerLayoutParams(
+    containerW: Int,
+    containerH: Int,
+): FrameLayout.LayoutParams {
+    if (containerW <= 0 || containerH <= 0) {
+        return FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.MATCH_PARENT,
+        )
+    }
+    // Альбом / квадрат → edge-to-edge
+    if (containerW >= containerH) {
+        return FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.MATCH_PARENT,
+        )
+    }
+    val byWidthH = (containerW * 9f / 16f).toInt()
+    val (w, h) = if (byWidthH <= containerH) {
+        containerW to byWidthH
     } else {
-        (screenH * 16f / 9f).toInt() to screenH
+        (containerH * 16f / 9f).toInt() to containerH
     }
     return FrameLayout.LayoutParams(w, h, android.view.Gravity.CENTER)
+}
+
+/** Мягко подгоняет child при смене размера контейнера (поворот), без мигания surface. */
+private fun bindFullscreenLayoutListener(
+    container: FrameLayout,
+    playerView: View,
+) {
+    container.addOnLayoutChangeListener { v, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom ->
+        val w = right - left
+        val h = bottom - top
+        val oldW = oldRight - oldLeft
+        val oldH = oldBottom - oldTop
+        if (w == oldW && h == oldH) return@addOnLayoutChangeListener
+        if (w <= 0 || h <= 0) return@addOnLayoutChangeListener
+        val next = fullscreenPlayerLayoutParams(w, h)
+        val cur = playerView.layoutParams as? FrameLayout.LayoutParams
+        if (cur != null &&
+            cur.width == next.width &&
+            cur.height == next.height &&
+            cur.gravity == next.gravity
+        ) {
+            return@addOnLayoutChangeListener
+        }
+        playerView.layoutParams = next
+        v.requestLayout()
+    }
+}
+
+/** В FS — следовать датчику; иначе вернуть прежнюю ориентацию Activity. */
+@Composable
+private fun PlayerFullscreenOrientationEffect(active: Boolean) {
+    val context = LocalContext.current
+    DisposableEffect(active) {
+        val activity = context.findActivity()
+        if (activity == null) {
+            return@DisposableEffect onDispose { }
+        }
+        val previous = activity.requestedOrientation
+        if (active) {
+            // SENSOR без reverse — меньше дёрганий при почти горизонтальном наклоне.
+            activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR
+        }
+        onDispose {
+            activity.requestedOrientation = previous
+        }
+    }
 }
 
 @Composable
@@ -825,8 +894,8 @@ private fun PlayerFullscreenEffect(
                 setPadding(pad, pad, pad, pad)
             }
             (webView.parent as? ViewGroup)?.removeView(webView)
-            // 16:9 по центру окна — иначе контент плеера часто липнет к верху
-            overlay.addView(webView, centeredPlayerLayoutParams(context))
+            overlay.addView(webView, fullscreenPlayerLayoutParams(context))
+            bindFullscreenLayoutListener(overlay, webView)
             overlay.addView(
                 close,
                 FrameLayout.LayoutParams(
