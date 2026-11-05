@@ -171,72 +171,71 @@ private fun DetailHeroPhone(
             .padding(horizontal = metrics.screenPadding)
             .padding(top = 4.dp),
     ) {
+        Text(
+            text = if (year != null) "$titleRu ($year)" else titleRu,
+            color = Color.White,
+            fontSize = metrics.detailTitleSize,
+            lineHeight = metrics.lineOf(metrics.detailTitleSize),
+            fontWeight = FontWeight.Bold,
+            maxLines = 3,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(end = 48.dp),
+        )
+        HeroOriginalAgeRow(
+            titleOriginal = titleOriginal,
+            ageRating = detail.ageRating,
+            metrics = metrics,
+            compact = true,
+        )
         Row(
-            Modifier.fillMaxWidth(),
+            Modifier
+                .fillMaxWidth()
+                .padding(top = metrics.sectionGap),
             horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.Top,
         ) {
             AsyncImage(
                 model = detail.poster,
                 contentDescription = titleRu,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier
-                    .width(108.dp)
+                    .width(140.dp)
                     .aspectRatio(2f / 3f)
                     .clip(RoundedCornerShape(10.dp))
                     .background(Color.White.copy(alpha = 0.12f)),
             )
-            Column(
-                Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(2.dp),
-            ) {
-                Text(
-                    text = if (year != null) "$titleRu ($year)" else titleRu,
-                    color = Color.White,
-                    fontSize = metrics.detailTitleSize,
-                    lineHeight = metrics.lineOf(metrics.detailTitleSize),
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 3,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                HeroOriginalAgeRow(
-                    titleOriginal = titleOriginal,
-                    ageRating = detail.ageRating,
-                    metrics = metrics,
-                    compact = true,
-                )
-            }
-        }
-        if (showFavorite || hasGenres || hasRatings) {
-            Column(
-                Modifier
-                    .fillMaxWidth()
-                    .padding(top = 6.dp),
-                verticalArrangement = Arrangement.spacedBy(metrics.blockGap),
-            ) {
-                if (showFavorite) {
-                    HeroFavoriteButton(
-                        isFavorite = isFavorite,
-                        favoriteBusy = favoriteBusy,
-                        favoriteError = favoriteError,
-                        metrics = metrics,
-                        onToggleFavorite = onToggleFavorite,
-                    )
-                }
-                if (hasGenres) {
-                    HeroGenresRow(
-                        genres = detail.genres,
-                        mediaType = detail.mediaType,
-                        metrics = metrics,
-                        onOpenGenre = onOpenGenre,
-                    )
-                }
-                if (hasRatings) {
-                    HeroRatingsRow(
-                        detail = detail,
-                        ratingKp = ratingKp,
-                        ratingImdb = ratingImdb,
-                        wrap = true,
-                    )
+            if (showFavorite || hasGenres || hasRatings) {
+                Column(
+                    Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(metrics.blockGap),
+                ) {
+                    if (showFavorite) {
+                        HeroFavoriteButton(
+                            isFavorite = isFavorite,
+                            favoriteBusy = favoriteBusy,
+                            favoriteError = favoriteError,
+                            metrics = metrics,
+                            onToggleFavorite = onToggleFavorite,
+                        )
+                    }
+                    if (hasGenres) {
+                        HeroGenresRow(
+                            genres = detail.genres,
+                            mediaType = detail.mediaType,
+                            metrics = metrics,
+                            onOpenGenre = onOpenGenre,
+                        )
+                    }
+                    if (hasRatings) {
+                        HeroRatingsRow(
+                            detail = detail,
+                            ratingKp = ratingKp,
+                            ratingImdb = ratingImdb,
+                            wrap = true,
+                        )
+                    }
                 }
             }
         }
@@ -248,7 +247,7 @@ private fun DetailHeroPhone(
                 lineHeight = metrics.detailBodyLine,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = 8.dp),
+                    .padding(top = metrics.sectionGap),
             )
         }
     }

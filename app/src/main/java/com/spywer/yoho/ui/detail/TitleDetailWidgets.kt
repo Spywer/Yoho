@@ -126,7 +126,7 @@ internal fun MetaRow(
             softWrap = false,
             overflow = TextOverflow.Clip,
             // Фикс. ширина — колонка ровная; softWrap=false — без переносов; spacedBy — зазор до значения.
-            modifier = Modifier.width(if (metrics.isTablet) 260.dp else 118.dp),
+            modifier = Modifier.width(if (metrics.isTablet) 260.dp else 140.dp),
         )
         if (personIds.isEmpty() && !linkPartsAsGenres) {
             Text(
