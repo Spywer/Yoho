@@ -17,15 +17,16 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -294,7 +295,8 @@ fun TrailerPlayerDialog(
                         }
                     }
                 }
-                Box(
+                // Нижний weight держит видео по центру; подложка списка — по контенту, max до низа.
+                BoxWithConstraints(
                     Modifier
                         .fillMaxWidth()
                         .weight(1f)
@@ -307,7 +309,7 @@ fun TrailerPlayerDialog(
                             onSelect = { selectedIndex = it },
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .fillMaxHeight()
+                                .heightIn(max = maxHeight)
                                 .clip(RoundedCornerShape(if (metrics.isTablet) 12.dp else 8.dp))
                                 .background(Color(0xFF1A1A1A))
                                 .clickable(
@@ -375,7 +377,8 @@ private fun ClipGrid(
                 fontSize = metrics.cardMetaSize,
                 fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal,
                 textAlign = if (compact) TextAlign.Start else TextAlign.Center,
-                maxLines = if (compact) 1 else 2,
+                maxLines = 1,
+                softWrap = false,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier
                     .then(if (compact) Modifier.fillMaxWidth() else Modifier.weight(1f))
