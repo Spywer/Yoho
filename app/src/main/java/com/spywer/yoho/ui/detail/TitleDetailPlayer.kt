@@ -135,7 +135,12 @@ internal fun PlayerBlock(
             fullscreen = false
         },
     )
-
+    // Zoom внутри плеера — только на весь экран.
+    LaunchedEffect(fullscreen, htmlFullscreen, hasPlayer) {
+        val wv = webHolder.webView ?: return@LaunchedEffect
+        if (!hasPlayer) return@LaunchedEffect
+        applyPlayerContentZoom(wv, enabled = fullscreen || htmlFullscreen)
+    }
     Column(
         modifier
             .fillMaxWidth()
@@ -956,8 +961,32 @@ private fun createPlayerWebView(
 
         override fun onPageFinished(view: WebView?, finishedUrl: String?) {
             android.util.Log.i("PlayerWebView", "finished $finishedUrl")
+            val fs = holder.fullscreenOverlay != null || holder.isHtmlFullscreen
+            view?.let { applyPlayerContentZoom(it, enabled = fs) }
         }
     }
+}
+
+/** Масштаб оболочки плеера; [enabled]=true только в fullscreen. */
+private fun applyPlayerContentZoom(webView: WebView, enabled: Boolean) {
+    val z = if (enabled) PlayerBrowserProfile.PLAYER_CSS_ZOOM else "1"
+    webView.settings.textZoom =
+        if (enabled) PlayerBrowserProfile.PLAYER_TEXT_ZOOM else 100
+    val js =
+        """
+        (function(){
+          try {
+            var z = '$z';
+            document.documentElement.style.zoom = z;
+            if (document.body) document.body.style.zoom = z;
+            var ifr = document.querySelectorAll('iframe');
+            for (var i = 0; i < ifr.length; i++) {
+              ifr[i].style.zoom = z;
+            }
+          } catch (e) {}
+        })();
+        """.trimIndent()
+    webView.evaluateJavascript(js, null)
 }
 
 /** Polyfill до скриптов во всех фреймах (в т.ч. player.cdnvideohub.com). */

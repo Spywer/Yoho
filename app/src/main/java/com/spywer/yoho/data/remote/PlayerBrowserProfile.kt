@@ -19,6 +19,12 @@ import androidx.webkit.WebViewFeature
 object PlayerBrowserProfile {
     private const val TAG_APPLIED = "yoho_browser_profile_v2"
 
+    /** Масштаб текста WebView в fullscreen (100 = как в браузере). */
+    const val PLAYER_TEXT_ZOOM = 145
+
+    /** CSS zoom оболочки embed в fullscreen. */
+    const val PLAYER_CSS_ZOOM = "1.35"
+
     /** Sec-CH / Accept для navigate и OkHttp-прокси. */
     fun browserHeaders(context: android.content.Context? = null): Map<String, String> {
         val ua = SiteHttp.userAgent(context)
@@ -70,6 +76,7 @@ object PlayerBrowserProfile {
         settings.displayZoomControls = false
         settings.setGeolocationEnabled(true)
         settings.cacheMode = WebSettings.LOAD_DEFAULT
+        // textZoom поднимаем только в fullscreen (см. applyPlayerContentZoom).
         settings.textZoom = 100
         settings.userAgentString = ua
 
