@@ -979,11 +979,16 @@ private fun createPlayerWebView(
     }
 }
 
-/** Масштаб оболочки плеера; [enabled]=true только в fullscreen. */
+/** true только Expanded (≥840dp); Compact/Medium — без zoom. */
+private fun playerZoomAllowed(context: android.content.Context): Boolean =
+    context.resources.configuration.screenWidthDp >= 840
+
+/** Масштаб оболочки плеера; только fullscreen и только Expanded. */
 private fun applyPlayerContentZoom(webView: WebView, enabled: Boolean) {
-    val z = if (enabled) PlayerBrowserProfile.PLAYER_CSS_ZOOM else "1"
+    val on = enabled && playerZoomAllowed(webView.context)
+    val z = if (on) PlayerBrowserProfile.PLAYER_CSS_ZOOM else "1"
     webView.settings.textZoom =
-        if (enabled) PlayerBrowserProfile.PLAYER_TEXT_ZOOM else 100
+        if (on) PlayerBrowserProfile.PLAYER_TEXT_ZOOM else 100
     val js =
         """
         (function(){

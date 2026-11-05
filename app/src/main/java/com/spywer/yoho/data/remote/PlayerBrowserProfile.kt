@@ -71,12 +71,14 @@ object PlayerBrowserProfile {
         settings.blockNetworkImage = false
         settings.javaScriptCanOpenWindowsAutomatically = true
         settings.setSupportMultipleWindows(true)
-        settings.setSupportZoom(true)
-        settings.builtInZoomControls = true
+        // Pinch/CSS zoom — только Expanded (≥840dp); Compact/Medium выкл.
+        val wide = ctx.resources.configuration.screenWidthDp >= 840
+        settings.setSupportZoom(wide)
+        settings.builtInZoomControls = wide
         settings.displayZoomControls = false
         settings.setGeolocationEnabled(true)
         settings.cacheMode = WebSettings.LOAD_DEFAULT
-        // textZoom поднимаем только в fullscreen (см. applyPlayerContentZoom).
+        // textZoom поднимаем только в fullscreen на Expanded (см. applyPlayerContentZoom).
         settings.textZoom = 100
         settings.userAgentString = ua
 
