@@ -680,23 +680,44 @@ private class PlayerWebViewHolder {
             ?: webView?.context?.findActivity()
             ?: return
         val decor = activity.window.decorView as ViewGroup
-        val container = FrameLayout(activity).apply {
+        val density = activity.resources.displayMetrics.density
+        val root = FrameLayout(activity).apply {
             setBackgroundColor(android.graphics.Color.BLACK)
             isClickable = true
             isFocusable = true
             elevation = 64f
         }
         (view.parent as? ViewGroup)?.removeView(view)
-        container.addView(view, fullscreenPlayerLayoutParams(activity))
-        bindFullscreenLayoutListener(container, view)
+        root.addView(view, fullscreenPlayerLayoutParams(activity))
+        bindFullscreenLayoutListener(root, view)
+        val close = android.widget.ImageButton(activity).apply {
+            setImageResource(android.R.drawable.ic_menu_close_clear_cancel)
+            setBackgroundColor(android.graphics.Color.TRANSPARENT)
+            contentDescription =
+                activity.getString(R.string.detail_player_fullscreen_exit)
+            setOnClickListener { requestExitHtmlFullscreen() }
+            val pad = (8 * density).toInt()
+            setPadding(pad, pad, pad, pad)
+        }
+        root.addView(
+            close,
+            FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                android.view.Gravity.END or android.view.Gravity.TOP,
+            ).also {
+                val m = (8 * density).toInt()
+                it.setMargins(m, m, m, m)
+            },
+        )
         decor.addView(
-            container,
+            root,
             FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT,
             ),
         )
-        htmlFsContainer = container
+        htmlFsContainer = root
         htmlFsCallback = callback
         // WebView остаётся в app-overlay / inline; прячем, пока играет custom view
         webView?.visibility = View.INVISIBLE
@@ -884,6 +905,9 @@ private fun PlayerFullscreenEffect(
                 isClickable = true
                 isFocusable = true
             }
+            (webView.parent as? ViewGroup)?.removeView(webView)
+            overlay.addView(webView, fullscreenPlayerLayoutParams(context))
+            bindFullscreenLayoutListener(overlay, webView)
             val close = android.widget.ImageButton(context).apply {
                 setImageResource(android.R.drawable.ic_menu_close_clear_cancel)
                 setBackgroundColor(android.graphics.Color.TRANSPARENT)
@@ -896,15 +920,12 @@ private fun PlayerFullscreenEffect(
                 val pad = (8 * density).toInt()
                 setPadding(pad, pad, pad, pad)
             }
-            (webView.parent as? ViewGroup)?.removeView(webView)
-            overlay.addView(webView, fullscreenPlayerLayoutParams(context))
-            bindFullscreenLayoutListener(overlay, webView)
             overlay.addView(
                 close,
                 FrameLayout.LayoutParams(
                     ViewGroup.LayoutParams.WRAP_CONTENT,
                     ViewGroup.LayoutParams.WRAP_CONTENT,
-                    android.view.Gravity.TOP or android.view.Gravity.END,
+                    android.view.Gravity.END or android.view.Gravity.TOP,
                 ).also {
                     val m = (8 * density).toInt()
                     it.setMargins(m, m, m, m)

@@ -362,15 +362,15 @@ private fun YoutubeTrailerPlayer(
     var loading by remember(videoId) { mutableStateOf(true) }
     var errorText by remember(videoId) { mutableStateOf<String?>(null) }
     // FS-слой держим сами: Dialog — отдельное Window, Activity.decorView под ним → «видео пропало».
-    var fullscreenView by remember { mutableStateOf<View?>(null) }
-    var exitFullscreen by remember { mutableStateOf<(() -> Unit)?>(null) }
+    var fsOverlay by remember { mutableStateOf<View?>(null) }
+    var exitFs by remember { mutableStateOf<(() -> Unit)?>(null) }
 
     fun clearFullscreenOverlay() {
-        fullscreenView?.let { view ->
+        fsOverlay?.let { view ->
             (view.parent as? ViewGroup)?.removeView(view)
         }
-        fullscreenView = null
-        exitFullscreen = null
+        fsOverlay = null
+        exitFs = null
     }
 
     DisposableEffect(Unit) {
@@ -378,8 +378,8 @@ private fun YoutubeTrailerPlayer(
     }
 
     // Back в FS YouTube → выходим из FS, не закрываем диалог.
-    BackHandler(enabled = fullscreenView != null) {
-        exitFullscreen?.invoke() ?: clearFullscreenOverlay()
+    BackHandler(enabled = fsOverlay != null) {
+        exitFs?.invoke() ?: clearFullscreenOverlay()
     }
 
     Box(modifier, contentAlignment = Alignment.Center) {
@@ -391,22 +391,22 @@ private fun YoutubeTrailerPlayer(
                         lifecycleOwner.lifecycle.addObserver(this)
                         addFullscreenListener(object : FullscreenListener {
                             override fun onEnterFullscreen(
-                                view: View,
-                                exitFullscreenAction: () -> Unit,
+                                fullscreenView: View,
+                                exitFullscreen: () -> Unit,
                             ) {
                                 val host = dialogFullscreenHost(localView, activity) ?: return
                                 clearFullscreenOverlay()
-                                view.setBackgroundColor(AndroidColor.BLACK)
-                                view.elevation = 64f
+                                fullscreenView.setBackgroundColor(AndroidColor.BLACK)
+                                fullscreenView.elevation = 64f
                                 host.addView(
-                                    view,
+                                    fullscreenView,
                                     ViewGroup.LayoutParams(
                                         ViewGroup.LayoutParams.MATCH_PARENT,
                                         ViewGroup.LayoutParams.MATCH_PARENT,
                                     ),
                                 )
-                                fullscreenView = view
-                                exitFullscreen = exitFullscreenAction
+                                fsOverlay = fullscreenView
+                                exitFs = exitFullscreen
                             }
 
                             override fun onExitFullscreen() {
