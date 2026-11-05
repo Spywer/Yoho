@@ -73,10 +73,6 @@ object PlayerWebViewHttp {
             val http = if (useHttp1) http1Client else client
             val response = http.newCall(builder.build()).execute()
             val body = response.body
-            if (body == null) {
-                response.close()
-                return@runCatching null
-            }
             val contentType = response.header("Content-Type").orEmpty()
             val mime = contentType.substringBefore(';').trim()
                 .ifBlank { guessMime(httpUrl.encodedPath) }

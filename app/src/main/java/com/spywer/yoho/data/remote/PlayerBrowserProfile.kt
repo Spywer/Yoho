@@ -55,7 +55,6 @@ object PlayerBrowserProfile {
         val ua = SiteHttp.userAgent(ctx)
         settings.javaScriptEnabled = true
         settings.domStorageEnabled = true
-        settings.databaseEnabled = true
         settings.mediaPlaybackRequiresUserGesture = false
         settings.loadWithOverviewMode = true
         settings.useWideViewPort = true
