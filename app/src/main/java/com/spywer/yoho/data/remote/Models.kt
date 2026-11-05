@@ -647,10 +647,6 @@ fun PlayerConfigDto.toPlayerSources(): List<PlayerSourceDto> {
     val byKey = linkedMapOf<String, PlayerSourceDto>()
     val titleId = resolvedKinopoiskId?.takeIf { it.isNotBlank() }
 
-    fun putDirect(name: String, url: String?) {
-        byKey[name] = PlayerSourceDto(name = name, iframeUrl = url?.takeIf { it.isNotBlank() })
-    }
-
     /** iframe + parent origin reyoho.com (как Alloha на сайте). */
     fun putShell(name: String, url: String?) {
         val src = url?.takeIf { it.isNotBlank() } ?: return
@@ -668,9 +664,9 @@ fun PlayerConfigDto.toPlayerSources(): List<PlayerSourceDto> {
     if (alloha != null) putShell("alloha", alloha.toEmbedUrl())
     // Turbo как на сайте: iframe под parent reyoho.com (top-level obrut часто пустой)
     if (turbo != null) putShell("turbo", turbo.toEmbedUrl())
-    // Collaps на WebView играет top-level
+    // Collaps в iframe-shell (как Alloha) — стабильнее viewport при повороте, чем top-level.
     if (!collapsUrl.isNullOrBlank() || capabilities?.get("collapsCatalog") == true) {
-        putDirect("collaps", collapsUrl?.takeIf { it.isNotBlank() }?.toCollapsEmbedUrl())
+        putShell("collaps", collapsUrl?.takeIf { it.isNotBlank() }?.toCollapsEmbedUrl())
     }
     if (vibix != null) {
         // Прямой kinescope URL → «контент ещё не добавлен»; на сайте — rendex+ins.
@@ -684,8 +680,7 @@ fun PlayerConfigDto.toPlayerSources(): List<PlayerSourceDto> {
     if (byKey.isEmpty()) {
         iframeUrl?.takeIf { it.isNotBlank() }?.let { url ->
             val name = primaryPlayer?.trim()?.lowercase()?.ifBlank { null } ?: "player"
-            if (name == "collaps") putDirect(name, url.ensureAbsHttpUrl())
-            else putShell(name, url.ensureAbsHttpUrl())
+            putShell(name, url.ensureAbsHttpUrl())
         }
     }
 
