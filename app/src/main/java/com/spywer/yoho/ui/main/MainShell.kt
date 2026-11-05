@@ -140,6 +140,8 @@ fun MainShell() {
     CompositionLocalProvider(LocalHomeMetrics provides metrics) {
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
+        // Только bottomBar; statusBars — на экранах (иначе двойной верхний отступ).
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         bottomBar = {
             Column(
                 Modifier

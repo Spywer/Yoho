@@ -311,11 +311,11 @@ internal fun LazyListScope.titleDetailScheduleSection(
                 Modifier
                     .fillMaxWidth()
                     .padding(horizontal = screenPadding)
-                    .padding(top = metrics.sectionGap),
+                    .padding(top = metrics.sectionGap, bottom = metrics.sectionGap),
             ) {
                 Row(
                     Modifier.horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(metrics.blockGap),
+                    horizontalArrangement = Arrangement.spacedBy(metrics.cardGap),
                 ) {
                     schedule.seasons.forEach { season ->
                         val num = season.seasonNumber ?: return@forEach
@@ -361,7 +361,7 @@ internal fun LazyListScope.titleDetailScheduleSection(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             fontSize = metrics.scheduleBodySize,
                             fontWeight = FontWeight.Medium,
-                            modifier = Modifier.padding(top = 10.dp),
+                            modifier = Modifier.padding(top = metrics.sectionGap),
                         )
                     }
             }

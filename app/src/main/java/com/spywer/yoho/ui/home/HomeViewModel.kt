@@ -6,6 +6,7 @@ import com.spywer.yoho.data.SessionRepository
 import com.spywer.yoho.data.remote.NetworkModule
 import com.spywer.yoho.data.remote.SessionCookieJar
 import com.spywer.yoho.data.remote.TitleDto
+import com.spywer.yoho.data.remote.displayRu
 import com.spywer.yoho.data.remote.toTitle
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
@@ -56,10 +57,17 @@ data class HomeUiState(
     val trailers: List<TitleDto> = emptyList(),
     val popular: List<TitleDto> = emptyList(),
     val newcomers: List<TitleDto> = emptyList(),
+    /** Только для /anime: «Популярно в этом сезоне». */
+    val seasonPopular: List<TitleDto> = emptyList(),
+    val seasonLabel: String? = null,
+    val animeTop: List<TitleDto> = emptyList(),
 ) {
+    val isAnimeLayout: Boolean get() = filter == ContentFilter.Anime
+
     val hasContent: Boolean
         get() = recommendations.isNotEmpty() || nowPopular.isNotEmpty() ||
-            trailers.isNotEmpty() || popular.isNotEmpty() || newcomers.isNotEmpty()
+            trailers.isNotEmpty() || popular.isNotEmpty() || newcomers.isNotEmpty() ||
+            seasonPopular.isNotEmpty() || animeTop.isNotEmpty()
 }
 
 class HomeViewModel : ViewModel() {
@@ -97,23 +105,10 @@ class HomeViewModel : ViewModel() {
                 )
             }
             runCatching {
-                coroutineScope {
-                    val recD = async { fetchRecommendations() }
-                    val nowD = async { api.trending(filter.trendingNow()) }
-                    val popD = async { api.trending(filter.trendingPopular()) }
-                    val trailD = async { api.latestTrailers() }
-                    val recentD = async { api.searchRecent() }
-                    val now = nowD.await()
-                    val pop = popD.await()
-                    val trail = trailD.await()
-                    val recent = recentD.await()
-                    HomeSections(
-                        recommendations = recD.await(),
-                        nowPopular = now.items.map { it.toTitle(now.ratings) },
-                        popular = pop.items.map { it.toTitle(pop.ratings) },
-                        trailers = trail.items.map { it.toTitle() },
-                        newcomers = recent.items.map { it.toTitle() },
-                    )
+                if (filter == ContentFilter.Anime) {
+                    loadAnimeSections()
+                } else {
+                    loadCatalogSections(filter)
                 }
             }.onSuccess { sections ->
                 if (!isActive) return@onSuccess
@@ -129,6 +124,9 @@ class HomeViewModel : ViewModel() {
                         popular = sections.popular,
                         trailers = sections.trailers,
                         newcomers = sections.newcomers,
+                        seasonPopular = sections.seasonPopular,
+                        seasonLabel = sections.seasonLabel,
+                        animeTop = sections.animeTop,
                     )
                 }
             }.onFailure { e ->
@@ -143,6 +141,42 @@ class HomeViewModel : ViewModel() {
                 }
             }
         }
+    }
+
+    private suspend fun loadCatalogSections(filter: ContentFilter): HomeSections = coroutineScope {
+        val recD = async { fetchRecommendations() }
+        val nowD = async { api.trending(filter.trendingNow()) }
+        val popD = async { api.trending(filter.trendingPopular()) }
+        val trailD = async { api.latestTrailers() }
+        val recentD = async { api.searchRecent() }
+        val now = nowD.await()
+        val pop = popD.await()
+        val trail = trailD.await()
+        val recent = recentD.await()
+        HomeSections(
+            recommendations = recD.await(),
+            nowPopular = now.items.map { it.toTitle(now.ratings) },
+            popular = pop.items.map { it.toTitle(pop.ratings) },
+            trailers = trail.items.map { it.toTitle() },
+            newcomers = recent.items.map { it.toTitle() },
+        )
+    }
+
+    /** Как reyoho.com/anime: /api/anime → trending / season / popular / top. */
+    private suspend fun loadAnimeSections(): HomeSections = coroutineScope {
+        val recD = async { fetchRecommendations() }
+        val home = api.animeHome()
+        val seasonRu = home.seasonLabel.displayRu().ifBlank { null }
+        HomeSections(
+            recommendations = recD.await(),
+            nowPopular = home.trending?.items.orEmpty().map { it.toTitle() },
+            seasonPopular = home.season?.items.orEmpty().map { it.toTitle() },
+            seasonLabel = seasonRu,
+            popular = home.popular?.items.orEmpty().map { it.toTitle() },
+            animeTop = home.top.map { it.toTitle() },
+            trailers = emptyList(),
+            newcomers = emptyList(),
+        )
     }
 
     fun loadRecommendations() {
@@ -173,6 +207,11 @@ class HomeViewModel : ViewModel() {
                 error = null,
                 nowPopular = emptyList(),
                 popular = emptyList(),
+                trailers = emptyList(),
+                newcomers = emptyList(),
+                seasonPopular = emptyList(),
+                seasonLabel = null,
+                animeTop = emptyList(),
             )
         }
         load()
@@ -182,7 +221,10 @@ class HomeViewModel : ViewModel() {
         val recommendations: List<TitleDto>,
         val nowPopular: List<TitleDto>,
         val popular: List<TitleDto>,
-        val trailers: List<TitleDto>,
-        val newcomers: List<TitleDto>,
+        val trailers: List<TitleDto> = emptyList(),
+        val newcomers: List<TitleDto> = emptyList(),
+        val seasonPopular: List<TitleDto> = emptyList(),
+        val seasonLabel: String? = null,
+        val animeTop: List<TitleDto> = emptyList(),
     )
 }

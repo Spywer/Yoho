@@ -288,6 +288,7 @@ private fun DetailHeroTablet(
                 text = if (year != null) "$titleRu ($year)" else titleRu,
                 color = Color.White,
                 fontSize = metrics.detailTitleSize,
+                lineHeight = metrics.lineOf(metrics.detailTitleSize),
                 fontWeight = FontWeight.Bold,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,

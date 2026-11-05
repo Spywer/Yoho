@@ -32,8 +32,8 @@ API_BASE_URL=http://10.0.2.2:8787/
 
 ## Возможности
 
-- Главная: тренды, рекомендации, трейлеры
-- Каталог / поиск с фильтрами
+- Главная: тренды / рекомендации / трейлеры; чип **Аниме** — блоки как на `/anime` (`GET /api/anime`)
+- Каталог / поиск с фильтрами (значения query как на сайте)
 - Карточка тайтла: герой, трейлер, плеер (iframe/embed), расписание сериала
 - Избранное: `POST /api/me/activity` (`addFavorite` / `removeFavorite`)
 - Дневник: `POST/DELETE /api/diary`, статус через `GET /api/diary/contains`
@@ -56,5 +56,5 @@ app/src/main/java/com/spywer/yoho/
 
 - Без входа часть плееров и личные полки недоступны (как на сайте).
 - Иконка приложения: белые **YH** на фоне `#1A2026`.
-- Документация: `docs/API.md` (0.1.41), `docs/openapi.yaml`, `docs/ANDROID.md`
+- Документация: `docs/API.md` (0.1.42), `docs/openapi.yaml`, `docs/ANDROID.md`
 - Локальный mock: `mock-api/` (см. `mock-api/README.md`)

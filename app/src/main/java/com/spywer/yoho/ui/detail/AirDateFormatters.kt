@@ -109,6 +109,12 @@ internal fun formatAirDateRu(
     return "%s %02d:%02d".format(dayMonth, timeFromString.hour, timeFromString.minute)
 }
 
+/** «9 апреля 2019» из ISO / yyyy-MM-dd. */
+internal fun formatLongDateRu(raw: String?): String? {
+    val d = parseAirLocalDate(raw) ?: return null
+    return "${d.dayOfMonth} ${RuMonthsGenitive[d.monthValue]} ${d.year}"
+}
+
 private fun parseAirLocalDate(airDate: String?): LocalDate? {
     if (airDate.isNullOrBlank()) return null
     return try {

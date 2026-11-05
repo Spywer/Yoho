@@ -18,9 +18,11 @@ import com.spywer.yoho.data.remote.hasPlayableSource
 import com.spywer.yoho.data.remote.isSeriesLike
 import com.spywer.yoho.data.remote.mergePlayerChoices
 import com.spywer.yoho.data.remote.playerItemId
+import com.spywer.yoho.data.remote.toDiaryReactionRequest
 import com.spywer.yoho.data.remote.toDiaryRequest
 import com.spywer.yoho.data.remote.toFavoriteActivityItem
 import com.spywer.yoho.data.remote.toPlayerSources
+import com.spywer.yoho.data.remote.toSetRatingBody
 import com.spywer.yoho.data.remote.toTitleDetail
 import com.spywer.yoho.data.remote.withResolvedMediaUrls
 import kotlinx.coroutines.Job
@@ -58,6 +60,9 @@ data class TitleDetailUiState(
     val diaryError: String? = null,
     /** Одноразовый toast после действия пользователя. */
     val diaryNotify: String? = null,
+    /** Реакция с плеера: like | dislike | null. */
+    val playerReaction: String? = null,
+    val reactionBusy: Boolean = false,
 )
 
 class TitleDetailViewModel : ViewModel() {
@@ -88,6 +93,8 @@ class TitleDetailViewModel : ViewModel() {
                     diaryStatusLabel = null,
                     diaryError = null,
                     diaryNotify = null,
+                    playerReaction = null,
+                    reactionBusy = false,
                     schedule = null,
                     selectedSeason = null,
                     lastAir = null,
@@ -112,6 +119,7 @@ class TitleDetailViewModel : ViewModel() {
                 }
                 refreshFavoriteState(detail.idKp)
                 refreshDiaryState(detail.playerItemId())
+                refreshPlayerReaction(detail.playerItemId())
                 loadPlayerBlock(detail)
                 if (detail.isSeriesLike()) {
                     loadSchedule(detail.idTmdb, detail.idKp)
@@ -198,6 +206,85 @@ class TitleDetailViewModel : ViewModel() {
 
     fun consumeDiaryNotify() {
         _state.update { it.copy(diaryNotify = null) }
+    }
+
+    /**
+     * Лайк/дизлайк под плеером (как на сайте):
+     * setRating → diary sourceReaction → diary/contains.
+     * Повтор того же жеста → clearRating.
+     */
+    fun setPlayerReaction(reaction: String) {
+        val detail = _state.value.detail ?: return
+        if (reaction != "like" && reaction != "dislike") return
+        if (_state.value.reactionBusy) return
+        if (!SessionRepository.state.value.isLoggedIn &&
+            !SessionCookieJar.get().hasSessionCookie()
+        ) {
+            _state.update {
+                it.copy(diaryNotify = "Войдите, чтобы оценить")
+            }
+            return
+        }
+        val itemId = detail.playerItemId() ?: return
+        val current = _state.value.playerReaction
+        viewModelScope.launch {
+            _state.update { it.copy(reactionBusy = true) }
+            runCatching {
+                if (current == reaction) {
+                    val resp = api.meActivity(
+                        MeActivityRequest(op = "clearRating", itemId = itemId),
+                    )
+                    when {
+                        resp.isSuccessful || resp.code() == 204 -> Unit
+                        resp.code() == 401 || resp.code() == 403 ->
+                            error("Войдите, чтобы оценить")
+                        else -> error("HTTP ${resp.code()}")
+                    }
+                    null
+                } else {
+                    val ratingBody = detail.toSetRatingBody(reaction)
+                        ?: error("Нет id тайтла")
+                    val ratingResp = api.meActivityJson(ratingBody)
+                    when {
+                        ratingResp.isSuccessful || ratingResp.code() == 204 -> Unit
+                        ratingResp.code() == 401 || ratingResp.code() == 403 ->
+                            error("Войдите, чтобы оценить")
+                        else -> error("HTTP ${ratingResp.code()}")
+                    }
+                    val diaryBody = detail.toDiaryReactionRequest(reaction)
+                        ?: error("Нет id тайтла")
+                    val diaryResp = api.diary(diaryBody)
+                    // 409 = уже в дневнике — ок, как на сайте
+                    when {
+                        diaryResp.isSuccessful || diaryResp.code() == 409 -> Unit
+                        diaryResp.code() == 401 || diaryResp.code() == 403 ->
+                            error("Войдите, чтобы оценить")
+                        else -> error("HTTP ${diaryResp.code()}")
+                    }
+                    reaction
+                }
+            }.onSuccess { next ->
+                _state.update {
+                    it.copy(
+                        reactionBusy = false,
+                        playerReaction = next,
+                        diaryNotify = when (next) {
+                            "like" -> "Оценка: 👍"
+                            "dislike" -> "Оценка: 👎"
+                            else -> "Оценка снята"
+                        },
+                    )
+                }
+                refreshDiaryState(itemId)
+            }.onFailure { e ->
+                _state.update {
+                    it.copy(
+                        reactionBusy = false,
+                        diaryNotify = e.message ?: "Не удалось оценить",
+                    )
+                }
+            }
+        }
     }
 
     /** POST /api/diary — statusLabel как на сайте («Хочу посмотреть» и т.п.). */
@@ -435,6 +522,31 @@ class TitleDetailViewModel : ViewModel() {
                         fav.id == key || fav.contentId == kp
                     }
                     _state.update { it.copy(isFavorite = found) }
+                }
+        }
+    }
+
+    /** Подтянуть like/dislike с GET /api/ratings (как на сайте). */
+    private fun refreshPlayerReaction(itemId: String?) {
+        val key = itemId?.takeIf { it.isNotBlank() } ?: return
+        if (!SessionRepository.state.value.isLoggedIn &&
+            !SessionCookieJar.get().hasSessionCookie()
+        ) {
+            return
+        }
+        viewModelScope.launch {
+            runCatching { api.userRatings() }
+                .onSuccess { resp ->
+                    val hit = resp.ratings.firstOrNull { r ->
+                        val reaction = r.reaction
+                        if (reaction != "like" && reaction != "dislike") return@firstOrNull false
+                        r.id == key ||
+                            r.aliases.any { it == key } ||
+                            r.href?.endsWith("/${key.removePrefix("kp:")}") == true
+                    }
+                    _state.update {
+                        it.copy(playerReaction = hit?.reaction)
+                    }
                 }
         }
     }

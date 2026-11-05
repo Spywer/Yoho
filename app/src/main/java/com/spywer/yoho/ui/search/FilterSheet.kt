@@ -64,6 +64,7 @@ import com.spywer.yoho.data.remote.FacetItemDto
 import com.spywer.yoho.data.remote.NetworkModule
 import com.spywer.yoho.data.remote.SearchFacetsDto
 import com.spywer.yoho.data.remote.SearchFiltersCatalogDto
+import com.spywer.yoho.data.remote.SearchPersonDto
 import com.spywer.yoho.data.remote.SuggestItemDto
 import com.spywer.yoho.data.remote.absMediaUrl
 import com.spywer.yoho.ui.layout.LocalHomeMetrics
@@ -221,13 +222,22 @@ fun FilterSheet(
                 }
             }
 
-            SearchField(
-                value = query,
-                onValueChange = { query = it },
-                placeholder = if (nav == null) "Найти фильтр или значение…" else "Поиск…",
-            )
-            HorizontalDivider(color = MaterialTheme.colorScheme.outline)
-            Spacer(Modifier.height(if (metrics.isTablet) 8.dp else 4.dp))
+            // У актёров / съёмки / «без участия» свой поиск по API — верхний фильтр значений не нужен.
+            val hideValueSearch = nav == FilterCategory.Actors ||
+                nav == FilterCategory.Crew ||
+                nav == FilterCategory.ExcludePeople
+            if (!hideValueSearch) {
+                SearchField(
+                    value = query,
+                    onValueChange = { query = it },
+                    placeholder = if (nav == null) "Найти фильтр или значение…" else "Поиск…",
+                )
+                HorizontalDivider(color = MaterialTheme.colorScheme.outline)
+                Spacer(Modifier.height(if (metrics.isTablet) 8.dp else 4.dp))
+            } else {
+                HorizontalDivider(color = MaterialTheme.colorScheme.outline)
+                Spacer(Modifier.height(if (metrics.isTablet) 8.dp else 4.dp))
+            }
 
             Column(
                 modifier = Modifier
@@ -238,14 +248,28 @@ fun FilterSheet(
             ) {
                 when (val category = nav) {
                     null -> {
-                        FilterCategory.entries
+                        val matched = FilterCategory.entries
                             .filter { query.isBlank() || it.title.contains(query, true) }
-                            .forEach { cat ->
-                                Text(
-                                    text = cat.title,
-                                    fontSize = CategorySp,
-                                    fontWeight = FontWeight.Medium,
-                                    color = MaterialTheme.colorScheme.onBackground,
+                        FilterGroup.entries.forEach { group ->
+                            val items = matched.filter { it.group == group }
+                            if (items.isEmpty()) return@forEach
+                            Text(
+                                text = group.title.uppercase(),
+                                fontSize = HintSp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
+                                letterSpacing = 0.6.sp,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(
+                                        top = if (metrics.isTablet) 14.dp else 10.dp,
+                                        bottom = if (metrics.isTablet) 4.dp else 2.dp,
+                                        start = if (metrics.isTablet) 6.dp else 2.dp,
+                                    ),
+                            )
+                            items.forEach { cat ->
+                                val selectedCount = filters.selectionCount(cat)
+                                Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .defaultMinSize(minHeight = RowMin)
@@ -254,8 +278,33 @@ fun FilterSheet(
                                             vertical = CatPadV,
                                             horizontal = if (metrics.isTablet) 6.dp else 2.dp,
                                         ),
-                                )
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Text(
+                                        text = cat.title,
+                                        fontSize = CategorySp,
+                                        fontWeight = FontWeight.Medium,
+                                        color = MaterialTheme.colorScheme.onBackground,
+                                        modifier = Modifier.weight(1f),
+                                    )
+                                    if (selectedCount > 0) {
+                                        Text(
+                                            text = selectedCount.toString(),
+                                            fontSize = HintSp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.onPrimary,
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(percent = 50))
+                                                .background(MaterialTheme.colorScheme.primary)
+                                                .padding(
+                                                    horizontal = if (metrics.isTablet) 10.dp else 8.dp,
+                                                    vertical = if (metrics.isTablet) 4.dp else 2.dp,
+                                                ),
+                                        )
+                                    }
+                                }
                             }
+                        }
                         Spacer(Modifier.height(if (metrics.isTablet) 8.dp else 4.dp))
                         ToggleRow("Только с плеером", filters.onlyWithPlayer) {
                             onUpdate(filters.copy(onlyWithPlayer = it))
@@ -311,10 +360,15 @@ fun FilterSheet(
                     }
 
                     FilterCategory.Actors -> PersonEditor(
-                        hint = "Имя актёра…",
+                        hint = "Поиск актёра…",
                         selected = filters.actors,
-                        onAdd = { onUpdate(filters.copy(actors = filters.actors + it)) },
-                        onRemove = { onUpdate(filters.copy(actors = filters.actors - it)) },
+                        onAdd = { person ->
+                            if (filters.actors.any { it.kpId == person.kpId }) return@PersonEditor
+                            onUpdate(filters.copy(actors = filters.actors + person))
+                        },
+                        onRemove = { kpId ->
+                            onUpdate(filters.copy(actors = filters.actors.filterNot { it.kpId == kpId }))
+                        },
                         colors = yoho,
                     )
 
@@ -330,19 +384,33 @@ fun FilterSheet(
                             colors = yoho,
                         )
                         PersonEditor(
-                            hint = "Имя человека…",
+                            hint = "Поиск в съёмочной группе…",
                             selected = filters.crew,
-                            onAdd = { onUpdate(filters.copy(crew = filters.crew + it)) },
-                            onRemove = { onUpdate(filters.copy(crew = filters.crew - it)) },
+                            // Сайт — один человек в crew.
+                            onAdd = { person ->
+                                onUpdate(filters.copy(crew = listOf(person)))
+                            },
+                            onRemove = { kpId ->
+                                onUpdate(filters.copy(crew = filters.crew.filterNot { it.kpId == kpId }))
+                            },
                             colors = yoho,
                         )
                     }
 
                     FilterCategory.ExcludePeople -> PersonEditor(
-                        hint = "Имя человека…",
+                        hint = "Поиск человека без участия…",
                         selected = filters.excludePeople,
-                        onAdd = { onUpdate(filters.copy(excludePeople = filters.excludePeople + it)) },
-                        onRemove = { onUpdate(filters.copy(excludePeople = filters.excludePeople - it)) },
+                        onAdd = { person ->
+                            if (filters.excludePeople.any { it.kpId == person.kpId }) return@PersonEditor
+                            onUpdate(filters.copy(excludePeople = filters.excludePeople + person))
+                        },
+                        onRemove = { kpId ->
+                            onUpdate(
+                                filters.copy(
+                                    excludePeople = filters.excludePeople.filterNot { it.kpId == kpId },
+                                ),
+                            )
+                        },
                         colors = yoho,
                     )
 
@@ -456,9 +524,14 @@ fun FilterSheet(
                     FilterCategory.ReleaseDates -> {
                         ValueChips(
                             items = ReleaseStatusOptions,
-                            selected = setOf(filters.releaseStatus ?: "all"),
+                            selected = setOf(filters.releaseStatus ?: "released"),
                             onToggle = {
-                                onUpdate(filters.copy(releaseStatus = if (it == "all") null else it))
+                                // Как на сайте: default released — в URL не уходит.
+                                onUpdate(
+                                    filters.copy(
+                                        releaseStatus = if (it == "released") null else it,
+                                    ),
+                                )
                             },
                             colors = yoho,
                         )
@@ -867,25 +940,47 @@ private fun ToggleRow(title: String, checked: Boolean, onChecked: (Boolean) -> U
 @Composable
 private fun PersonEditor(
     hint: String,
-    selected: Set<String>,
-    onAdd: (String) -> Unit,
-    onRemove: (String) -> Unit,
+    selected: List<PersonFilterRef>,
+    onAdd: (PersonFilterRef) -> Unit,
+    onRemove: (Int) -> Unit,
     colors: YohoColors,
 ) {
     var draft by remember { mutableStateOf("") }
+    var suggestions by remember { mutableStateOf<List<SearchPersonDto>>(emptyList()) }
+    val minQueryLen = 2
+
+    LaunchedEffect(draft) {
+        val q = draft.trim()
+        if (q.length < minQueryLen) {
+            suggestions = emptyList()
+            return@LaunchedEffect
+        }
+        delay(280)
+        val qNow = draft.trim()
+        if (qNow.length < minQueryLen) {
+            suggestions = emptyList()
+            return@LaunchedEffect
+        }
+        suggestions = runCatching {
+            NetworkModule.api.searchPersons(qNow).persons
+        }.getOrDefault(emptyList())
+    }
+
+    fun pick(person: SearchPersonDto) {
+        val name = person.name?.trim()?.takeIf { it.isNotEmpty() } ?: return
+        val kpId = person.id ?: return
+        onAdd(PersonFilterRef(name = name, kpId = kpId))
+        draft = ""
+        suggestions = emptyList()
+    }
+
     BasicTextField(
         value = draft,
         onValueChange = { draft = it },
         singleLine = true,
         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
         keyboardActions = KeyboardActions(
-            onDone = {
-                val name = draft.trim()
-                if (name.isNotEmpty()) {
-                    onAdd(name)
-                    draft = ""
-                }
-            },
+            onDone = { suggestions.firstOrNull()?.let(::pick) },
         ),
         textStyle = TextStyle(color = MaterialTheme.colorScheme.onBackground, fontSize = BodySp),
         cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
@@ -903,14 +998,72 @@ private fun PersonEditor(
             inner()
         },
     )
-    Text("Enter — добавить", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = HintSp)
-    Spacer(Modifier.height(if (LocalHomeMetrics.current.isTablet) 12.dp else 6.dp))
-    ValueChips(
-        items = selected.map { FacetItemDto(it, it) },
-        selected = selected,
-        onToggle = onRemove,
-        colors = colors,
+    Text(
+        "Минимум $minQueryLen символа — выберите из списка",
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        fontSize = HintSp,
     )
+    if (suggestions.isNotEmpty()) {
+        Spacer(Modifier.height(if (LocalHomeMetrics.current.isTablet) 8.dp else 4.dp))
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(12.dp))
+                .background(MaterialTheme.colorScheme.surfaceVariant)
+                .padding(vertical = 4.dp),
+        ) {
+            suggestions.forEach { person ->
+                val name = person.name?.takeIf { it.isNotBlank() } ?: return@forEach
+                if (person.id == null) return@forEach
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { pick(person) }
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    AsyncImage(
+                        model = person.photoUrl.absMediaUrl(),
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier
+                            .size(40.dp, 56.dp)
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(MaterialTheme.colorScheme.outline.copy(alpha = 0.25f)),
+                    )
+                    Spacer(Modifier.width(12.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            text = name,
+                            color = MaterialTheme.colorScheme.onBackground,
+                            fontSize = BodySp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            fontWeight = FontWeight.Medium,
+                        )
+                        person.originalName?.takeIf { it.isNotBlank() && it != name }?.let { orig ->
+                            Text(
+                                text = orig,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                fontSize = HintSp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+    Spacer(Modifier.height(if (LocalHomeMetrics.current.isTablet) 12.dp else 6.dp))
+    if (selected.isNotEmpty()) {
+        ValueChips(
+            items = selected.map { FacetItemDto(value = it.kpId.toString(), label = it.name) },
+            selected = selected.map { it.kpId.toString() }.toSet(),
+            onToggle = { key -> key.toIntOrNull()?.let(onRemove) },
+            colors = colors,
+        )
+    }
 }
 
 @OptIn(ExperimentalLayoutApi::class)

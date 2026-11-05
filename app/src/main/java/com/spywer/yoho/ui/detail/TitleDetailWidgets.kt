@@ -34,7 +34,13 @@ import com.spywer.yoho.ui.search.genreSlugOf
 @Composable
 internal fun AgeRatingBadge(age: String) {
     val metrics = LocalHomeMetrics.current
-    val label = age.trim().let { if (it.endsWith("+")) it else "$it+" }
+    // API часто отдаёт "age18" / "age16+" — на UI только «18+».
+    val label = age.trim()
+        .let { if (it.startsWith("age", ignoreCase = true)) it.drop(3).trimStart() else it }
+        .let { raw ->
+            val digits = raw.removeSuffix("+").trim()
+            if (digits.isEmpty()) raw else "$digits+"
+        }
     Text(
         text = label,
         color = Color.White,

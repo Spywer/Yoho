@@ -48,6 +48,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.spywer.yoho.ui.components.TrailerPlayerDialog
+import com.spywer.yoho.ui.components.youtubeEmbedUrl
 import coil.compose.AsyncImage
 import com.spywer.yoho.R
 import com.spywer.yoho.data.remote.PlayerChoiceItemDto
@@ -130,11 +132,14 @@ fun TitleDetailScreen(
                             diaryBusy = state.diaryBusy,
                             diaryError = state.diaryError,
                             diaryNotify = state.diaryNotify,
+                            playerReaction = state.playerReaction,
+                            reactionBusy = state.reactionBusy,
                             onBack = onBack,
                             onToggleFavorite = viewModel::toggleFavorite,
                             onSetDiaryStatus = viewModel::setDiaryStatus,
                             onRemoveFromDiary = viewModel::removeFromDiary,
                             onConsumeDiaryNotify = viewModel::consumeDiaryNotify,
+                            onPlayerReaction = viewModel::setPlayerReaction,
                             onSelectSeason = viewModel::selectSeason,
                             onSelectPlayerSource = viewModel::selectPlayerSource,
                             onOpenTitle = onOpenTitle,
@@ -175,11 +180,14 @@ private fun DetailContent(
     diaryBusy: Boolean,
     diaryError: String?,
     diaryNotify: String?,
+    playerReaction: String?,
+    reactionBusy: Boolean,
     onBack: () -> Unit,
     onToggleFavorite: () -> Unit,
     onSetDiaryStatus: (String) -> Unit,
     onRemoveFromDiary: () -> Unit,
     onConsumeDiaryNotify: () -> Unit,
+    onPlayerReaction: (String) -> Unit,
     onSelectSeason: (Int) -> Unit,
     onSelectPlayerSource: (String) -> Unit,
     onOpenTitle: (Int?, Int?, String?) -> Unit,
@@ -197,8 +205,16 @@ private fun DetailContent(
     val castTitle = stringResource(R.string.detail_cast)
     val castFullCount = detail.castTotal?.takeIf { it > 0 } ?: detail.cast.size
     val castFullTitle = stringResource(R.string.detail_cast_full, castFullCount)
-    val aboutTitle = stringResource(R.string.detail_about)
+    val aboutTitle = stringResource(
+        when (detail.mediaType?.lowercase()) {
+            "tv" -> R.string.detail_about_tv
+            "animation" -> R.string.detail_about_animation
+            "anime" -> R.string.detail_about_anime
+            else -> R.string.detail_about
+        },
+    )
     val trailerFallback = stringResource(R.string.detail_trailer)
+    var trailerUrl by remember { mutableStateOf<String?>(null) }
     val showFullCastLink = !detail.castPageHref.isNullOrBlank() && castFullCount > 0
     val selectedSeasonEpisodes = remember(schedule, selectedSeason) {
         schedule?.seasons
@@ -206,6 +222,13 @@ private fun DetailContent(
             ?.episodes
             ?.sortedBy { it.episodeNumber ?: 0 }
             .orEmpty()
+    }
+    trailerUrl?.let { url ->
+        TrailerPlayerDialog(
+            urlOrKey = url,
+            title = detail.trailer?.title ?: trailerFallback,
+            onDismiss = { trailerUrl = null },
+        )
     }
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -288,9 +311,9 @@ private fun DetailContent(
                         .clip(RoundedCornerShape(12.dp))
                         .background(MaterialTheme.colorScheme.surfaceVariant)
                         .clickable {
-                            context.startActivity(
-                                Intent(Intent.ACTION_VIEW, Uri.parse(url)),
-                            )
+                            if (youtubeEmbedUrl(url) != null) {
+                                trailerUrl = url
+                            }
                         }
                         .padding(if (metrics.isTablet) 12.dp else 10.dp)
                     val thumb = @Composable {
@@ -337,14 +360,16 @@ private fun DetailContent(
                                 maxLines = 2,
                                 overflow = TextOverflow.Ellipsis,
                             )
-                            detail.trailer.date?.let {
-                                Text(
-                                    text = it,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    fontSize = metrics.cardMetaSize,
-                                    lineHeight = metrics.lineOf(metrics.cardMetaSize),
-                                    modifier = Modifier.padding(top = metrics.blockGap),
-                                )
+                            detail.trailer.date?.let { raw ->
+                                formatLongDateRu(raw)?.let { formatted ->
+                                    Text(
+                                        text = formatted,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        fontSize = metrics.cardMetaSize,
+                                        lineHeight = metrics.lineOf(metrics.cardMetaSize),
+                                        modifier = Modifier.padding(top = metrics.blockGap),
+                                    )
+                                }
                             }
                         }
                     }
@@ -381,10 +406,13 @@ private fun DetailContent(
                 diaryBusy = diaryBusy,
                 diaryError = diaryError,
                 diaryNotify = diaryNotify,
+                playerReaction = playerReaction,
+                reactionBusy = reactionBusy,
                 onSelectSource = onSelectPlayerSource,
                 onSetDiaryStatus = onSetDiaryStatus,
                 onRemoveFromDiary = onRemoveFromDiary,
                 onConsumeDiaryNotify = onConsumeDiaryNotify,
+                onPlayerReaction = onPlayerReaction,
                 padding = metrics.screenPadding,
                 metaSize = metrics.cardMetaSize,
                 modifier = Modifier.padding(top = metrics.sectionGap),

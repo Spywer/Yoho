@@ -53,6 +53,12 @@ data class LongRangeFilter(val from: Long? = null, val to: Long? = null) {
     }
 }
 
+/** Человек в фильтре: имя + KP id (как actor / actor_kp на сайте). */
+data class PersonFilterRef(
+    val name: String,
+    val kpId: Int,
+)
+
 data class SearchFilterState(
     /** Пустой набор = все типы. Иначе мультивыбор: movie, tv, animation, anime. */
     val types: Set<String> = emptySet(),
@@ -66,10 +72,10 @@ data class SearchFilterState(
     val ratingRt: DoubleRangeFilter = DoubleRangeFilter(),
     val ratingMc: DoubleRangeFilter = DoubleRangeFilter(),
     val ratingCritics: DoubleRangeFilter = DoubleRangeFilter(),
-    val actors: Set<String> = emptySet(),
+    val actors: List<PersonFilterRef> = emptyList(),
     val crewRole: String? = null,
-    val crew: Set<String> = emptySet(),
-    val excludePeople: Set<String> = emptySet(),
+    val crew: List<PersonFilterRef> = emptyList(),
+    val excludePeople: List<PersonFilterRef> = emptyList(),
     val tags: Set<String> = emptySet(),
     val language: String? = null,
     val age: String? = null,
@@ -97,7 +103,7 @@ data class SearchFilterState(
     val digitalTo: String? = null,
     val preset: String? = null,
     val collection: String? = null,
-    val sort: String = "popularity",
+    val sort: String = DefaultSort,
     val titleContains: String? = null,
     val onlyWithPlayer: Boolean = false,
     val excludeWatched: Boolean = false,
@@ -116,7 +122,7 @@ data class SearchFilterState(
             premiereWorldFrom != null || premiereWorldTo != null ||
             premiereRuFrom != null || premiereRuTo != null ||
             digitalFrom != null || digitalTo != null || preset != null ||
-            collection != null || sort != "popularity" ||
+            collection != null || sort != DefaultSort ||
             !titleContains.isNullOrBlank() || onlyWithPlayer || excludeWatched
 
     val isActive: Boolean get() = types.isNotEmpty() || hasAdvanced
@@ -171,15 +177,21 @@ data class SearchFilterState(
                 if (ratingCritics.isSet) add(ActiveFilterChip("rating_critics", ratingCritics.label("Критики")))
             },
         )
-        group("Актёры", actors.map { ActiveFilterChip("actor:$it", it) })
+        group(
+            "Актёры",
+            actors.map { ActiveFilterChip("actor:${it.kpId}", it.name) },
+        )
         group(
             "Съёмочная группа",
             buildList {
                 crewRole?.let { add(ActiveFilterChip("crew_role", it)) }
-                crew.forEach { add(ActiveFilterChip("crew:$it", it)) }
+                crew.forEach { add(ActiveFilterChip("crew:${it.kpId}", it.name)) }
             },
         )
-        group("Исключить", excludePeople.map { ActiveFilterChip("exclude:$it", it) })
+        group(
+            "Исключить",
+            excludePeople.map { ActiveFilterChip("exclude:${it.kpId}", it.name) },
+        )
         group(
             "Теги",
             tags.map { t ->
@@ -295,7 +307,7 @@ data class SearchFilterState(
         group(
             "Сортировка",
             listOfNotNull(
-                sort.takeIf { it != "popularity" }?.let {
+                sort.takeIf { it != DefaultSort }?.let {
                     ActiveFilterChip("sort", labelOf(it, SortOptions, it))
                 },
             ),
@@ -341,10 +353,19 @@ fun SearchFilterState.removeChip(id: String): SearchFilterState = when {
     id == "rating_rt" -> copy(ratingRt = DoubleRangeFilter())
     id == "rating_mc" -> copy(ratingMc = DoubleRangeFilter())
     id == "rating_critics" -> copy(ratingCritics = DoubleRangeFilter())
-    id.startsWith("actor:") -> copy(actors = actors - id.removePrefix("actor:"))
+    id.startsWith("actor:") -> {
+        val kp = id.removePrefix("actor:").toIntOrNull()
+        copy(actors = actors.filterNot { it.kpId == kp })
+    }
     id == "crew_role" -> copy(crewRole = null)
-    id.startsWith("crew:") -> copy(crew = crew - id.removePrefix("crew:"))
-    id.startsWith("exclude:") -> copy(excludePeople = excludePeople - id.removePrefix("exclude:"))
+    id.startsWith("crew:") -> {
+        val kp = id.removePrefix("crew:").toIntOrNull()
+        copy(crew = crew.filterNot { it.kpId == kp })
+    }
+    id.startsWith("exclude:") -> {
+        val kp = id.removePrefix("exclude:").toIntOrNull()
+        copy(excludePeople = excludePeople.filterNot { it.kpId == kp })
+    }
     id.startsWith("tag:") -> copy(tags = tags - id.removePrefix("tag:"))
     id == "language" -> copy(language = null)
     id == "age" -> copy(age = null)
@@ -369,9 +390,45 @@ fun SearchFilterState.removeChip(id: String): SearchFilterState = when {
     id == "digital" -> copy(digitalFrom = null, digitalTo = null)
     id == "preset" -> copy(preset = null)
     id == "collection" -> copy(collection = null)
-    id == "sort" -> copy(sort = "popularity")
+    id == "sort" -> copy(sort = DefaultSort)
     id == "title" -> copy(titleContains = null)
     id == "player" -> copy(onlyWithPlayer = false)
     id == "watched" -> copy(excludeWatched = false)
     else -> this
+}
+
+/** Сколько выбранных значений в категории — для бейджа в списке фильтров. */
+fun SearchFilterState.selectionCount(category: FilterCategory): Int = when (category) {
+    FilterCategory.Genre -> genres.size
+    FilterCategory.Country -> countries.size
+    FilterCategory.Year -> if (year.isSet) 1 else 0
+    FilterCategory.Rating -> listOf(
+        ratingKp, ratingImdb, ratingTmdb, ratingRt, ratingMc, ratingCritics,
+    ).count { it.isSet }
+    FilterCategory.Actors -> actors.size
+    FilterCategory.Crew -> crew.size + if (crewRole != null) 1 else 0
+    FilterCategory.ExcludePeople -> excludePeople.size
+    FilterCategory.Tags -> tags.size
+    FilterCategory.Language -> if (language != null) 1 else 0
+    FilterCategory.Region -> if (region != null) 1 else 0
+    FilterCategory.Age -> if (age != null) 1 else 0
+    FilterCategory.Duration -> if (duration.isSet) 1 else 0
+    FilterCategory.Votes -> listOf(votesKp, votesImdb, votesTmdb).count { it.isSet }
+    FilterCategory.Awards -> listOf(oscars, awardsTotal).count { it.isSet }
+    FilterCategory.Budget -> listOf(budget, boxOfficeWorld, boxOfficeUs).count { it.isSet }
+    FilterCategory.Company -> companies.size
+    FilterCategory.Platform -> platforms.size
+    FilterCategory.Series -> listOf(seasons, episodes, airStart, airEnd).count { it.isSet }
+    FilterCategory.ReleaseDates -> {
+        var n = 0
+        if (releaseStatus != null) n++
+        if (premiereWorldFrom != null || premiereWorldTo != null) n++
+        if (premiereRuFrom != null || premiereRuTo != null) n++
+        if (digitalFrom != null || digitalTo != null) n++
+        n
+    }
+    FilterCategory.Preset -> if (preset != null) 1 else 0
+    FilterCategory.Collection -> if (collection != null) 1 else 0
+    FilterCategory.Sort -> if (sort != DefaultSort) 1 else 0
+    FilterCategory.TitleMode -> if (!titleContains.isNullOrBlank()) 1 else 0
 }

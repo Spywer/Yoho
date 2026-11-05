@@ -10,6 +10,53 @@ data class TrendingResponse(
     val builtAt: Long? = null,
 )
 
+/** GET /api/anime — блоки как на reyoho.com/anime. */
+data class AnimeHomeResponse(
+    val trending: AnimeListPageDto? = null,
+    val season: AnimeListPageDto? = null,
+    val popular: AnimeListPageDto? = null,
+    val top: List<AnimeItemDto> = emptyList(),
+    val seasonTop: List<AnimeItemDto> = emptyList(),
+    val seasonLabel: AnimeSeasonLabelDto? = null,
+)
+
+data class AnimeListResponse(
+    val items: List<AnimeItemDto> = emptyList(),
+    val nextPage: Int? = null,
+)
+
+data class AnimeListPageDto(
+    val items: List<AnimeItemDto> = emptyList(),
+    val nextPage: Int? = null,
+)
+
+data class AnimeSeasonLabelDto(
+    val season: String? = null,
+    val year: Int? = null,
+)
+
+data class AnimeItemDto(
+    val anilistId: Int? = null,
+    val idMal: Int? = null,
+    val title: String? = null,
+    val romaji: String? = null,
+    val russian: String? = null,
+    val ruTitle: String? = null,
+    val year: Int? = null,
+    val score: Double? = null,
+    val coverImage: String? = null,
+    val ruPosterUrl: String? = null,
+    val format: String? = null,
+    val status: String? = null,
+    val episodes: Int? = null,
+    val mediaType: String? = null,
+    val tmdbId: Int? = null,
+    val kpId: Int? = null,
+    val kpRating: Double? = null,
+    val imdbRating: Double? = null,
+    val ruOverview: String? = null,
+)
+
 data class TrendingItemDto(
     val id: Int? = null,
     val title: String? = null,
@@ -136,7 +183,7 @@ data class PersonDto(
     val knownFor: List<String> = emptyList(),
 )
 
-/** POST /api/diary → 201 { entry } */
+/** POST /api/diary → 201 { entry }; like/dislike без statusLabel (409 = уже есть). */
 data class DiaryRequestDto(
     val itemId: String,
     val href: String,
@@ -144,8 +191,8 @@ data class DiaryRequestDto(
     val year: String? = null,
     val mediaType: String,
     val sourceReaction: String = "manual",
-    val statusLabel: String,
-    val updateStatusIfItemExists: Boolean = true,
+    val statusLabel: String? = null,
+    val updateStatusIfItemExists: Boolean? = null,
 )
 
 data class DiaryResponseDto(
@@ -174,10 +221,17 @@ data class DiaryRemoveResponseDto(
     val removed: Boolean? = null,
 )
 
-/** POST /api/me/activity */
+/**
+ * POST /api/me/activity — формы body зависят от op:
+ * - addFavorite/removeFavorite/recordWatch: `item`
+ * - setRating: `input`
+ * - clearRating/removeFavorite(alt)/removeWatch: `itemId`
+ */
 data class MeActivityRequest(
     val op: String,
-    val item: MeActivityItemDto,
+    val item: MeActivityItemDto? = null,
+    val input: MeActivityRatingInputDto? = null,
+    val itemId: String? = null,
 )
 
 data class MeActivityItemDto(
@@ -188,6 +242,16 @@ data class MeActivityItemDto(
     val posterUrl: String? = null,
     val mediaType: String? = null,
     val ts: Long = System.currentTimeMillis(),
+)
+
+/** input для op=setRating (лайк → value=10, дизлайк → isNotInterested). */
+data class MeActivityRatingInputDto(
+    val itemId: String,
+    val href: String,
+    val title: String,
+    val mediaType: String,
+    val value: Int? = null,
+    val isNotInterested: Boolean = false,
 )
 
 /** Элемент полки: favorites / watchHistory из GET /api/sync */
@@ -209,6 +273,23 @@ data class SyncResponseDto(
     val ok: Boolean = false,
     val favorites: List<FavoriteItemDto> = emptyList(),
     val watchHistory: List<FavoriteItemDto> = emptyList(),
+)
+
+/** GET /api/ratings — реакции like/dislike. */
+data class UserRatingsResponse(
+    val ratings: List<UserReactionDto> = emptyList(),
+)
+
+data class UserReactionDto(
+    val id: String? = null,
+    val href: String? = null,
+    val title: String? = null,
+    val year: String? = null,
+    val posterUrl: String? = null,
+    val mediaType: String? = null,
+    val reaction: String? = null,
+    val aliases: List<String> = emptyList(),
+    val ts: Long? = null,
 )
 
 /** POST /api/auth/sign-in/email */
@@ -881,6 +962,18 @@ data class SuggestItemDto(
     @SerializedName("poster") val poster: String? = null,
 )
 
+/** GET /api/search/persons?source=kinodata&q= */
+data class SearchPersonDto(
+    val id: Int? = null,
+    val name: String? = null,
+    val originalName: String? = null,
+    val photoUrl: String? = null,
+)
+
+data class SearchPersonsResponse(
+    val persons: List<SearchPersonDto> = emptyList(),
+)
+
 data class SearchResponseDto(
     val total: Int = 0,
     val page: Int = 1,
@@ -1077,6 +1170,48 @@ fun TitleDetailDto.toDiaryRequest(statusLabel: String): DiaryRequestDto? {
     )
 }
 
+/** Реакция с плеера: sourceReaction=like|dislike, без statusLabel. */
+fun TitleDetailDto.toDiaryReactionRequest(reaction: String): DiaryRequestDto? {
+    val kp = idKp?.takeIf { it > 0 } ?: return null
+    val href = siteHref() ?: return null
+    val titleText = title?.ru ?: title?.original ?: return null
+    return DiaryRequestDto(
+        itemId = "kp:$kp",
+        href = href,
+        title = titleText,
+        year = (year ?: yearStart)?.toString(),
+        mediaType = normalizedMediaType(),
+        sourceReaction = reaction,
+    )
+}
+
+/**
+ * Body setRating как на сайте:
+ * like → value:10, isNotInterested:false
+ * dislike → value:null, isNotInterested:true (null обязан быть в JSON).
+ */
+fun TitleDetailDto.toSetRatingBody(reaction: String): com.google.gson.JsonObject? {
+    val kp = idKp?.takeIf { it > 0 } ?: return null
+    val href = siteHref() ?: return null
+    val titleText = title?.ru ?: title?.original ?: return null
+    val input = com.google.gson.JsonObject().apply {
+        addProperty("itemId", "kp:$kp")
+        addProperty("href", href)
+        addProperty("title", titleText)
+        addProperty("mediaType", normalizedMediaType())
+        if (reaction == "like") {
+            addProperty("value", 10)
+        } else {
+            add("value", com.google.gson.JsonNull.INSTANCE)
+        }
+        addProperty("isNotInterested", reaction == "dislike")
+    }
+    return com.google.gson.JsonObject().apply {
+        addProperty("op", "setRating")
+        add("input", input)
+    }
+}
+
 /** Постер для /api/me/activity — относительный path с w185, как на сайте. */
 fun String?.toFavoritePosterPath(): String? {
     val path = toRelativeMediaPath() ?: return null
@@ -1109,6 +1244,39 @@ fun RecommendationItemDto.toTitle(): TitleDto {
         reason = sourceTitle?.takeIf { it.isNotBlank() }
             ?: reason?.takeIf { it.isNotBlank() },
     )
+}
+
+fun AnimeItemDto.toTitle(): TitleDto {
+    val display = ruTitle?.takeIf { it.isNotBlank() }
+        ?: russian?.takeIf { it.isNotBlank() }
+        ?: title
+    return TitleDto(
+        idKp = kpId,
+        idTmdb = tmdbId,
+        mediaType = mediaType ?: "anime",
+        title = TitleNameDto(ru = display, original = romaji ?: title),
+        year = year,
+        poster = (ruPosterUrl ?: coverImage).absMediaUrl(),
+        ratings = RatingsDto(
+            kinopoisk = (kpRating ?: score)?.let { ScoreDto(it) },
+            imdb = imdbRating?.let { ScoreDto(it) },
+        ),
+    )
+}
+
+fun AnimeSeasonLabelDto?.displayRu(): String {
+    if (this == null) return ""
+    val seasonRu = when (season?.uppercase()) {
+        "WINTER" -> "зима"
+        "SPRING" -> "весна"
+        "SUMMER" -> "лето"
+        "FALL" -> "осень"
+        else -> season?.lowercase().orEmpty()
+    }
+    return listOfNotNull(
+        seasonRu.takeIf { it.isNotBlank() },
+        year?.toString(),
+    ).joinToString(" ")
 }
 
 fun TrendingItemDto.toTitle(ratings: Map<String, TrendingRatingDto>): TitleDto {

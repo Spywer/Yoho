@@ -2,31 +2,42 @@ package com.spywer.yoho.ui.search
 
 import com.spywer.yoho.data.remote.FacetItemDto
 
+/** Группы меню фильтра — как на reyoho.com/search. */
+enum class FilterGroup(val title: String) {
+    Basic("Основное"),
+    People("Люди"),
+    Content("Содержание"),
+    Fame("Известность"),
+    Production("Производство"),
+    Collections("Подборки"),
+    Order("Порядок"),
+}
+
 /** Полный набор категорий как на reyoho.com/search → «Фильтр». */
-enum class FilterCategory(val title: String) {
-    Genre("Жанр"),
-    Country("Страна"),
-    Year("Год"),
-    Rating("Рейтинг"),
-    Actors("Актёры"),
-    Crew("Съёмочная группа"),
-    ExcludePeople("Без участия"),
-    Tags("Теги"),
-    Language("Язык оригинала"),
-    Region("Регион"),
-    Age("Возраст"),
-    Duration("Длительность"),
-    Votes("Число оценок"),
-    Awards("Награды"),
-    Budget("Бюджет и сборы"),
-    Company("Кинокомпания"),
-    Platform("Платформа"),
-    Series("Сериал"),
-    ReleaseDates("Даты выхода"),
-    Preset("Готовый набор"),
-    Collection("Подборка"),
-    Sort("Сортировка"),
-    TitleMode("Название"),
+enum class FilterCategory(val title: String, val group: FilterGroup) {
+    Genre("Жанр", FilterGroup.Basic),
+    Country("Страна", FilterGroup.Basic),
+    Year("Год", FilterGroup.Basic),
+    Rating("Рейтинг", FilterGroup.Basic),
+    Actors("Актёры", FilterGroup.People),
+    Crew("Съёмочная группа", FilterGroup.People),
+    ExcludePeople("Без участия", FilterGroup.People),
+    Tags("Теги", FilterGroup.Content),
+    Language("Язык оригинала", FilterGroup.Content),
+    Region("Регион", FilterGroup.Content),
+    Age("Возраст", FilterGroup.Content),
+    Duration("Длительность", FilterGroup.Content),
+    Votes("Число оценок", FilterGroup.Fame),
+    Awards("Награды", FilterGroup.Fame),
+    Budget("Бюджет и сборы", FilterGroup.Fame),
+    Company("Кинокомпания", FilterGroup.Production),
+    Platform("Платформа", FilterGroup.Production),
+    Series("Сериал", FilterGroup.Production),
+    ReleaseDates("Даты выхода", FilterGroup.Production),
+    Preset("Готовый набор", FilterGroup.Collections),
+    Collection("Подборка", FilterGroup.Collections),
+    Sort("Сортировка", FilterGroup.Order),
+    TitleMode("Название", FilterGroup.Order),
 }
 
 val AllGenres = listOf(
@@ -101,16 +112,15 @@ val AllRegions = listOf(
     FacetItemDto("europe", "Европа"),
     FacetItemDto("asia", "Азия"),
     FacetItemDto("america", "Америка"),
-    FacetItemDto("africa", "Африка"),
-    FacetItemDto("oceania", "Океания"),
 )
 
+/** Значения age как на сайте: age=6|12|16|18. */
 val AgeOptions = listOf(
     FacetItemDto("any", "Любой"),
-    FacetItemDto("max6", "Не старше 6+"),
-    FacetItemDto("max12", "Не старше 12+"),
-    FacetItemDto("max16", "Не старше 16+"),
-    FacetItemDto("only18", "Только 18+"),
+    FacetItemDto("6", "Не старше 6+"),
+    FacetItemDto("12", "Не старше 12+"),
+    FacetItemDto("16", "Не старше 16+"),
+    FacetItemDto("18", "Только 18+"),
 )
 
 val CrewRoleOptions = listOf(
@@ -121,56 +131,103 @@ val CrewRoleOptions = listOf(
     FacetItemDto("cinematographer", "Оператор"),
     FacetItemDto("composer", "Композитор"),
     FacetItemDto("editor", "Монтажёр"),
-    FacetItemDto("art_director", "Художник"),
+    FacetItemDto("art", "Художник"),
     FacetItemDto("sound", "Звукорежиссёр"),
 )
 
 val ReleaseStatusOptions = listOf(
     FacetItemDto("released", "Вышедшие"),
     FacetItemDto("upcoming", "Ещё не вышли"),
-    FacetItemDto("all", "Все"),
+    FacetItemDto("any", "Все"),
 )
 
+/** Значения preset как на сайте. */
 val PresetOptions = listOf(
     FacetItemDto("none", "Без набора"),
-    FacetItemDto("imdb_best", "Лучшее по IMDb"),
+    FacetItemDto("top", "Лучшее по IMDb"),
     FacetItemDto("hidden_gems", "Скрытые жемчужины"),
-    FacetItemDto("popular_now", "Популярное сейчас"),
-    FacetItemDto("new_month", "Новинки месяца"),
-    FacetItemDto("classic_1980", "Классика по 1980 год"),
+    FacetItemDto("trending", "Популярное сейчас"),
+    FacetItemDto("new", "Новинки месяца"),
+    FacetItemDto("classics", "Классика по 1980 год"),
 )
 
+/** Значения collection как на сайте. */
 val CollectionOptions = listOf(
-    FacetItemDto("all", "Весь каталог"),
-    FacetItemDto("top500_movies", "Топ-500 фильмов"),
-    FacetItemDto("top250_series", "Топ-250 сериалов"),
-    FacetItemDto("top1000_popular", "Топ-1000 популярных"),
-    FacetItemDto("trending_week", "В тренде за неделю"),
-    FacetItemDto("trending_day", "В тренде за день"),
+    FacetItemDto("all", "Все"),
+    FacetItemDto("films-best500", "Топ-500 фильмов"),
+    FacetItemDto("series-best250", "Топ-250 сериалов"),
+    FacetItemDto("all-popular1000", "Топ-1000 популярных"),
+    FacetItemDto("all-week250", "В тренде за неделю"),
+    FacetItemDto("all-day250", "В тренде за день"),
 )
 
+/** Значения sort как на сайте (− убыв. / + возр.). */
 val SortOptions = listOf(
-    FacetItemDto("popularity", "По популярности"),
-    FacetItemDto("rating_kp", "По рейтингу КП"),
-    FacetItemDto("rating_imdb", "По рейтингу IMDb"),
-    FacetItemDto("rating_tmdb", "По рейтингу TMDB"),
-    FacetItemDto("rating_rt", "По Rotten Tomatoes"),
-    FacetItemDto("rating_mc", "По Metacritic"),
-    FacetItemDto("rating_critics", "По оценке критиков"),
+    FacetItemDto("-popularity", "По популярности"),
+    FacetItemDto("-rating_kp", "По рейтингу КП"),
+    FacetItemDto("-rating_imdb", "По рейтингу IMDb"),
+    FacetItemDto("-rating_tmdb", "По рейтингу TMDB"),
+    FacetItemDto("-rating_rt", "По Rotten Tomatoes"),
+    FacetItemDto("-rating_metacritic", "По Metacritic"),
+    FacetItemDto("-rating_critics", "По оценке критиков"),
+    FacetItemDto("-votes_kp", "По числу оценок КП"),
+    FacetItemDto("-votes_imdb", "По числу оценок IMDb"),
+    FacetItemDto("-release_date", "Сначала новые"),
+    FacetItemDto("+release_date", "Сначала старые"),
+    FacetItemDto("-runtime", "Сначала длинные"),
+    FacetItemDto("+runtime", "Сначала короткие"),
+    FacetItemDto("-budget", "По бюджету"),
+    FacetItemDto("-revenue", "По сборам в мире"),
+    FacetItemDto("-box_office", "По сборам в США"),
+    FacetItemDto("-oscars_won", "По числу «Оскаров»"),
+    FacetItemDto("-awards_won", "По числу наград"),
 )
+
+const val DefaultSort = "-popularity"
 
 val LanguageOptions = listOf(
+    FacetItemDto("en", "Английский"),
     FacetItemDto("ru", "Русский"),
-    FacetItemDto("en", "English"),
-    FacetItemDto("ja", "日本語"),
-    FacetItemDto("ko", "한국어"),
-    FacetItemDto("zh", "中文"),
-    FacetItemDto("fr", "Français"),
-    FacetItemDto("de", "Deutsch"),
-    FacetItemDto("es", "Español"),
-    FacetItemDto("it", "Italiano"),
-    FacetItemDto("original", "Оригинал"),
-    FacetItemDto("any", "Любой"),
+    FacetItemDto("fr", "Французский"),
+    FacetItemDto("de", "Немецкий"),
+    FacetItemDto("es", "Испанский"),
+    FacetItemDto("it", "Итальянский"),
+    FacetItemDto("ja", "Японский"),
+    FacetItemDto("ko", "Корейский"),
+    FacetItemDto("zh", "Китайский"),
+    FacetItemDto("hi", "Хинди"),
+    FacetItemDto("ta", "Тамильский"),
+    FacetItemDto("te", "Телугу"),
+    FacetItemDto("ml", "Малаялам"),
+    FacetItemDto("tr", "Турецкий"),
+    FacetItemDto("uk", "Украинский"),
+    FacetItemDto("pl", "Польский"),
+    FacetItemDto("pt", "Португальский"),
+    FacetItemDto("sv", "Шведский"),
+    FacetItemDto("da", "Датский"),
+    FacetItemDto("no", "Норвежский"),
+    FacetItemDto("fi", "Финский"),
+    FacetItemDto("nl", "Нидерландский"),
+    FacetItemDto("cs", "Чешский"),
+    FacetItemDto("hu", "Венгерский"),
+    FacetItemDto("ro", "Румынский"),
+    FacetItemDto("el", "Греческий"),
+    FacetItemDto("he", "Иврит"),
+    FacetItemDto("ar", "Арабский"),
+    FacetItemDto("fa", "Персидский"),
+    FacetItemDto("th", "Тайский"),
+    FacetItemDto("id", "Индонезийский"),
+    FacetItemDto("tl", "Тагальский"),
+    FacetItemDto("ka", "Грузинский"),
+    FacetItemDto("kk", "Казахский"),
+    FacetItemDto("be", "Белорусский"),
+    FacetItemDto("sr", "Сербский"),
+    FacetItemDto("hr", "Хорватский"),
+    FacetItemDto("bg", "Болгарский"),
+    FacetItemDto("et", "Эстонский"),
+    FacetItemDto("lt", "Литовский"),
+    FacetItemDto("lv", "Латышский"),
+    FacetItemDto("is", "Исландский"),
 )
 
 val DefaultTagOptions = listOf(

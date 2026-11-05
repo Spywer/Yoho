@@ -15,11 +15,13 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -39,6 +41,9 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -54,12 +59,15 @@ import com.spywer.yoho.R
 import com.spywer.yoho.data.remote.TitleDto
 import com.spywer.yoho.ui.components.PosterCard
 import com.spywer.yoho.ui.components.TrailerCard
+import com.spywer.yoho.ui.components.TrailerPlayerDialog
+import com.spywer.yoho.ui.components.youtubeEmbedUrl
 import com.spywer.yoho.ui.layout.HomeMetrics
 import com.spywer.yoho.ui.layout.LocalHomeMetrics
 import com.spywer.yoho.ui.layout.rememberHomeMetrics
 import com.spywer.yoho.ui.detail.TitleDetailActivity
 import com.spywer.yoho.ui.search.SearchActivity
 import com.spywer.yoho.ui.theme.YohoThemeExtras
+import com.spywer.yoho.data.remote.displayTitle
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -85,6 +93,17 @@ fun HomeScreen(
             )
     }
 
+    var playingTrailer by remember {
+        mutableStateOf<Pair<String, String?>?>(null)
+    }
+    playingTrailer?.let { (url, title) ->
+        TrailerPlayerDialog(
+            urlOrKey = url,
+            title = title,
+            onDismiss = { playingTrailer = null },
+        )
+    }
+
     CompositionLocalProvider(LocalHomeMetrics provides metrics) {
         Scaffold(
             containerColor = MaterialTheme.colorScheme.background,
@@ -94,6 +113,7 @@ fun HomeScreen(
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
+                            .statusBarsPadding()
                             .background(MaterialTheme.colorScheme.background)
                             .padding(
                                 horizontal = metrics.screenPadding,
@@ -212,32 +232,28 @@ fun HomeScreen(
                                         onOpen = ::openTitle,
                                     )
                                 }
-                                item {
-                                    TrailerSection(
-                                        title = stringResource(R.string.trailers),
-                                        items = state.trailers,
-                                        cardWidth = metrics.trailer,
-                                        gap = metrics.cardGap,
-                                        padding = metrics.screenPadding,
-                                        titleSize = metrics.sectionTitleSize,
-                                        onOpen = ::openTitle,
-                                    )
-                                }
-                                if (metrics.isTablet) {
-                                    item {
-                                        TabletPosterPair(
-                                            leftTitle = stringResource(R.string.popular),
-                                            leftItems = state.popular,
-                                            rightTitle = stringResource(R.string.newcomers),
-                                            rightItems = state.newcomers,
-                                            metrics = metrics,
-                                            onOpen = ::openTitle,
-                                        )
+                                if (state.isAnimeLayout) {
+                                    // Как /anime: сезон → за всё время → топ 100 (без трейлеров/новинок).
+                                    val seasonLabel = state.seasonLabel
+                                    if (seasonLabel != null && state.seasonPopular.isNotEmpty()) {
+                                        item {
+                                            PosterSection(
+                                                title = stringResource(
+                                                    R.string.anime_season_popular,
+                                                    seasonLabel,
+                                                ),
+                                                items = state.seasonPopular,
+                                                cardWidth = metrics.posterLarge,
+                                                gap = metrics.cardGap,
+                                                padding = metrics.screenPadding,
+                                                titleSize = metrics.sectionTitleSize,
+                                                onOpen = ::openTitle,
+                                            )
+                                        }
                                     }
-                                } else {
                                     item {
                                         PosterSection(
-                                            title = stringResource(R.string.popular),
+                                            title = stringResource(R.string.popular_all_time),
                                             items = state.popular,
                                             cardWidth = metrics.posterLarge,
                                             gap = metrics.cardGap,
@@ -248,14 +264,69 @@ fun HomeScreen(
                                     }
                                     item {
                                         PosterSection(
-                                            title = stringResource(R.string.newcomers),
-                                            items = state.newcomers,
-                                            cardWidth = metrics.poster,
+                                            title = stringResource(R.string.anime_top100),
+                                            items = state.animeTop,
+                                            cardWidth = metrics.posterLarge,
                                             gap = metrics.cardGap,
                                             padding = metrics.screenPadding,
                                             titleSize = metrics.sectionTitleSize,
                                             onOpen = ::openTitle,
                                         )
+                                    }
+                                } else {
+                                    item {
+                                        TrailerSection(
+                                            title = stringResource(R.string.trailers),
+                                            items = state.trailers,
+                                            cardWidth = metrics.trailer,
+                                            gap = metrics.cardGap,
+                                            padding = metrics.screenPadding,
+                                            titleSize = metrics.sectionTitleSize,
+                                            onOpen = ::openTitle,
+                                            onPlayTrailer = { item ->
+                                                val url = item.trailer?.url
+                                                if (url != null && youtubeEmbedUrl(url) != null) {
+                                                    playingTrailer = url to item.displayTitle()
+                                                } else {
+                                                    openTitle(item)
+                                                }
+                                            },
+                                        )
+                                    }
+                                    if (metrics.isTablet) {
+                                        item {
+                                            TabletPosterPair(
+                                                leftTitle = stringResource(R.string.popular),
+                                                leftItems = state.popular,
+                                                rightTitle = stringResource(R.string.newcomers),
+                                                rightItems = state.newcomers,
+                                                metrics = metrics,
+                                                onOpen = ::openTitle,
+                                            )
+                                        }
+                                    } else {
+                                        item {
+                                            PosterSection(
+                                                title = stringResource(R.string.popular),
+                                                items = state.popular,
+                                                cardWidth = metrics.posterLarge,
+                                                gap = metrics.cardGap,
+                                                padding = metrics.screenPadding,
+                                                titleSize = metrics.sectionTitleSize,
+                                                onOpen = ::openTitle,
+                                            )
+                                        }
+                                        item {
+                                            PosterSection(
+                                                title = stringResource(R.string.newcomers),
+                                                items = state.newcomers,
+                                                cardWidth = metrics.poster,
+                                                gap = metrics.cardGap,
+                                                padding = metrics.screenPadding,
+                                                titleSize = metrics.sectionTitleSize,
+                                                onOpen = ::openTitle,
+                                            )
+                                        }
                                     }
                                 }
                             }
@@ -411,7 +482,11 @@ private fun PosterSection(
             contentPadding = PaddingValues(start = edgePaddingStart, end = edgePaddingEnd),
             horizontalArrangement = Arrangement.spacedBy(gap),
         ) {
-            items(items, key = { it.idKp ?: it.idTmdb ?: it.hashCode() }) { item ->
+            // index в ключе: в /api/anime один kpId может повториться в ленте.
+            itemsIndexed(
+                items,
+                key = { index, item -> "${item.idKp ?: item.idTmdb ?: item.hashCode()}-$index" },
+            ) { _, item ->
                 PosterCard(
                     item = item,
                     modifier = Modifier.width(cardWidth),
@@ -431,6 +506,7 @@ private fun TrailerSection(
     padding: Dp,
     titleSize: TextUnit,
     onOpen: (TitleDto) -> Unit,
+    onPlayTrailer: (TitleDto) -> Unit = onOpen,
 ) {
     if (items.isEmpty()) return
     val metrics = LocalHomeMetrics.current
@@ -440,11 +516,14 @@ private fun TrailerSection(
             contentPadding = PaddingValues(horizontal = padding),
             horizontalArrangement = Arrangement.spacedBy(gap),
         ) {
-            items(items, key = { "tr-${it.idKp ?: it.idTmdb}" }) { item ->
+            itemsIndexed(
+                items,
+                key = { index, item -> "tr-${item.idKp ?: item.idTmdb}-$index" },
+            ) { _, item ->
                 TrailerCard(
                     item = item,
                     modifier = Modifier.width(cardWidth),
-                    onClick = { onOpen(item) },
+                    onClick = { onPlayTrailer(item) },
                 )
             }
         }

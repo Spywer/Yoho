@@ -101,10 +101,13 @@ internal fun PlayerBlock(
     diaryBusy: Boolean,
     diaryError: String?,
     diaryNotify: String?,
+    playerReaction: String?,
+    reactionBusy: Boolean,
     onSelectSource: (String) -> Unit,
     onSetDiaryStatus: (String) -> Unit,
     onRemoveFromDiary: () -> Unit,
     onConsumeDiaryNotify: () -> Unit,
+    onPlayerReaction: (String) -> Unit,
     padding: androidx.compose.ui.unit.Dp,
     metaSize: androidx.compose.ui.unit.TextUnit,
     modifier: Modifier = Modifier,
@@ -279,9 +282,12 @@ internal fun PlayerBlock(
                     diaryStatusLabel = diaryStatusLabel,
                     diaryBusy = diaryBusy,
                     diaryNotify = diaryNotify,
+                    playerReaction = playerReaction,
+                    reactionBusy = reactionBusy,
                     onSetDiaryStatus = onSetDiaryStatus,
                     onRemoveFromDiary = onRemoveFromDiary,
                     onConsumeDiaryNotify = onConsumeDiaryNotify,
+                    onPlayerReaction = onPlayerReaction,
                     onCinema = { fullscreen = true },
                 )
             }
@@ -421,9 +427,12 @@ private fun PlayerUnderBar(
     diaryStatusLabel: String?,
     diaryBusy: Boolean,
     diaryNotify: String?,
+    playerReaction: String?,
+    reactionBusy: Boolean,
     onSetDiaryStatus: (String) -> Unit,
     onRemoveFromDiary: () -> Unit,
     onConsumeDiaryNotify: () -> Unit,
+    onPlayerReaction: (String) -> Unit,
     onCinema: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -431,8 +440,8 @@ private fun PlayerUnderBar(
     fun toastSoon() {
         Toast.makeText(context, soon, Toast.LENGTH_SHORT).show()
     }
-    var liked by remember { mutableStateOf(false) }
-    var disliked by remember { mutableStateOf(false) }
+    val liked = playerReaction == "like"
+    val disliked = playerReaction == "dislike"
     var diaryMenuOpen by remember { mutableStateOf(false) }
     val inDiary = diaryStatusLabel != null
 
@@ -465,18 +474,15 @@ private fun PlayerUnderBar(
         }
         Row(verticalAlignment = Alignment.CenterVertically) {
             IconButton(
-                onClick = {
-                    liked = !liked
-                    if (liked) disliked = false
-                    toastSoon()
-                },
+                onClick = { if (!reactionBusy) onPlayerReaction("like") },
+                enabled = !reactionBusy,
                 modifier = iconMod,
             ) {
                 Icon(
                     Icons.Filled.ThumbUp,
                     contentDescription = stringResource(R.string.detail_player_like),
                     tint = if (liked) {
-                        MaterialTheme.colorScheme.primary
+                        Color(0xFF43A047)
                     } else {
                         MaterialTheme.colorScheme.onSurface
                     },
@@ -606,18 +612,15 @@ private fun PlayerUnderBar(
                 }
             }
             IconButton(
-                onClick = {
-                    disliked = !disliked
-                    if (disliked) liked = false
-                    toastSoon()
-                },
+                onClick = { if (!reactionBusy) onPlayerReaction("dislike") },
+                enabled = !reactionBusy,
                 modifier = iconMod,
             ) {
                 Icon(
                     Icons.Filled.ThumbDown,
                     contentDescription = stringResource(R.string.detail_player_dislike),
                     tint = if (disliked) {
-                        MaterialTheme.colorScheme.error
+                        Color(0xFFE53935)
                     } else {
                         MaterialTheme.colorScheme.onSurface
                     },

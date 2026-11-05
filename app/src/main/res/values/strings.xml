@@ -41,6 +41,9 @@
     <string name="now_popular">Сейчас популярно</string>
     <string name="trailers">Трейлеры</string>
     <string name="popular">Популярные</string>
+    <string name="popular_all_time">Популярное за всё время</string>
+    <string name="anime_season_popular">Популярно в этом сезоне · %1$s</string>
+    <string name="anime_top100">Топ 100 аниме</string>
     <string name="newcomers">Новинки</string>
     <string name="retry">Повторить</string>
     <string name="type_all">Все</string>
@@ -50,6 +53,9 @@
     <string name="type_anime">Аниме</string>
     <string name="error_load">Не удалось загрузить. Проверь mock на :8787</string>
     <string name="detail_about">О фильме</string>
+    <string name="detail_about_tv">О сериале</string>
+    <string name="detail_about_animation">О мультфильме</string>
+    <string name="detail_about_anime">Об аниме</string>
     <string name="detail_cast">В главных ролях</string>
     <string name="detail_cast_full">Полный список актёров (%d)</string>
     <string name="detail_trailer">Трейлер</string>
