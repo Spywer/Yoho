@@ -20,6 +20,8 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -28,6 +30,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -46,8 +49,6 @@ import androidx.compose.material.icons.filled.ThumbUp
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -165,25 +166,11 @@ internal fun PlayerBlock(
                     choices.forEach { item ->
                         val source = item.source ?: return@forEach
                         val selected = source.equals(selectedSource, ignoreCase = true)
-                        val pct = ((item.share ?: 0.0) * 100).toInt()
-                        FilterChip(
+                        PlayerSourceChip(
+                            label = displayPlayerSourceName(source),
+                            share = item.share ?: 0.0,
                             selected = selected,
                             onClick = { onSelectSource(source) },
-                            modifier = Modifier.height(48.dp),
-                            label = {
-                                Text(
-                                    text = buildString {
-                                        append(displayPlayerSourceName(source))
-                                        append(" · $pct%")
-                                    },
-                                    fontSize = 20.sp,
-                                    fontWeight = FontWeight.Medium,
-                                )
-                            },
-                            colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = MaterialTheme.colorScheme.primary,
-                                selectedLabelColor = MaterialTheme.colorScheme.onPrimary,
-                            ),
                         )
                     }
                 }
@@ -267,6 +254,57 @@ internal fun PlayerBlock(
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun PlayerSourceChip(
+    label: String,
+    share: Double,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    val fraction = share.toFloat().coerceIn(0f, 1f)
+    val shape = RoundedCornerShape(28.dp)
+    val primary = MaterialTheme.colorScheme.primary
+    val onPrimary = MaterialTheme.colorScheme.onPrimary
+    val onSurface = MaterialTheme.colorScheme.onSurface
+    Box(
+        modifier = Modifier
+            .height(64.dp)
+            .clip(shape)
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .then(
+                if (selected) {
+                    Modifier.border(2.dp, primary, shape)
+                } else {
+                    Modifier
+                },
+            )
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.CenterStart,
+    ) {
+        Box(
+            Modifier
+                .fillMaxHeight()
+                .fillMaxWidth(fraction)
+                .background(
+                    if (selected) primary else primary.copy(alpha = 0.45f),
+                ),
+        )
+        Text(
+            text = label,
+            fontSize = 26.sp,
+            fontWeight = FontWeight.Medium,
+            color = when {
+                selected -> onPrimary
+                fraction >= 0.55f -> onPrimary
+                else -> onSurface
+            },
+            modifier = Modifier
+                .align(Alignment.Center)
+                .padding(horizontal = 20.dp),
+        )
     }
 }
 
