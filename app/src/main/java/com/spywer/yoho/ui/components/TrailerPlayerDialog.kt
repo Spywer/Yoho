@@ -2,11 +2,8 @@ package com.spywer.yoho.ui.components
 
 import android.annotation.SuppressLint
 import android.app.Activity
-import android.content.ComponentCallbacks
 import android.content.Context
 import android.content.ContextWrapper
-import android.content.pm.ActivityInfo
-import android.content.res.Configuration
 import android.graphics.Color as AndroidColor
 import android.view.View
 import android.view.ViewGroup
@@ -67,9 +64,6 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.window.DialogWindowProvider
-import androidx.core.view.WindowCompat
-import androidx.core.view.WindowInsetsCompat
-import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.pierfrancescosoffritti.androidyoutubeplayer.core.player.PlayerConstants
 import com.pierfrancescosoffritti.androidyoutubeplayer.core.player.YouTubePlayer
@@ -170,7 +164,9 @@ fun TrailerPlayerDialog(
     val metrics = LocalHomeMetrics.current
     val showSourceTabs = hasYoutube && hasVk
     val showClipPicker = sourceClips.size > 1
-    val landscape = rememberTrailerLandscape()
+    val padH = if (metrics.isTablet) 24.dp else 8.dp
+    val cardPad = if (metrics.isTablet) 12.dp else 8.dp
+    val gapAfterHeader = if (metrics.isTablet) 10.dp else 6.dp
 
     BackHandler(onBack = onDismiss)
     Dialog(
@@ -182,207 +178,123 @@ fun TrailerPlayerDialog(
             decorFitsSystemWindows = false,
         ),
     ) {
-        // Dialog при Activity.configChanges часто не меняет размер окна — форсим MATCH_PARENT.
-        TrailerDialogWindowSync(landscape = landscape)
-        TrailerSystemBarsEffect(hidden = landscape)
         Box(
             Modifier
                 .fillMaxSize()
-                .background(if (landscape) Color.Black else Color.Black.copy(alpha = 0.92f))
-                .then(
-                    if (landscape) {
-                        Modifier
-                    } else {
-                        Modifier
-                            .statusBarsPadding()
-                            .navigationBarsPadding()
-                    },
-                )
+                .background(Color.Black.copy(alpha = 0.92f))
+                .statusBarsPadding()
+                .navigationBarsPadding()
                 .clickable(onClick = onDismiss),
         ) {
-            if (landscape) {
-                Box(
+            Column(
+                Modifier
+                    .fillMaxSize()
+                    .widthIn(max = 720.dp)
+                    .align(Alignment.Center)
+                    .padding(horizontal = padH),
+            ) {
+                Spacer(Modifier.weight(1f))
+                Column(
                     Modifier
-                        .fillMaxSize()
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(if (metrics.isTablet) 16.dp else 12.dp))
+                        .background(Color(0xFF1A1A1A))
                         .clickable(
                             indication = null,
                             interactionSource = remember { MutableInteractionSource() },
                             onClick = {},
+                        )
+                        .padding(cardPad),
+                ) {
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(
+                            if (metrics.isTablet) 8.dp else 6.dp,
                         ),
-                ) {
-                    TrailerPlayerSlot(
-                        source = source,
-                        selected = selected,
-                        modifier = Modifier.fillMaxSize(),
-                    )
+                    ) {
+                        if (showSourceTabs) {
+                            SourceChip(
+                                label = stringResource(R.string.detail_trailer_source_youtube),
+                                selected = source == TrailerSource.Youtube,
+                                onClick = {
+                                    source = TrailerSource.Youtube
+                                    selectedIndex = 0
+                                },
+                            )
+                            SourceChip(
+                                label = stringResource(R.string.detail_trailer_source_vk),
+                                selected = source == TrailerSource.Vk,
+                                onClick = {
+                                    source = TrailerSource.Vk
+                                    selectedIndex = 0
+                                },
+                            )
+                            Spacer(Modifier.weight(1f))
+                        } else {
+                            Text(
+                                text = title?.takeIf { it.isNotBlank() }
+                                    ?: selected?.title
+                                    ?: stringResource(R.string.detail_trailer),
+                                color = Color.White,
+                                fontSize = metrics.searchTextSize,
+                                fontWeight = FontWeight.SemiBold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f),
+                            )
+                        }
+                        TrailerCloseButton(
+                            onClick = onDismiss,
+                            compact = !metrics.isTablet,
+                        )
+                    }
+
+                    Spacer(Modifier.padding(top = gapAfterHeader))
+
+                    Box(
+                        Modifier
+                            .fillMaxWidth()
+                            .aspectRatio(16f / 9f)
+                            .clip(RoundedCornerShape(if (metrics.isTablet) 12.dp else 8.dp))
+                            .background(Color.Black),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        TrailerPlayerSlot(
+                            source = source,
+                            selected = selected,
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                    }
                 }
-            } else {
-                val padH = if (metrics.isTablet) 24.dp else 8.dp
-                val cardPad = if (metrics.isTablet) 12.dp else 8.dp
-                val gapAfterHeader = if (metrics.isTablet) 10.dp else 6.dp
-                Column(
+                BoxWithConstraints(
                     Modifier
-                        .fillMaxSize()
-                        .widthIn(max = 720.dp)
-                        .align(Alignment.Center)
-                        .padding(horizontal = padH),
+                        .fillMaxWidth()
+                        .weight(1f)
+                        .padding(top = if (metrics.isTablet) 12.dp else 8.dp),
                 ) {
-                    Spacer(Modifier.weight(1f))
-                    Column(
-                        Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(if (metrics.isTablet) 16.dp else 12.dp))
-                            .background(Color(0xFF1A1A1A))
-                            .clickable(
-                                indication = null,
-                                interactionSource = remember { MutableInteractionSource() },
-                                onClick = {},
-                            )
-                            .padding(cardPad),
-                    ) {
-                        Row(
-                            Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(
-                                if (metrics.isTablet) 8.dp else 6.dp,
-                            ),
-                        ) {
-                            if (showSourceTabs) {
-                                SourceChip(
-                                    label = stringResource(R.string.detail_trailer_source_youtube),
-                                    selected = source == TrailerSource.Youtube,
-                                    onClick = {
-                                        source = TrailerSource.Youtube
-                                        selectedIndex = 0
-                                    },
-                                )
-                                SourceChip(
-                                    label = stringResource(R.string.detail_trailer_source_vk),
-                                    selected = source == TrailerSource.Vk,
-                                    onClick = {
-                                        source = TrailerSource.Vk
-                                        selectedIndex = 0
-                                    },
-                                )
-                                Spacer(Modifier.weight(1f))
-                            } else {
-                                Text(
-                                    text = title?.takeIf { it.isNotBlank() }
-                                        ?: selected?.title
-                                        ?: stringResource(R.string.detail_trailer),
-                                    color = Color.White,
-                                    fontSize = metrics.searchTextSize,
-                                    fontWeight = FontWeight.SemiBold,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                    modifier = Modifier.weight(1f),
-                                )
-                            }
-                            TrailerCloseButton(
-                                onClick = onDismiss,
-                                compact = !metrics.isTablet,
-                            )
-                        }
-
-                        Spacer(Modifier.padding(top = gapAfterHeader))
-
-                        Box(
-                            Modifier
+                    if (showClipPicker) {
+                        ClipGrid(
+                            clips = sourceClips,
+                            selectedIndex = selectedIndex,
+                            onSelect = { selectedIndex = it },
+                            modifier = Modifier
                                 .fillMaxWidth()
-                                .aspectRatio(16f / 9f)
+                                .heightIn(max = maxHeight)
                                 .clip(RoundedCornerShape(if (metrics.isTablet) 12.dp else 8.dp))
-                                .background(Color.Black),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            TrailerPlayerSlot(
-                                source = source,
-                                selected = selected,
-                                modifier = Modifier.fillMaxSize(),
-                            )
-                        }
-                    }
-                    BoxWithConstraints(
-                        Modifier
-                            .fillMaxWidth()
-                            .weight(1f)
-                            .padding(top = if (metrics.isTablet) 12.dp else 8.dp),
-                    ) {
-                        if (showClipPicker) {
-                            ClipGrid(
-                                clips = sourceClips,
-                                selectedIndex = selectedIndex,
-                                onSelect = { selectedIndex = it },
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .heightIn(max = maxHeight)
-                                    .clip(RoundedCornerShape(if (metrics.isTablet) 12.dp else 8.dp))
-                                    .background(Color(0xFF1A1A1A))
-                                    .clickable(
-                                        indication = null,
-                                        interactionSource = remember { MutableInteractionSource() },
-                                        onClick = {},
-                                    )
-                                    .padding(if (metrics.isTablet) 10.dp else 6.dp)
-                                    .verticalScroll(rememberScrollState()),
-                            )
-                        }
+                                .background(Color(0xFF1A1A1A))
+                                .clickable(
+                                    indication = null,
+                                    interactionSource = remember { MutableInteractionSource() },
+                                    onClick = {},
+                                )
+                                .padding(if (metrics.isTablet) 10.dp else 6.dp)
+                                .verticalScroll(rememberScrollState()),
+                        )
                     }
                 }
             }
         }
-    }
-}
-
-/** Альбом по Activity.configuration + FULL_SENSOR (LocalConfiguration у Dialog врёт/запаздывает). */
-@Composable
-private fun rememberTrailerLandscape(): Boolean {
-    val context = LocalContext.current
-    val activity = remember(context) { context.findActivity() }
-    fun Configuration.isLandscape(): Boolean =
-        orientation == Configuration.ORIENTATION_LANDSCAPE || screenWidthDp > screenHeightDp
-
-    var landscape by remember(activity) {
-        val cfg = activity?.resources?.configuration ?: context.resources.configuration
-        mutableStateOf(cfg.isLandscape())
-    }
-
-    DisposableEffect(activity) {
-        if (activity == null) {
-            return@DisposableEffect onDispose { }
-        }
-        val previous = activity.requestedOrientation
-        // FULL_SENSOR — и «обычный», и перевёрнутый альбом/портрет.
-        activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_FULL_SENSOR
-        val callbacks = object : ComponentCallbacks {
-            override fun onConfigurationChanged(newConfig: Configuration) {
-                landscape = newConfig.isLandscape()
-            }
-
-            @Deprecated("Deprecated in Java")
-            override fun onLowMemory() = Unit
-        }
-        activity.registerComponentCallbacks(callbacks)
-        // Синхронизация на случай, если колбэк уже прошёл.
-        landscape = activity.resources.configuration.isLandscape()
-        onDispose {
-            activity.unregisterComponentCallbacks(callbacks)
-            activity.requestedOrientation = previous
-        }
-    }
-    return landscape
-}
-
-@Composable
-private fun TrailerDialogWindowSync(landscape: Boolean) {
-    val view = LocalView.current
-    // Только при смене ориентации — постоянный requestLayout в SideEffect гасит WebView (VK).
-    LaunchedEffect(landscape) {
-        val window = (view.parent as? DialogWindowProvider)?.window ?: return@LaunchedEffect
-        window.setLayout(
-            ViewGroup.LayoutParams.MATCH_PARENT,
-            ViewGroup.LayoutParams.MATCH_PARENT,
-        )
-        window.decorView.requestLayout()
     }
 }
 
@@ -437,26 +349,6 @@ private fun TrailerCloseButton(
             tint = Color.White,
             modifier = Modifier.size(if (compact) 16.dp else 22.dp),
         )
-    }
-}
-
-@Composable
-private fun TrailerSystemBarsEffect(hidden: Boolean) {
-    val view = LocalView.current
-    DisposableEffect(hidden, view) {
-        val window = (view.parent as? DialogWindowProvider)?.window
-            ?: view.context.findActivity()?.window
-        val controller = window?.let { WindowCompat.getInsetsController(it, view) }
-        if (hidden) {
-            controller?.hide(WindowInsetsCompat.Type.systemBars())
-            controller?.systemBarsBehavior =
-                WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-        } else {
-            controller?.show(WindowInsetsCompat.Type.systemBars())
-        }
-        onDispose {
-            controller?.show(WindowInsetsCompat.Type.systemBars())
-        }
     }
 }
 
