@@ -851,16 +851,9 @@ private fun syncFullscreenCloseVisibility(container: ViewGroup, width: Int, heig
 }
 
 /**
- * Альбом — на весь экран; портрет — 16:9 по центру (чёрные поля сверху/снизу).
- * Порог 5/4 — без дрожания около квадрата во время анимации поворота.
+ * Альбом — на весь экран; портрет — 16:9 по центру.
+ * Порог 5/4 — без дрожания около квадрата при повороте.
  */
-private fun fullscreenPlayerLayoutParams(
-    context: android.content.Context,
-): FrameLayout.LayoutParams {
-    val dm = context.resources.displayMetrics
-    return fullscreenPlayerLayoutParams(dm.widthPixels, dm.heightPixels)
-}
-
 private fun fullscreenPlayerLayoutParams(
     containerW: Int,
     containerH: Int,
@@ -871,7 +864,6 @@ private fun fullscreenPlayerLayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT,
         )
     }
-    // Явный альбом → edge-to-edge
     if (containerW * 4 >= containerH * 5) {
         return FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT,
@@ -887,62 +879,9 @@ private fun fullscreenPlayerLayoutParams(
     return FrameLayout.LayoutParams(w, h, android.view.Gravity.CENTER)
 }
 
-private fun findFullscreenWebView(root: View): WebView? {
-    if (root is WebView) return root
-    if (root is ViewGroup) {
-        for (i in 0 until root.childCount) {
-            findFullscreenWebView(root.getChildAt(i))?.let { return it }
-        }
-    }
-    return null
-}
-
-/** После поворота: iframe/video часто остаются со старыми px и «уезжают» за экран. */
-private fun reflowFullscreenPlayer(playerSlot: View) {
-    val web = findFullscreenWebView(playerSlot) ?: return
-    web.post {
-        runCatching {
-            web.onResume()
-            web.resumeTimers()
-            web.requestLayout()
-            val fs = true
-            applyPlayerContentZoom(web, enabled = fs)
-            web.evaluateJavascript(
-                """
-                (function(){
-                  try {
-                    document.documentElement.style.width='100%';
-                    document.documentElement.style.height='100%';
-                    document.documentElement.style.overflow='hidden';
-                    if (document.body) {
-                      document.body.style.width='100%';
-                      document.body.style.height='100%';
-                      document.body.style.overflow='hidden';
-                      document.body.style.margin='0';
-                    }
-                    var nodes = document.querySelectorAll('iframe,video,embed,object');
-                    for (var i = 0; i < nodes.length; i++) {
-                      var n = nodes[i];
-                      n.style.maxWidth='100%';
-                      n.style.maxHeight='100%';
-                      n.style.width='100%';
-                      n.style.height='100%';
-                      n.removeAttribute('width');
-                      n.removeAttribute('height');
-                    }
-                    window.dispatchEvent(new Event('resize'));
-                  } catch (e) {}
-                })();
-                """.trimIndent(),
-                null,
-            )
-        }
-    }
-}
-
 /**
- * Подгоняет slot при повороте:
- * сразу MATCH_PARENT (не оставляем старые px), затем debounce → 16:9/full + reflow.
+ * Slot: debounce → 16:9/full + видимость крестика.
+ * Сразу MATCH_PARENT, чтобы не оставлять старые px с прошлой ориентации.
  */
 private fun bindFullscreenLayoutListener(
     container: FrameLayout,
@@ -950,10 +889,6 @@ private fun bindFullscreenLayoutListener(
 ) {
     container.clipChildren = true
     container.clipToPadding = true
-    (playerSlot as? ViewGroup)?.let {
-        it.clipChildren = true
-        it.clipToPadding = true
-    }
     var pending: Runnable? = null
     fun fillParams() = FrameLayout.LayoutParams(
         ViewGroup.LayoutParams.MATCH_PARENT,
@@ -966,7 +901,6 @@ private fun bindFullscreenLayoutListener(
         val oldH = oldBottom - oldTop
         if (w == oldW && h == oldH) return@addOnLayoutChangeListener
         if (w <= 0 || h <= 0) return@addOnLayoutChangeListener
-        // Мгновенно на весь контейнер — иначе слот со старыми px уезжает за край.
         val cur = playerSlot.layoutParams as? FrameLayout.LayoutParams
         if (cur == null ||
             cur.width != ViewGroup.LayoutParams.MATCH_PARENT ||
@@ -990,7 +924,6 @@ private fun bindFullscreenLayoutListener(
             ) {
                 playerSlot.layoutParams = next
             }
-            reflowFullscreenPlayer(playerSlot)
         }
         pending = task
         v.postDelayed(task, 64L)
@@ -1001,7 +934,6 @@ private fun bindFullscreenLayoutListener(
         val ch = container.height
         if (cw > 0 && ch > 0) {
             playerSlot.layoutParams = fullscreenPlayerLayoutParams(cw, ch)
-            reflowFullscreenPlayer(playerSlot)
         }
     }
 }
@@ -1344,16 +1276,10 @@ private fun applyPlayerContentZoom(webView: WebView, enabled: Boolean) {
           try {
             var z = '$z';
             document.documentElement.style.zoom = z;
-            document.documentElement.style.overflow = 'hidden';
-            if (document.body) {
-              document.body.style.zoom = z;
-              document.body.style.overflow = 'hidden';
-            }
-            var ifr = document.querySelectorAll('iframe,video,embed,object');
+            if (document.body) document.body.style.zoom = z;
+            var ifr = document.querySelectorAll('iframe');
             for (var i = 0; i < ifr.length; i++) {
               ifr[i].style.zoom = z;
-              ifr[i].style.maxWidth = '100%';
-              ifr[i].style.maxHeight = '100%';
             }
           } catch (e) {}
         })();
