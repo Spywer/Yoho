@@ -158,12 +158,47 @@ data class ScoreDto(
     @SerializedName("votes") val votes: Int? = null,
 )
 
+/** Один ролик из trailer.clips (YouTube и/или VK). */
+data class TrailerClipDto(
+    val title: String? = null,
+    val youtubeKey: String? = null,
+    val vkEmbedUrl: String? = null,
+    val durationSec: Int? = null,
+) {
+    val youtubeWatchUrl: String?
+        get() = youtubeKey?.takeIf { it.isNotBlank() }?.let { "https://www.youtube.com/watch?v=$it" }
+
+    val hasYoutube: Boolean get() = !youtubeKey.isNullOrBlank()
+    val hasVk: Boolean get() = !vkEmbedUrl.isNullOrBlank()
+    val isPlayable: Boolean get() = hasYoutube || hasVk
+}
+
 data class TrailerDto(
     @SerializedName("url") val url: String? = null,
     @SerializedName("title") val title: String? = null,
     @SerializedName("date") val date: String? = null,
     @SerializedName("thumbnail") val thumbnail: String? = null,
-)
+    val vkEmbedUrl: String? = null,
+    val clips: List<TrailerClipDto> = emptyList(),
+) {
+    /** Клипы для плеера; если clips пуст — собираем из корневых youtube/vk/url. */
+    fun playableClips(): List<TrailerClipDto> {
+        val fromApi = clips.filter { it.isPlayable }
+        if (fromApi.isNotEmpty()) return fromApi
+        val single = TrailerClipDto(
+            title = title,
+            youtubeKey = youtubeKeyFromWatchUrl(url),
+            vkEmbedUrl = vkEmbedUrl,
+        )
+        return if (single.isPlayable) listOf(single) else emptyList()
+    }
+}
+
+private fun youtubeKeyFromWatchUrl(url: String?): String? {
+    if (url.isNullOrBlank()) return null
+    val m = Regex("""(?:v=|/embed/|youtu\.be/)([A-Za-z0-9_-]{6,})""").find(url)
+    return m?.groupValues?.getOrNull(1)
+}
 
 data class CastMemberDto(
     val id: Int? = null,
@@ -851,11 +886,21 @@ data class FilmInfoCastPreviewDto(
     val href: String? = null,
 )
 
+data class FilmInfoTrailerClipDto(
+    val title: String? = null,
+    val youtubeKey: String? = null,
+    val vkEmbedUrl: String? = null,
+    val durationSec: Int? = null,
+)
+
 data class FilmInfoTrailerDto(
     val title: String? = null,
     val youtubeKey: String? = null,
     val publishedAt: String? = null,
     val thumbnailUrl: String? = null,
+    val vkEmbedUrl: String? = null,
+    val durationSec: Int? = null,
+    val clips: List<FilmInfoTrailerClipDto> = emptyList(),
 )
 
 data class FilmInfoRtRatingDto(
@@ -928,11 +973,32 @@ fun FilmInfoResponseDto.toTitleDetail(): TitleDetailDto {
         poster = d?.posterUrl,
         backdrop = backdropUrl ?: d?.posterUrl,
         trailer = trailer?.let { t ->
+            val mappedClips = t.clips.map { c ->
+                TrailerClipDto(
+                    title = c.title,
+                    youtubeKey = c.youtubeKey,
+                    vkEmbedUrl = c.vkEmbedUrl,
+                    durationSec = c.durationSec,
+                )
+            }
             TrailerDto(
-                url = t.youtubeKey?.let { "https://www.youtube.com/watch?v=$it" },
+                url = t.youtubeKey?.let { "https://www.youtube.com/watch?v=$it" }
+                    ?: mappedClips.firstOrNull { it.hasYoutube }?.youtubeWatchUrl,
                 title = t.title,
                 date = t.publishedAt?.take(10),
                 thumbnail = t.thumbnailUrl,
+                vkEmbedUrl = t.vkEmbedUrl
+                    ?: mappedClips.firstOrNull { it.hasVk }?.vkEmbedUrl,
+                clips = mappedClips.ifEmpty {
+                    listOfNotNull(
+                        TrailerClipDto(
+                            title = t.title,
+                            youtubeKey = t.youtubeKey,
+                            vkEmbedUrl = t.vkEmbedUrl,
+                            durationSec = t.durationSec,
+                        ).takeIf { it.isPlayable },
+                    )
+                },
             )
         },
         similar = recommendations.map {

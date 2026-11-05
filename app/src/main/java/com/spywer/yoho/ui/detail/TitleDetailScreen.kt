@@ -49,11 +49,11 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.spywer.yoho.ui.components.TrailerPlayerDialog
-import com.spywer.yoho.ui.components.youtubeEmbedUrl
 import coil.compose.AsyncImage
 import com.spywer.yoho.R
 import com.spywer.yoho.data.remote.PlayerChoiceItemDto
 import com.spywer.yoho.data.remote.TitleDetailDto
+import com.spywer.yoho.data.remote.TrailerClipDto
 import com.spywer.yoho.data.remote.TvLastAirDto
 import com.spywer.yoho.data.remote.TvScheduleDto
 import com.spywer.yoho.ui.layout.LocalHomeMetrics
@@ -214,7 +214,8 @@ private fun DetailContent(
         },
     )
     val trailerFallback = stringResource(R.string.detail_trailer)
-    var trailerUrl by remember { mutableStateOf<String?>(null) }
+    var playingClips by remember { mutableStateOf<List<TrailerClipDto>?>(null) }
+    val trailerClips = remember(detail.trailer) { detail.trailer?.playableClips().orEmpty() }
     val showFullCastLink = !detail.castPageHref.isNullOrBlank() && castFullCount > 0
     val selectedSeasonEpisodes = remember(schedule, selectedSeason) {
         schedule?.seasons
@@ -223,11 +224,11 @@ private fun DetailContent(
             ?.sortedBy { it.episodeNumber ?: 0 }
             .orEmpty()
     }
-    trailerUrl?.let { url ->
+    playingClips?.let { clips ->
         TrailerPlayerDialog(
-            urlOrKey = url,
+            clips = clips,
             title = detail.trailer?.title ?: trailerFallback,
-            onDismiss = { trailerUrl = null },
+            onDismiss = { playingClips = null },
         )
     }
     LazyColumn(
@@ -304,17 +305,14 @@ private fun DetailContent(
                     MetaRow("Бюджет", detail.production?.budget)
                 }
 
-                detail.trailer?.url?.let { url ->
+                if (trailerClips.isNotEmpty()) {
                     Spacer(Modifier.height(metrics.sectionGap))
+                    val trailer = detail.trailer
                     val trailerMod = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(12.dp))
                         .background(MaterialTheme.colorScheme.surfaceVariant)
-                        .clickable {
-                            if (youtubeEmbedUrl(url) != null) {
-                                trailerUrl = url
-                            }
-                        }
+                        .clickable { playingClips = trailerClips }
                         .padding(if (metrics.isTablet) 12.dp else 10.dp)
                     val thumb = @Composable {
                         Box(
@@ -332,7 +330,7 @@ private fun DetailContent(
                             contentAlignment = Alignment.Center,
                         ) {
                             AsyncImage(
-                                model = detail.trailer.thumbnail ?: detail.backdrop,
+                                model = trailer?.thumbnail ?: detail.backdrop,
                                 contentDescription = null,
                                 contentScale = ContentScale.Crop,
                                 modifier = Modifier.fillMaxSize(),
@@ -352,7 +350,7 @@ private fun DetailContent(
                     val caption = @Composable { mod: Modifier ->
                         Column(mod) {
                             Text(
-                                text = detail.trailer.title ?: trailerFallback,
+                                text = trailer?.title ?: trailerFallback,
                                 color = MaterialTheme.colorScheme.onBackground,
                                 fontSize = metrics.searchTextSize,
                                 lineHeight = metrics.lineOf(metrics.searchTextSize),
@@ -360,16 +358,27 @@ private fun DetailContent(
                                 maxLines = 2,
                                 overflow = TextOverflow.Ellipsis,
                             )
-                            detail.trailer.date?.let { raw ->
-                                formatLongDateRu(raw)?.let { formatted ->
-                                    Text(
-                                        text = formatted,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        fontSize = metrics.cardMetaSize,
-                                        lineHeight = metrics.lineOf(metrics.cardMetaSize),
-                                        modifier = Modifier.padding(top = metrics.blockGap),
+                            val metaParts = buildList {
+                                trailer?.date?.let { raw ->
+                                    formatLongDateRu(raw)?.let(::add)
+                                }
+                                if (trailerClips.size > 1) {
+                                    add(
+                                        stringResource(
+                                            R.string.detail_trailer_clips_count,
+                                            trailerClips.size,
+                                        ),
                                     )
                                 }
+                            }
+                            if (metaParts.isNotEmpty()) {
+                                Text(
+                                    text = metaParts.joinToString(" · "),
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    fontSize = metrics.cardMetaSize,
+                                    lineHeight = metrics.lineOf(metrics.cardMetaSize),
+                                    modifier = Modifier.padding(top = metrics.blockGap),
+                                )
                             }
                         }
                     }

@@ -59,6 +59,9 @@
     <string name="detail_cast">В главных ролях</string>
     <string name="detail_cast_full">Полный список актёров (%d)</string>
     <string name="detail_trailer">Трейлер</string>
+    <string name="detail_trailer_clips_count">%d роликов</string>
+    <string name="detail_trailer_source_youtube">YouTube</string>
+    <string name="detail_trailer_source_vk">VK Видео</string>
     <string name="detail_similar">Похожие</string>
     <string name="detail_sequels">Сиквелы</string>
     <string name="detail_prequels">Приквелы</string>
