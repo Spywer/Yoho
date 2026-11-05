@@ -420,7 +420,7 @@ private fun PlayerUnderBar(
                 DropdownMenu(
                     expanded = diaryMenuOpen,
                     onDismissRequest = { diaryMenuOpen = false },
-                    modifier = Modifier.widthIn(min = if (metrics.isTablet) 340.dp else 220.dp),
+                    modifier = Modifier.widthIn(min = if (metrics.isTablet) 340.dp else 180.dp),
                 ) {
                     Text(
                         text = stringResource(
@@ -434,8 +434,8 @@ private fun PlayerUnderBar(
                         fontSize = metrics.diaryMenuTitle,
                         fontWeight = FontWeight.Medium,
                         modifier = Modifier.padding(
-                            horizontal = if (metrics.isTablet) 20.dp else 16.dp,
-                            vertical = if (metrics.isTablet) 14.dp else 10.dp,
+                            horizontal = if (metrics.isTablet) 20.dp else 10.dp,
+                            vertical = if (metrics.isTablet) 14.dp else 4.dp,
                         ),
                     )
                     diaryStatusLabelRes.forEach { labelRes ->
@@ -459,8 +459,16 @@ private fun PlayerUnderBar(
                                 if (!selected) onSetDiaryStatus(label)
                             },
                             modifier = Modifier
-                                .padding(horizontal = 8.dp, vertical = 2.dp)
-                                .clip(RoundedCornerShape(10.dp))
+                                .then(
+                                    if (metrics.isTablet) {
+                                        Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                                    } else {
+                                        Modifier
+                                            .padding(horizontal = 4.dp)
+                                            .height(36.dp)
+                                    },
+                                )
+                                .clip(RoundedCornerShape(if (metrics.isTablet) 10.dp else 6.dp))
                                 .then(
                                     if (selected) {
                                         Modifier.background(MaterialTheme.colorScheme.primary)
@@ -469,14 +477,14 @@ private fun PlayerUnderBar(
                                     },
                                 ),
                             contentPadding = PaddingValues(
-                                horizontal = if (metrics.isTablet) 16.dp else 12.dp,
-                                vertical = if (metrics.isTablet) 12.dp else 10.dp,
+                                horizontal = if (metrics.isTablet) 16.dp else 10.dp,
+                                vertical = if (metrics.isTablet) 12.dp else 0.dp,
                             ),
                         )
                     }
                     if (inDiary) {
                         HorizontalDivider(
-                            Modifier.padding(vertical = 8.dp),
+                            Modifier.padding(vertical = if (metrics.isTablet) 8.dp else 2.dp),
                             color = MaterialTheme.colorScheme.outline.copy(alpha = 0.4f),
                         )
                         DropdownMenuItem(
@@ -492,9 +500,14 @@ private fun PlayerUnderBar(
                                 diaryMenuOpen = false
                                 onRemoveFromDiary()
                             },
+                            modifier = if (metrics.isTablet) {
+                                Modifier
+                            } else {
+                                Modifier.height(36.dp)
+                            },
                             contentPadding = PaddingValues(
-                                horizontal = if (metrics.isTablet) 20.dp else 16.dp,
-                                vertical = if (metrics.isTablet) 14.dp else 10.dp,
+                                horizontal = if (metrics.isTablet) 20.dp else 10.dp,
+                                vertical = if (metrics.isTablet) 14.dp else 0.dp,
                             ),
                         )
                     }

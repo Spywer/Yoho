@@ -62,8 +62,8 @@ internal fun RatingBadge(
             .clip(RoundedCornerShape(8.dp))
             .background(MaterialTheme.colorScheme.surfaceVariant)
             .padding(
-                horizontal = if (metrics.isTablet) 12.dp else 8.dp,
-                vertical = if (metrics.isTablet) 10.dp else 6.dp,
+                horizontal = if (metrics.isTablet) 12.dp else 10.dp,
+                vertical = if (metrics.isTablet) 10.dp else 8.dp,
             ),
     ) {
         Text(
@@ -109,7 +109,7 @@ internal fun MetaRow(
     Row(
         Modifier
             .fillMaxWidth()
-            .padding(vertical = if (metrics.isTablet) 5.dp else 1.dp),
+            .padding(vertical = if (metrics.isTablet) 5.dp else 4.dp),
         horizontalArrangement = Arrangement.spacedBy(
             if (metrics.isTablet) 12.dp else 8.dp,
         ),
@@ -126,7 +126,7 @@ internal fun MetaRow(
             softWrap = false,
             overflow = TextOverflow.Clip,
             // Фикс. ширина — колонка ровная; softWrap=false — без переносов; spacedBy — зазор до значения.
-            modifier = Modifier.width(if (metrics.isTablet) 260.dp else 140.dp),
+            modifier = Modifier.width(if (metrics.isTablet) 260.dp else 130.dp),
         )
         if (personIds.isEmpty() && !linkPartsAsGenres) {
             Text(

@@ -214,7 +214,6 @@ private fun DetailContent(
                 favoriteBusy = favoriteBusy,
                 favoriteError = favoriteError,
                 metrics = metrics,
-                onBack = onBack,
                 onToggleFavorite = onToggleFavorite,
                 onOpenGenre = onOpenGenre,
             )
