@@ -7,6 +7,7 @@ import com.spywer.yoho.data.remote.NetworkModule
 import com.spywer.yoho.data.remote.SessionCookieJar
 import com.spywer.yoho.data.remote.TitleDto
 import com.spywer.yoho.data.remote.toTitle
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -15,6 +16,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 enum class ContentFilter(val labelRes: String) {
@@ -25,22 +27,22 @@ enum class ContentFilter(val labelRes: String) {
     Anime("Аниме"),
     ;
 
-    fun trendingNow(): String? = when (this) {
-        All -> null
+    /** Как на сайте: / → all, /film → movie, /series → tv, /animation, /anime. */
+    fun trendingNow(): String = when (this) {
+        All -> "all"
         Movie -> "movie"
         Tv -> "tv"
-        Animation, Anime -> "animation"
+        Animation -> "animation"
+        Anime -> "anime"
     }
 
-    fun matchesMedia(mediaType: String?): Boolean {
-        val m = mediaType?.lowercase().orEmpty()
-        return when (this) {
-            All -> true
-            Movie -> m == "movie" || m == "film"
-            Tv -> m == "tv" || m == "series"
-            Animation -> m.contains("anim") || m == "cartoon"
-            Anime -> m.contains("anime")
-        }
+    /** Блок «Популярные»: popular / popular_movie / popular_tv / … */
+    fun trendingPopular(): String = when (this) {
+        All -> "popular"
+        Movie -> "popular_movie"
+        Tv -> "popular_tv"
+        Animation -> "popular_animation"
+        Anime -> "popular_anime"
     }
 }
 
@@ -55,9 +57,6 @@ data class HomeUiState(
     val popular: List<TitleDto> = emptyList(),
     val newcomers: List<TitleDto> = emptyList(),
 ) {
-    val filteredRecommendations: List<TitleDto>
-        get() = recommendations.filter { filter.matchesMedia(it.mediaType) }
-
     val hasContent: Boolean
         get() = recommendations.isNotEmpty() || nowPopular.isNotEmpty() ||
             trailers.isNotEmpty() || popular.isNotEmpty() || newcomers.isNotEmpty()
@@ -67,6 +66,7 @@ class HomeViewModel : ViewModel() {
     private val api = NetworkModule.api
     private val _state = MutableStateFlow(HomeUiState())
     val state: StateFlow<HomeUiState> = _state.asStateFlow()
+    private var loadJob: Job? = null
 
     init {
         load()
@@ -86,7 +86,8 @@ class HomeViewModel : ViewModel() {
     }
 
     fun load(refresh: Boolean = false) {
-        viewModelScope.launch {
+        loadJob?.cancel()
+        loadJob = viewModelScope.launch {
             val filter = _state.value.filter
             _state.update {
                 it.copy(
@@ -99,7 +100,7 @@ class HomeViewModel : ViewModel() {
                 coroutineScope {
                     val recD = async { fetchRecommendations() }
                     val nowD = async { api.trending(filter.trendingNow()) }
-                    val popD = async { api.trending("popular") }
+                    val popD = async { api.trending(filter.trendingPopular()) }
                     val trailD = async { api.latestTrailers() }
                     val recentD = async { api.searchRecent() }
                     val now = nowD.await()
@@ -115,8 +116,11 @@ class HomeViewModel : ViewModel() {
                     )
                 }
             }.onSuccess { sections ->
-                _state.update {
-                    it.copy(
+                if (!isActive) return@onSuccess
+                _state.update { cur ->
+                    // Не затираем данные устаревшим ответом после быстрой смены фильтра.
+                    if (cur.filter != filter) return@update cur
+                    cur.copy(
                         loading = false,
                         refreshing = false,
                         error = null,
@@ -128,8 +132,10 @@ class HomeViewModel : ViewModel() {
                     )
                 }
             }.onFailure { e ->
-                _state.update {
-                    it.copy(
+                if (!isActive) return@onFailure
+                _state.update { cur ->
+                    if (cur.filter != filter) return@update cur
+                    cur.copy(
                         loading = false,
                         refreshing = false,
                         error = e.message ?: "Ошибка загрузки",
@@ -159,8 +165,16 @@ class HomeViewModel : ViewModel() {
 
     fun setFilter(filter: ContentFilter) {
         if (_state.value.filter == filter) return
-        // Фильтр только клиентский для рекомендаций; тренды перегружаем.
-        _state.update { it.copy(filter = filter) }
+        // Сразу убираем чужой контент — иначе «Сейчас популярно»/«Популярные» выглядят как зависшие.
+        _state.update {
+            it.copy(
+                filter = filter,
+                loading = true,
+                error = null,
+                nowPopular = emptyList(),
+                popular = emptyList(),
+            )
+        }
         load()
     }
 

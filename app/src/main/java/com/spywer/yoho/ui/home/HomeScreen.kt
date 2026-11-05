@@ -193,7 +193,7 @@ fun HomeScreen(
                                 item {
                                     PosterSection(
                                         title = stringResource(R.string.recommendations),
-                                        items = state.filteredRecommendations,
+                                        items = state.recommendations,
                                         cardWidth = metrics.posterLarge,
                                         gap = metrics.cardGap,
                                         padding = metrics.screenPadding,
