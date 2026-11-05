@@ -688,18 +688,17 @@ private class PlayerWebViewHolder {
             isFocusable = true
             elevation = 64f
         }
-        val playerSlot = FrameLayout(activity)
+        val videoHost = FrameLayout(activity)
         (view.parent as? ViewGroup)?.removeView(view)
-        playerSlot.addView(
+        videoHost.addView(
             view,
             FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT,
             ),
         )
-        // Сразу MATCH_PARENT — displayMetrics на повороте часто устаревшие → уезд за экран.
         root.addView(
-            playerSlot,
+            videoHost,
             FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT,
@@ -726,7 +725,7 @@ private class PlayerWebViewHolder {
                 it.setMargins(m, fullscreenCloseTopMargin(decor, density), m, m)
             },
         )
-        bindFullscreenLayoutListener(root, playerSlot)
+        bindFullscreenLayoutListener(root, videoHost)
         decor.addView(
             root,
             FrameLayout.LayoutParams(
@@ -854,16 +853,16 @@ private fun syncFullscreenCloseVisibility(container: ViewGroup, width: Int, heig
 }
 
 /**
- * Letterbox 16:9 через padding контейнера.
- * Слот всегда MATCH_PARENT — без скачков абсолютных LayoutParams при повороте.
+ * Letterbox 16:9 через padding videoHost.
+ * Крестик на внешнем overlay — не съезжает в letterbox.
  */
-private fun applyFullscreenLetterbox(container: FrameLayout, width: Int, height: Int) {
+private fun applyFullscreenLetterbox(videoHost: FrameLayout, width: Int, height: Int) {
     if (width <= 0 || height <= 0) return
     if (isFullscreenLandscape(width, height)) {
-        if (container.paddingLeft != 0 || container.paddingTop != 0 ||
-            container.paddingRight != 0 || container.paddingBottom != 0
+        if (videoHost.paddingLeft != 0 || videoHost.paddingTop != 0 ||
+            videoHost.paddingRight != 0 || videoHost.paddingBottom != 0
         ) {
-            container.setPadding(0, 0, 0, 0)
+            videoHost.setPadding(0, 0, 0, 0)
         }
         return
     }
@@ -874,26 +873,22 @@ private fun applyFullscreenLetterbox(container: FrameLayout, width: Int, height:
         val contentW = (height * 16f / 9f).toInt()
         0 to ((width - contentW) / 2).coerceAtLeast(0)
     }
-    if (container.paddingTop != padV || container.paddingBottom != padV ||
-        container.paddingLeft != padH || container.paddingRight != padH
+    if (videoHost.paddingTop != padV || videoHost.paddingBottom != padV ||
+        videoHost.paddingLeft != padH || videoHost.paddingRight != padH
     ) {
-        container.setPadding(padH, padV, padH, padV)
+        videoHost.setPadding(padH, padV, padH, padV)
     }
 }
 
-/** Debounce только padding + крестик; размер слота не трогаем. */
+/** Debounce: letterbox на videoHost, крестик — на overlay. */
 private fun bindFullscreenLayoutListener(
-    container: FrameLayout,
-    playerSlot: View,
+    overlay: FrameLayout,
+    videoHost: FrameLayout,
 ) {
-    container.clipChildren = true
-    container.clipToPadding = true
-    playerSlot.layoutParams = FrameLayout.LayoutParams(
-        ViewGroup.LayoutParams.MATCH_PARENT,
-        ViewGroup.LayoutParams.MATCH_PARENT,
-    )
+    videoHost.clipChildren = true
+    videoHost.clipToPadding = true
     var pending: Runnable? = null
-    container.addOnLayoutChangeListener { v, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom ->
+    overlay.addOnLayoutChangeListener { v, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom ->
         val w = right - left
         val h = bottom - top
         val oldW = oldRight - oldLeft
@@ -906,18 +901,17 @@ private fun bindFullscreenLayoutListener(
             val cw = v.width
             val ch = v.height
             if (cw <= 0 || ch <= 0) return@Runnable
-            syncFullscreenCloseVisibility(container, cw, ch)
-            applyFullscreenLetterbox(container, cw, ch)
+            syncFullscreenCloseVisibility(overlay, cw, ch)
+            applyFullscreenLetterbox(videoHost, cw, ch)
         }
         pending = task
-        // Ждём конец анимации поворота — меньше промежуточных padding.
         v.postDelayed(task, 100L)
     }
-    container.post {
-        val cw = container.width
-        val ch = container.height
-        syncFullscreenCloseVisibility(container, cw, ch)
-        applyFullscreenLetterbox(container, cw, ch)
+    overlay.post {
+        val cw = overlay.width
+        val ch = overlay.height
+        syncFullscreenCloseVisibility(overlay, cw, ch)
+        applyFullscreenLetterbox(videoHost, cw, ch)
     }
 }
 
@@ -960,9 +954,9 @@ private fun PlayerFullscreenEffect(
                 isClickable = true
                 isFocusable = true
             }
-            val playerSlot = FrameLayout(context)
+            val videoHost = FrameLayout(context)
             (webView.parent as? ViewGroup)?.removeView(webView)
-            playerSlot.addView(
+            videoHost.addView(
                 webView,
                 FrameLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT,
@@ -970,7 +964,7 @@ private fun PlayerFullscreenEffect(
                 ),
             )
             overlay.addView(
-                playerSlot,
+                videoHost,
                 FrameLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT,
                     ViewGroup.LayoutParams.MATCH_PARENT,
@@ -1000,7 +994,7 @@ private fun PlayerFullscreenEffect(
                     it.setMargins(m, fullscreenCloseTopMargin(decor, density), m, m)
                 },
             )
-            bindFullscreenLayoutListener(overlay, playerSlot)
+            bindFullscreenLayoutListener(overlay, videoHost)
             decor.addView(
                 overlay,
                 FrameLayout.LayoutParams(
