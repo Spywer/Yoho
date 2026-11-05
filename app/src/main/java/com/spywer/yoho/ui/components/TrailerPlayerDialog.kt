@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
+import android.content.pm.ActivityInfo
 import android.graphics.Color as AndroidColor
 import android.view.View
 import android.view.ViewGroup
@@ -64,6 +65,9 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.window.DialogWindowProvider
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.pierfrancescosoffritti.androidyoutubeplayer.core.player.PlayerConstants
 import com.pierfrancescosoffritti.androidyoutubeplayer.core.player.YouTubePlayer
@@ -160,6 +164,8 @@ fun TrailerPlayerDialog(
     }
     var selectedIndex by remember(sourceClips) { mutableIntStateOf(0) }
     val selected = sourceClips.getOrNull(selectedIndex.coerceIn(0, (sourceClips.size - 1).coerceAtLeast(0)))
+    var playerFullscreen by remember { mutableStateOf(false) }
+    TrailerHostOrientationEffect(fullscreen = playerFullscreen)
 
     val metrics = LocalHomeMetrics.current
     val showSourceTabs = hasYoutube && hasVk
@@ -178,12 +184,16 @@ fun TrailerPlayerDialog(
             decorFitsSystemWindows = false,
         ),
     ) {
+        // Внутри Dialog — иначе controller сидит на Activity, а FS на окне Dialog.
+        TrailerFullscreenSystemBarsEffect(hidden = playerFullscreen)
         Box(
             Modifier
                 .fillMaxSize()
                 .background(Color.Black.copy(alpha = 0.92f))
-                .statusBarsPadding()
-                .navigationBarsPadding()
+                .then(
+                    if (playerFullscreen) Modifier
+                    else Modifier.statusBarsPadding().navigationBarsPadding(),
+                )
                 .clickable(onClick = onDismiss),
         ) {
             Column(
@@ -263,6 +273,7 @@ fun TrailerPlayerDialog(
                         TrailerPlayerSlot(
                             source = source,
                             selected = selected,
+                            onFullscreenChanged = { playerFullscreen = it },
                             modifier = Modifier.fillMaxSize(),
                         )
                     }
@@ -302,8 +313,12 @@ fun TrailerPlayerDialog(
 private fun TrailerPlayerSlot(
     source: TrailerSource,
     selected: TrailerClipDto?,
+    onFullscreenChanged: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    DisposableEffect(source, selected) {
+        onDispose { onFullscreenChanged(false) }
+    }
     Box(modifier, contentAlignment = Alignment.Center) {
         when {
             selected == null -> {
@@ -316,14 +331,88 @@ private fun TrailerPlayerSlot(
             source == TrailerSource.Youtube && selected.hasYoutube -> {
                 YoutubeTrailerPlayer(
                     videoId = selected.youtubeKey.orEmpty(),
+                    onFullscreenChanged = onFullscreenChanged,
                     modifier = Modifier.fillMaxSize(),
                 )
             }
             source == TrailerSource.Vk && selected.hasVk -> {
                 VkTrailerPlayer(
                     embedUrl = selected.vkEmbedUrl.orEmpty(),
+                    onFullscreenChanged = onFullscreenChanged,
                     modifier = Modifier.fillMaxSize(),
                 )
+            }
+        }
+    }
+}
+
+/**
+ * Диалог — портрет; нативный FS плеера — SENSOR; при закрытии диалога — как было.
+ */
+@Composable
+private fun TrailerHostOrientationEffect(fullscreen: Boolean) {
+    val context = LocalContext.current
+    DisposableEffect(Unit) {
+        val activity = context.findActivity()
+        if (activity == null) {
+            return@DisposableEffect onDispose { }
+        }
+        val original = activity.requestedOrientation
+        activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+        onDispose {
+            activity.requestedOrientation = original
+        }
+    }
+    val activity = LocalContext.current.findActivity()
+    DisposableEffect(fullscreen) {
+        if (activity == null) {
+            return@DisposableEffect onDispose { }
+        }
+        activity.requestedOrientation = if (fullscreen) {
+            ActivityInfo.SCREEN_ORIENTATION_SENSOR
+        } else {
+            ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+        }
+        onDispose { }
+    }
+}
+
+@Composable
+private fun TrailerFullscreenSystemBarsEffect(hidden: Boolean) {
+    val view = LocalView.current
+    val activity = LocalContext.current.findActivity()
+    DisposableEffect(hidden, view) {
+        val windows = LinkedHashSet<android.view.Window>()
+        var p: Any? = view.parent
+        while (p != null) {
+            if (p is DialogWindowProvider) {
+                windows.add(p.window)
+                break
+            }
+            p = (p as? View)?.parent
+        }
+        activity?.window?.let { windows.add(it) }
+        val controllers = windows.map { w ->
+            WindowCompat.setDecorFitsSystemWindows(w, false)
+            WindowCompat.getInsetsController(w, w.decorView)
+        }
+        fun applyHide() {
+            controllers.forEach { c ->
+                c.hide(WindowInsetsCompat.Type.systemBars())
+                c.systemBarsBehavior =
+                    WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            }
+        }
+        if (hidden) {
+            applyHide()
+            // После addView FS / поворота система иногда возвращает bars.
+            view.post { if (hidden) applyHide() }
+        }
+        onDispose {
+            if (hidden) {
+                controllers.forEach { c ->
+                    c.show(WindowInsetsCompat.Type.systemBars())
+                }
             }
         }
     }
@@ -422,6 +511,7 @@ private fun ClipGrid(
 @Composable
 private fun YoutubeTrailerPlayer(
     videoId: String,
+    onFullscreenChanged: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -441,8 +531,15 @@ private fun YoutubeTrailerPlayer(
         exitFs = null
     }
 
+    LaunchedEffect(fsOverlay != null) {
+        onFullscreenChanged(fsOverlay != null)
+    }
+
     DisposableEffect(Unit) {
-        onDispose { clearFullscreenOverlay() }
+        onDispose {
+            clearFullscreenOverlay()
+            onFullscreenChanged(false)
+        }
     }
 
     // Back в FS YouTube → выходим из FS, не закрываем диалог.
@@ -565,6 +662,7 @@ private fun dialogFullscreenHost(localView: View, activity: Activity?): ViewGrou
 @Composable
 private fun VkTrailerPlayer(
     embedUrl: String,
+    onFullscreenChanged: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val localView = LocalView.current
@@ -598,9 +696,14 @@ private fun VkTrailerPlayer(
         }
     }
 
+    LaunchedEffect(isFullscreen) {
+        onFullscreenChanged(isFullscreen)
+    }
+
     DisposableEffect(Unit) {
         onDispose {
             exitVkFullscreen()
+            onFullscreenChanged(false)
         }
     }
 
