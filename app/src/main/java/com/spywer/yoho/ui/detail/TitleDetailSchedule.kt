@@ -34,13 +34,13 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.spywer.yoho.R
 import com.spywer.yoho.data.remote.TvEpisodeDto
 import com.spywer.yoho.data.remote.TvLastAirDto
 import com.spywer.yoho.data.remote.TvScheduleDto
 import com.spywer.yoho.data.remote.dubsFor
 import com.spywer.yoho.data.remote.formatDubsSummary
+import com.spywer.yoho.ui.layout.LocalHomeMetrics
 
 @Composable
 private fun NextEpisodeBlock(
@@ -48,6 +48,7 @@ private fun NextEpisodeBlock(
     schedule: TvScheduleDto?,
     padding: androidx.compose.ui.unit.Dp,
 ) {
+    val metrics = LocalHomeMetrics.current
     val meta = lastAir.meta ?: return
     val lastSeason = meta.seasonNumber
     val lastEpisode = meta.episodeNumber
@@ -116,60 +117,67 @@ private fun NextEpisodeBlock(
             Row(
                 Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(16.dp))
+                    .clip(RoundedCornerShape(12.dp))
                     .background(MaterialTheme.colorScheme.surfaceVariant)
-                    .padding(18.dp),
+                    .padding(if (metrics.isTablet) 16.dp else 12.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Box(
                     Modifier
-                        .clip(RoundedCornerShape(14.dp))
+                        .clip(RoundedCornerShape(10.dp))
                         .background(MaterialTheme.colorScheme.primary)
-                        .padding(horizontal = 16.dp, vertical = 14.dp),
+                        .padding(
+                            horizontal = if (metrics.isTablet) 14.dp else 10.dp,
+                            vertical = if (metrics.isTablet) 12.dp else 8.dp,
+                        ),
                     contentAlignment = Alignment.Center,
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text(
                             text = nextEpisode.toString(),
                             color = MaterialTheme.colorScheme.onPrimary,
-                            fontSize = 32.sp,
+                            fontSize = metrics.detailTitleSize,
                             fontWeight = FontWeight.Bold,
                             textAlign = TextAlign.Center,
                         )
                         Text(
                             text = stringResource(R.string.detail_episode_badge_label).uppercase(),
                             color = MaterialTheme.colorScheme.onPrimary,
-                            fontSize = 18.sp,
+                            fontSize = if (metrics.isTablet) {
+                                metrics.scheduleBodySize
+                            } else {
+                                metrics.castRoleSize
+                            },
                             fontWeight = FontWeight.Bold,
                             textAlign = TextAlign.Center,
                         )
                     }
                 }
-                Spacer(Modifier.width(16.dp))
+                Spacer(Modifier.width(if (metrics.isTablet) 14.dp else 10.dp))
                 Column(Modifier.weight(1f)) {
                     Text(
                         text = stringResource(R.string.detail_next_episode).uppercase(),
                         color = MaterialTheme.colorScheme.primary,
-                        fontSize = 20.sp,
+                        fontSize = metrics.scheduleBodySize,
                         fontWeight = FontWeight.Bold,
                     )
                     nextTitle?.takeIf { it.isNotBlank() }?.let { title ->
                         Text(
                             text = title,
                             color = MaterialTheme.colorScheme.onBackground,
-                            fontSize = 24.sp,
+                            fontSize = metrics.scheduleTitleSize,
                             fontWeight = FontWeight.SemiBold,
                             maxLines = 2,
                             overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.padding(top = 4.dp),
+                            modifier = Modifier.padding(top = 2.dp),
                         )
                     }
                     nextAirLabel?.let { label ->
                         Text(
                             text = label,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            fontSize = 20.sp,
-                            modifier = Modifier.padding(top = 6.dp),
+                            fontSize = metrics.scheduleBodySize,
+                            modifier = Modifier.padding(top = 4.dp),
                         )
                     }
                 }
@@ -177,9 +185,9 @@ private fun NextEpisodeBlock(
                     Text(
                         text = formatDaysLeft(days),
                         color = MaterialTheme.colorScheme.onBackground,
-                        fontSize = 34.sp,
+                        fontSize = metrics.detailTitleSize,
                         fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(start = 10.dp),
+                        modifier = Modifier.padding(start = 8.dp),
                     )
                 }
             }
@@ -202,21 +210,21 @@ private fun NextEpisodeBlock(
                         }
                     },
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontSize = 22.sp,
+                    fontSize = metrics.scheduleBodySize,
                 )
                 Spacer(Modifier.height(8.dp))
                 Box(
                     Modifier
                         .fillMaxWidth()
-                        .height(8.dp)
-                        .clip(RoundedCornerShape(4.dp))
+                        .height(6.dp)
+                        .clip(RoundedCornerShape(3.dp))
                         .background(MaterialTheme.colorScheme.surfaceVariant),
                 ) {
                     Box(
                         Modifier
                             .fillMaxWidth(progress.coerceIn(0f, 1f))
-                            .height(8.dp)
-                            .clip(RoundedCornerShape(4.dp))
+                            .height(6.dp)
+                            .clip(RoundedCornerShape(3.dp))
                             .background(MaterialTheme.colorScheme.primary),
                     )
                 }
@@ -239,13 +247,13 @@ private fun NextEpisodeBlock(
                     }
                 },
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                fontSize = 22.sp,
+                fontSize = metrics.scheduleBodySize,
             )
         } else if (!lastAir.badge.isNullOrBlank()) {
             Text(
                 text = lastAir.badge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                fontSize = 22.sp,
+                fontSize = metrics.scheduleBodySize,
             )
         }
     }
@@ -295,6 +303,7 @@ internal fun LazyListScope.titleDetailScheduleSection(
 
     if (schedule != null && schedule.seasons.isNotEmpty()) {
         item {
+            val metrics = LocalHomeMetrics.current
             Column(
                 Modifier
                     .fillMaxWidth()
@@ -303,20 +312,28 @@ internal fun LazyListScope.titleDetailScheduleSection(
             ) {
                 Row(
                     Modifier.horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     schedule.seasons.forEach { season ->
                         val num = season.seasonNumber ?: return@forEach
                         FilterChip(
                             selected = selectedSeason == num,
                             onClick = { onSelectSeason(num) },
-                            modifier = Modifier.height(56.dp),
+                            modifier = Modifier.height(
+                                if (metrics.isTablet) 56.dp else metrics.playerChipHeight,
+                            ),
                             label = {
                                 Text(
                                     text = stringResource(R.string.detail_season_n, num),
-                                    fontSize = 24.sp,
+                                    fontSize = if (metrics.isTablet) {
+                                        metrics.scheduleEpSize
+                                    } else {
+                                        metrics.chipTextSize
+                                    },
                                     fontWeight = FontWeight.SemiBold,
-                                    modifier = Modifier.padding(vertical = 10.dp),
+                                    modifier = Modifier.padding(
+                                        vertical = if (metrics.isTablet) 8.dp else 4.dp,
+                                    ),
                                 )
                             },
                             colors = FilterChipDefaults.filterChipColors(
@@ -339,9 +356,9 @@ internal fun LazyListScope.titleDetailScheduleSection(
                                 period,
                             ),
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            fontSize = 18.sp,
+                            fontSize = metrics.scheduleBodySize,
                             fontWeight = FontWeight.Medium,
-                            modifier = Modifier.padding(top = 12.dp),
+                            modifier = Modifier.padding(top = 10.dp),
                         )
                     }
             }
@@ -350,6 +367,7 @@ internal fun LazyListScope.titleDetailScheduleSection(
             items = selectedSeasonEpisodes,
             key = { "ep-${it.seasonNumber}-${it.episodeNumber}" },
         ) { ep ->
+            val metrics = LocalHomeMetrics.current
             val daysUntil = daysUntilAir(ep.airDate)
             val aired = daysUntil == null || daysUntil <= 0
             val statusColor = if (aired) {
@@ -392,8 +410,8 @@ internal fun LazyListScope.titleDetailScheduleSection(
                 Modifier
                     .fillMaxWidth()
                     .padding(horizontal = screenPadding)
-                    .padding(top = 5.dp, bottom = 5.dp)
-                    .clip(RoundedCornerShape(10.dp))
+                    .padding(top = 4.dp, bottom = 4.dp)
+                    .clip(RoundedCornerShape(8.dp))
                     .background(
                         if (aired) {
                             MaterialTheme.colorScheme.surfaceVariant
@@ -404,10 +422,15 @@ internal fun LazyListScope.titleDetailScheduleSection(
                     .border(
                         width = 1.dp,
                         color = statusColor.copy(alpha = if (aired) 0.25f else 0.45f),
-                        shape = RoundedCornerShape(10.dp),
+                        shape = RoundedCornerShape(8.dp),
                     )
-                    .padding(horizontal = 12.dp, vertical = 10.dp),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    .padding(
+                        horizontal = if (metrics.isTablet) 12.dp else 10.dp,
+                        vertical = if (metrics.isTablet) 10.dp else 8.dp,
+                    ),
+                horizontalArrangement = Arrangement.spacedBy(
+                    if (metrics.isTablet) 12.dp else 8.dp,
+                ),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
@@ -420,11 +443,11 @@ internal fun LazyListScope.titleDetailScheduleSection(
                     } else {
                         statusColor
                     },
-                    fontSize = 20.sp,
+                    fontSize = metrics.scheduleEpSize,
                     fontWeight = FontWeight.SemiBold,
                     maxLines = 1,
                     softWrap = false,
-                    modifier = Modifier.width(120.dp),
+                    modifier = Modifier.width(if (metrics.isTablet) 120.dp else 56.dp),
                 )
                 Column(Modifier.weight(1f)) {
                     Text(
@@ -434,7 +457,7 @@ internal fun LazyListScope.titleDetailScheduleSection(
                                 ep.episodeNumber ?: 0,
                             ),
                         color = MaterialTheme.colorScheme.onBackground,
-                        fontSize = 22.sp,
+                        fontSize = metrics.scheduleEpSize,
                         fontWeight = FontWeight.Medium,
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
@@ -443,10 +466,10 @@ internal fun LazyListScope.titleDetailScheduleSection(
                         Text(
                             text = stringResource(R.string.detail_dubs, dubs),
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            fontSize = 20.sp,
+                            fontSize = metrics.cardMetaSize,
                             maxLines = 2,
                             overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.padding(top = 4.dp),
+                            modifier = Modifier.padding(top = 2.dp),
                         )
                     }
                 }
@@ -464,7 +487,7 @@ internal fun LazyListScope.titleDetailScheduleSection(
                             stringResource(R.string.detail_episode_aired)
                         },
                         color = statusColor,
-                        fontSize = 22.sp,
+                        fontSize = metrics.scheduleBodySize,
                         fontWeight = FontWeight.SemiBold,
                         textAlign = TextAlign.End,
                         maxLines = 1,
@@ -474,7 +497,7 @@ internal fun LazyListScope.titleDetailScheduleSection(
                         Text(
                             text = date,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            fontSize = 20.sp,
+                            fontSize = metrics.cardMetaSize,
                             textAlign = TextAlign.End,
                             maxLines = 2,
                             softWrap = true,

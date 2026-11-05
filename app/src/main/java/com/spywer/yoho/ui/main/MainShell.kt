@@ -41,8 +41,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.spywer.yoho.R
 import com.spywer.yoho.data.SessionRepository
@@ -51,6 +51,8 @@ import com.spywer.yoho.ui.detail.TitleDetailScreen
 import com.spywer.yoho.ui.detail.TitleDetailViewModel
 import com.spywer.yoho.ui.favorites.FavoritesScreen
 import com.spywer.yoho.ui.home.HomeScreen
+import com.spywer.yoho.ui.layout.LocalHomeMetrics
+import com.spywer.yoho.ui.layout.rememberHomeMetrics
 import com.spywer.yoho.ui.search.SearchActivity
 import com.spywer.yoho.ui.search.SearchScreen
 import com.spywer.yoho.ui.search.SearchViewModel
@@ -125,7 +127,9 @@ fun MainShell() {
         TabSpec(MainTab.Favorites, R.string.nav_favorites, Icons.Filled.Favorite, Icons.Outlined.FavoriteBorder),
         TabSpec(MainTab.Account, R.string.nav_account, Icons.Filled.Person, Icons.Outlined.Person),
     )
+    val metrics = rememberHomeMetrics()
 
+    CompositionLocalProvider(LocalHomeMetrics provides metrics) {
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
         bottomBar = {
@@ -139,7 +143,7 @@ fun MainShell() {
                     containerColor = MaterialTheme.colorScheme.surface,
                     tonalElevation = 0.dp,
                     windowInsets = WindowInsets(0, 0, 0, 0),
-                    modifier = Modifier.height(96.dp),
+                    modifier = Modifier.height(metrics.navBarHeight),
                 ) {
                     tabs.forEach { spec ->
                         val selected = tab == spec.tab
@@ -159,14 +163,14 @@ fun MainShell() {
                                         spec.unselectedIcon
                                     },
                                     contentDescription = stringResource(spec.labelRes),
-                                    modifier = Modifier.size(36.dp),
+                                    modifier = Modifier.size(metrics.navIconSize),
                                     tint = if (selected) active else inactive,
                                 )
                             },
                             label = {
                                 Text(
                                     text = stringResource(spec.labelRes),
-                                    fontSize = 20.sp,
+                                    fontSize = metrics.navLabelSize,
                                     fontWeight = if (selected) {
                                         FontWeight.SemiBold
                                     } else {
@@ -243,4 +247,5 @@ fun MainShell() {
             }
         }
     }
+    } // CompositionLocalProvider
 }

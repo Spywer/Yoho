@@ -46,7 +46,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.spywer.yoho.R
@@ -385,9 +384,13 @@ private fun DetailContent(
                 )
             }
             item {
+                val castCardW = if (metrics.isTablet) 112.dp else 88.dp
+                val castCardH = if (metrics.isTablet) 148.dp else 116.dp
                 LazyRow(
                     contentPadding = PaddingValues(horizontal = metrics.screenPadding),
-                    horizontalArrangement = Arrangement.spacedBy(18.dp),
+                    horizontalArrangement = Arrangement.spacedBy(
+                        if (metrics.isTablet) 18.dp else 12.dp,
+                    ),
                 ) {
                     items(
                         items = detail.cast,
@@ -395,14 +398,14 @@ private fun DetailContent(
                     ) { actor ->
                         Column(
                             Modifier
-                                .width(112.dp)
+                                .width(castCardW)
                                 .clickable(enabled = actor.id != null && actor.id > 0) {
                                     actor.id?.let(onOpenPerson)
                                 },
                         ) {
                             Box(
                                 Modifier
-                                    .size(112.dp, 148.dp)
+                                    .size(castCardW, castCardH)
                                     .clip(RoundedCornerShape(10.dp))
                                     .background(MaterialTheme.colorScheme.surfaceVariant),
                             ) {
@@ -418,7 +421,7 @@ private fun DetailContent(
                             Text(
                                 text = actor.name.orEmpty(),
                                 color = MaterialTheme.colorScheme.onBackground,
-                                fontSize = 20.sp,
+                                fontSize = metrics.castNameSize,
                                 fontWeight = FontWeight.Medium,
                                 textAlign = TextAlign.Center,
                                 maxLines = 2,
@@ -431,7 +434,7 @@ private fun DetailContent(
                                 Text(
                                     text = it,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    fontSize = 13.sp,
+                                    fontSize = metrics.castRoleSize,
                                     textAlign = TextAlign.Center,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis,
@@ -448,7 +451,10 @@ private fun DetailContent(
                         Modifier
                             .fillMaxWidth()
                             .padding(horizontal = metrics.screenPadding)
-                            .padding(top = 28.dp, bottom = 4.dp),
+                            .padding(
+                                top = if (metrics.isTablet) 28.dp else 16.dp,
+                                bottom = 4.dp,
+                            ),
                         contentAlignment = Alignment.Center,
                     ) {
                         OutlinedButton(
@@ -460,7 +466,7 @@ private fun DetailContent(
                         ) {
                             Text(
                                 text = castFullTitle,
-                                fontSize = 18.sp,
+                                fontSize = metrics.detailFavTextSize,
                                 fontWeight = FontWeight.SemiBold,
                             )
                         }

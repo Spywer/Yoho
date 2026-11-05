@@ -71,7 +71,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
@@ -85,6 +84,8 @@ import com.spywer.yoho.data.remote.PlayerChoiceItemDto
 import com.spywer.yoho.data.remote.PlayerWebViewHttp
 import com.spywer.yoho.data.remote.SiteHttp
 import com.spywer.yoho.data.remote.displayPlayerSourceName
+import com.spywer.yoho.ui.layout.LocalHomeMetrics
+
 @Composable
 internal fun PlayerBlock(
     choices: List<PlayerChoiceItemDto>,
@@ -269,14 +270,15 @@ private fun PlayerSourceChip(
     selected: Boolean,
     onClick: () -> Unit,
 ) {
+    val metrics = LocalHomeMetrics.current
     val fraction = share.toFloat().coerceIn(0f, 1f)
-    val shape = RoundedCornerShape(28.dp)
+    val shape = RoundedCornerShape(percent = 50)
     val primary = MaterialTheme.colorScheme.primary
     val onPrimary = MaterialTheme.colorScheme.onPrimary
     val onSurface = MaterialTheme.colorScheme.onSurface
     Box(
         modifier = Modifier
-            .height(64.dp)
+            .height(metrics.playerChipHeight)
             .clip(shape)
             .background(MaterialTheme.colorScheme.surfaceVariant)
             .then(
@@ -299,7 +301,7 @@ private fun PlayerSourceChip(
         )
         Text(
             text = label,
-            fontSize = 26.sp,
+            fontSize = metrics.playerChipText,
             fontWeight = FontWeight.Medium,
             color = when {
                 selected -> onPrimary
@@ -308,7 +310,7 @@ private fun PlayerSourceChip(
             },
             modifier = Modifier
                 .align(Alignment.Center)
-                .padding(horizontal = 20.dp),
+                .padding(horizontal = if (metrics.isTablet) 18.dp else 14.dp),
         )
     }
 }
@@ -348,13 +350,14 @@ private fun PlayerUnderBar(
         onConsumeDiaryNotify()
     }
 
-    val iconMod = Modifier.size(72.dp)
-    val iconSize = 40.dp
+    val metrics = LocalHomeMetrics.current
+    val iconMod = Modifier.size(metrics.playerBarBtn)
+    val iconSize = metrics.playerBarIcon
 
     Row(
         Modifier
             .fillMaxWidth()
-            .padding(top = 10.dp),
+            .padding(top = 8.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -417,7 +420,7 @@ private fun PlayerUnderBar(
                 DropdownMenu(
                     expanded = diaryMenuOpen,
                     onDismissRequest = { diaryMenuOpen = false },
-                    modifier = Modifier.widthIn(min = 340.dp),
+                    modifier = Modifier.widthIn(min = if (metrics.isTablet) 340.dp else 220.dp),
                 ) {
                     Text(
                         text = stringResource(
@@ -428,9 +431,12 @@ private fun PlayerUnderBar(
                             },
                         ).uppercase(),
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        fontSize = 22.sp,
+                        fontSize = metrics.diaryMenuTitle,
                         fontWeight = FontWeight.Medium,
-                        modifier = Modifier.padding(horizontal = 24.dp, vertical = 16.dp),
+                        modifier = Modifier.padding(
+                            horizontal = if (metrics.isTablet) 20.dp else 16.dp,
+                            vertical = if (metrics.isTablet) 14.dp else 10.dp,
+                        ),
                     )
                     diaryStatusLabelRes.forEach { labelRes ->
                         val label = stringResource(labelRes)
@@ -439,7 +445,7 @@ private fun PlayerUnderBar(
                             text = {
                                 Text(
                                     text = label,
-                                    fontSize = 26.sp,
+                                    fontSize = metrics.diaryMenuItem,
                                     fontWeight = FontWeight.Medium,
                                     color = if (selected) {
                                         Color.White
@@ -453,8 +459,8 @@ private fun PlayerUnderBar(
                                 if (!selected) onSetDiaryStatus(label)
                             },
                             modifier = Modifier
-                                .padding(horizontal = 10.dp, vertical = 4.dp)
-                                .clip(RoundedCornerShape(12.dp))
+                                .padding(horizontal = 8.dp, vertical = 2.dp)
+                                .clip(RoundedCornerShape(10.dp))
                                 .then(
                                     if (selected) {
                                         Modifier.background(MaterialTheme.colorScheme.primary)
@@ -462,19 +468,22 @@ private fun PlayerUnderBar(
                                         Modifier
                                     },
                                 ),
-                            contentPadding = PaddingValues(horizontal = 18.dp, vertical = 16.dp),
+                            contentPadding = PaddingValues(
+                                horizontal = if (metrics.isTablet) 16.dp else 12.dp,
+                                vertical = if (metrics.isTablet) 12.dp else 10.dp,
+                            ),
                         )
                     }
                     if (inDiary) {
                         HorizontalDivider(
-                            Modifier.padding(vertical = 10.dp),
+                            Modifier.padding(vertical = 8.dp),
                             color = MaterialTheme.colorScheme.outline.copy(alpha = 0.4f),
                         )
                         DropdownMenuItem(
                             text = {
                                 Text(
                                     text = stringResource(R.string.detail_diary_remove),
-                                    fontSize = 26.sp,
+                                    fontSize = metrics.diaryMenuItem,
                                     fontWeight = FontWeight.Medium,
                                     color = Color(0xFFF87171),
                                 )
@@ -483,7 +492,10 @@ private fun PlayerUnderBar(
                                 diaryMenuOpen = false
                                 onRemoveFromDiary()
                             },
-                            contentPadding = PaddingValues(horizontal = 24.dp, vertical = 16.dp),
+                            contentPadding = PaddingValues(
+                                horizontal = if (metrics.isTablet) 20.dp else 16.dp,
+                                vertical = if (metrics.isTablet) 14.dp else 10.dp,
+                            ),
                         )
                     }
                 }

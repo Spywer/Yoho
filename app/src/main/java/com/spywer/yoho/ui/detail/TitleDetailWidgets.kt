@@ -25,22 +25,24 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.spywer.yoho.data.remote.TitleDto
 import com.spywer.yoho.ui.components.PosterCard
+import com.spywer.yoho.ui.layout.LocalHomeMetrics
 import com.spywer.yoho.ui.search.genreSlugOf
+
 @Composable
 internal fun AgeRatingBadge(age: String) {
+    val metrics = LocalHomeMetrics.current
     val label = age.trim().let { if (it.endsWith("+")) it else "$it+" }
     Text(
         text = label,
         color = Color.White,
-        fontSize = 26.sp,
+        fontSize = metrics.detailSubtitleSize,
         fontWeight = FontWeight.Bold,
         textAlign = TextAlign.Center,
         modifier = Modifier
-            .border(2.dp, Color.White.copy(alpha = 0.9f), RoundedCornerShape(4.dp))
-            .padding(horizontal = 10.dp, vertical = 4.dp),
+            .border(1.5.dp, Color.White.copy(alpha = 0.9f), RoundedCornerShape(4.dp))
+            .padding(horizontal = 8.dp, vertical = 3.dp),
     )
 }
 
@@ -52,25 +54,34 @@ internal fun RatingBadge(
     color: Color,
     suffix: String = "",
 ) {
+    val metrics = LocalHomeMetrics.current
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier
-            .clip(RoundedCornerShape(10.dp))
+            .clip(RoundedCornerShape(8.dp))
             .background(MaterialTheme.colorScheme.surfaceVariant)
-            .padding(horizontal = 14.dp, vertical = 12.dp),
+            .padding(
+                horizontal = if (metrics.isTablet) 12.dp else 8.dp,
+                vertical = if (metrics.isTablet) 10.dp else 6.dp,
+            ),
     ) {
-        Text(label, color = color, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+        Text(
+            label,
+            color = color,
+            fontSize = metrics.detailTagSize,
+            fontWeight = FontWeight.Bold,
+        )
         Text(
             text = if (suffix == "%") "${value.toInt()}$suffix" else "%.1f".format(value),
             color = MaterialTheme.colorScheme.onBackground,
-            fontSize = 28.sp,
+            fontSize = metrics.detailTitleSize,
             fontWeight = FontWeight.Bold,
         )
         votes?.let {
             Text(
                 text = formatVotes(it),
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                fontSize = 15.sp,
+                fontSize = metrics.cardMetaSize,
             )
         }
     }
@@ -93,19 +104,20 @@ internal fun MetaRow(
     onOpenGenre: (String) -> Unit = {},
 ) {
     if (value.isNullOrBlank()) return
+    val metrics = LocalHomeMetrics.current
     Row(
         Modifier
             .fillMaxWidth()
-            .padding(vertical = 5.dp),
+            .padding(vertical = if (metrics.isTablet) 5.dp else 3.dp),
     ) {
-        val metaSize = 22.sp
-        val metaLine = 32.sp
+        val metaSize = metrics.detailMetaSize
+        val metaLine = metrics.detailMetaLine
         Text(
             text = label,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             fontSize = metaSize,
             lineHeight = metaLine,
-            modifier = Modifier.width(260.dp),
+            modifier = Modifier.width(if (metrics.isTablet) 260.dp else 112.dp),
         )
         if (personIds.isEmpty() && !linkPartsAsGenres) {
             Text(
@@ -156,6 +168,7 @@ internal fun MetaRow(
 
 @Composable
 internal fun SectionHeader(title: String, size: androidx.compose.ui.unit.TextUnit, padding: androidx.compose.ui.unit.Dp) {
+    val metrics = LocalHomeMetrics.current
     Text(
         text = title,
         color = MaterialTheme.colorScheme.onBackground,
@@ -164,8 +177,8 @@ internal fun SectionHeader(title: String, size: androidx.compose.ui.unit.TextUni
         modifier = Modifier.padding(
             start = padding,
             end = padding,
-            top = 24.dp,
-            bottom = 12.dp,
+            top = if (metrics.isTablet) 24.dp else 16.dp,
+            bottom = if (metrics.isTablet) 12.dp else 8.dp,
         ),
     )
 }

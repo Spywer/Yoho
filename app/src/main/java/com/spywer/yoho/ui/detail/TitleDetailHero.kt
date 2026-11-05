@@ -97,7 +97,7 @@ Box(Modifier.fillMaxWidth()) {
                 contentDescription = titleRu,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier
-                    .width(if (metrics.isTablet) 300.dp else 228.dp)
+                    .width(if (metrics.isTablet) 280.dp else 120.dp)
                     .aspectRatio(2f / 3f)
                     .clip(RoundedCornerShape(12.dp))
                     .background(Color.White.copy(alpha = 0.12f)),
@@ -106,7 +106,7 @@ Box(Modifier.fillMaxWidth()) {
                 Text(
                     text = if (year != null) "$titleRu ($year)" else titleRu,
                     color = Color.White,
-                    fontSize = if (metrics.isTablet) 32.sp else 26.sp,
+                    fontSize = metrics.detailTitleSize,
                     fontWeight = FontWeight.Bold,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
@@ -115,7 +115,7 @@ Box(Modifier.fillMaxWidth()) {
                     Row(
                         Modifier
                             .fillMaxWidth()
-                            .padding(top = 10.dp, bottom = 4.dp),
+                            .padding(top = 8.dp, bottom = 4.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
@@ -123,7 +123,7 @@ Box(Modifier.fillMaxWidth()) {
                             Text(
                                 text = it,
                                 color = Color.White.copy(alpha = 0.75f),
-                                fontSize = 26.sp,
+                                fontSize = metrics.detailSubtitleSize,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
                                 modifier = Modifier.weight(1f, fill = false),
@@ -174,9 +174,9 @@ Box(Modifier.fillMaxWidth()) {
                                         } else {
                                             Color.White
                                         },
-                                        modifier = Modifier.size(26.dp),
+                                        modifier = Modifier.size(if (metrics.isTablet) 24.dp else 18.dp),
                                     )
-                                    Spacer(Modifier.width(8.dp))
+                                    Spacer(Modifier.width(6.dp))
                                     Text(
                                         text = stringResource(
                                             if (isFavorite) {
@@ -186,7 +186,7 @@ Box(Modifier.fillMaxWidth()) {
                                             },
                                         ),
                                         color = Color.White,
-                                        fontSize = 24.sp,
+                                        fontSize = metrics.detailFavTextSize,
                                     )
                                 }
                                 favoriteError?.let { err ->
@@ -210,17 +210,17 @@ Box(Modifier.fillMaxWidth()) {
                                         Text(
                                             text = g,
                                             color = Color.White,
-                                            fontSize = 22.sp,
+                                            fontSize = metrics.detailTagSize,
                                             fontWeight = FontWeight.Medium,
                                             modifier = Modifier
-                                                .clip(RoundedCornerShape(22.dp))
+                                                .clip(RoundedCornerShape(16.dp))
                                                 .background(Color.White.copy(alpha = 0.18f))
                                                 .clickable {
                                                     onOpenGenre(g, genreType)
                                                 }
                                                 .padding(
-                                                    horizontal = 16.dp,
-                                                    vertical = 9.dp,
+                                                    horizontal = if (metrics.isTablet) 14.dp else 10.dp,
+                                                    vertical = if (metrics.isTablet) 8.dp else 5.dp,
                                                 ),
                                         )
                                     }
@@ -264,11 +264,11 @@ Box(Modifier.fillMaxWidth()) {
                     Text(
                         text = desc,
                         color = Color.White.copy(alpha = 0.92f),
-                        fontSize = 22.sp,
-                        lineHeight = 32.sp,
+                        fontSize = metrics.detailBodySize,
+                        lineHeight = metrics.detailBodyLine,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(top = 35.dp),
+                            .padding(top = if (metrics.isTablet) 28.dp else 16.dp),
                     )
                 }
             }

@@ -52,6 +52,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
@@ -66,14 +68,46 @@ import com.spywer.yoho.ui.theme.YohoColors
 import com.spywer.yoho.ui.theme.YohoThemeExtras
 import kotlinx.coroutines.delay
 
-private val TitleSp = 28.sp
-private val CategorySp = 22.sp
-private val BodySp = 20.sp
-private val ChipSp = 18.sp
-private val HintSp = 15.sp
-private val RowMin = 56.dp
-private val ChipMinH = 48.dp
-private val FieldH = 52.dp
+private val TitleSp: TextUnit
+    @Composable get() {
+        val m = LocalHomeMetrics.current
+        return if (m.isTablet) 28.sp else m.sectionTitleSize
+    }
+private val CategorySp: TextUnit
+    @Composable get() {
+        val m = LocalHomeMetrics.current
+        return if (m.isTablet) 22.sp else m.searchTextSize
+    }
+private val BodySp: TextUnit
+    @Composable get() {
+        val m = LocalHomeMetrics.current
+        return if (m.isTablet) 20.sp else m.searchTextSize
+    }
+private val ChipSp: TextUnit
+    @Composable get() {
+        val m = LocalHomeMetrics.current
+        return if (m.isTablet) 18.sp else m.chipTextSize
+    }
+private val HintSp: TextUnit
+    @Composable get() {
+        val m = LocalHomeMetrics.current
+        return if (m.isTablet) 15.sp else m.cardMetaSize
+    }
+private val RowMin: Dp
+    @Composable get() {
+        val m = LocalHomeMetrics.current
+        return if (m.isTablet) 56.dp else 44.dp
+    }
+private val ChipMinH: Dp
+    @Composable get() {
+        val m = LocalHomeMetrics.current
+        return if (m.isTablet) 48.dp else 40.dp
+    }
+private val FieldH: Dp
+    @Composable get() {
+        val m = LocalHomeMetrics.current
+        return if (m.isTablet) 52.dp else m.searchHeight
+    }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -109,9 +143,13 @@ fun FilterSheet(
                 if (nav != null) {
                     IconButton(
                         onClick = { nav = null; query = "" },
-                        modifier = Modifier.size(52.dp),
+                        modifier = Modifier.size(if (metrics.isTablet) 52.dp else 44.dp),
                     ) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, null, Modifier.size(28.dp))
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowBack,
+                            null,
+                            Modifier.size(if (metrics.isTablet) 28.dp else 22.dp),
+                        )
                     }
                 }
                 Text(
