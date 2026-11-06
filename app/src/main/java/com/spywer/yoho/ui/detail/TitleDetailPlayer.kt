@@ -119,7 +119,8 @@ internal fun PlayerBlock(
 ) {
     val playUrl = remember(iframeUrl) { normalizePlayerUrl(iframeUrl) }
     val hasPlayer = !playUrl.isNullOrBlank() || !embedHtml.isNullOrBlank()
-    val noSources = !needsLogin && choices.isEmpty() && !hasPlayer
+    // Заглушка «нет источников» — без учёта player-choice (чипы).
+    val noSources = !needsLogin && !hasPlayer
     val context = LocalContext.current
     // Подхват уже открытого cinema на decor при редком remount.
     var fullscreen by remember(webHolder) { mutableStateOf(webHolder.isCinemaFullscreen) }

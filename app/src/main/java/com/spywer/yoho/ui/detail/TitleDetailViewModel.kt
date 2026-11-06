@@ -461,20 +461,31 @@ class TitleDetailViewModel : ViewModel() {
                     ?: sources.firstOrNull()?.name
                     ?: choices.firstOrNull()?.source
                 val picked = pickSource(sources, preferred)
+                val playable = picked?.hasPlayableContent() == true ||
+                    sources.any { it.hasPlayableContent() }
+                // Авторизован + пустой player-config → «Нет доступных источников» (player-choice не смотрим).
+                val showNeedsLogin = when {
+                    playable -> false
+                    hasPlayerSession() -> false
+                    else -> needsLogin
+                }
                 _state.update {
                     it.copy(
                         playerLoading = false,
-                        playerChoices = choices,
+                        playerChoices = if (playable) choices else emptyList(),
                         playerSources = sources,
-                        selectedPlayerSource = preferred,
+                        selectedPlayerSource = if (playable) preferred else null,
                         playerIframeUrl = picked?.iframeUrl?.takeIf { url -> url.isNotBlank() },
                         playerEmbedHtml = picked?.embedHtml?.takeIf { html -> html.isNotBlank() },
-                        playerNeedsLogin = needsLogin && picked?.hasPlayableContent() != true,
+                        playerNeedsLogin = showNeedsLogin,
                     )
                 }
             }
         }
     }
+
+    private fun hasPlayerSession(): Boolean =
+        SessionRepository.state.value.isLoggedIn || SessionCookieJar.get().hasSessionCookie()
 
     private fun loadSchedule(tmdbId: Int?, kinopoiskId: Int?) {
         if ((tmdbId == null || tmdbId <= 0) && (kinopoiskId == null || kinopoiskId <= 0)) return
@@ -554,6 +565,7 @@ class TitleDetailViewModel : ViewModel() {
     /**
      * Как на сайте: сначала /api/player-config (с cookie),
      * иначе SSR `initialPlayerConfig` из HTML карточки.
+     * @return config to needsLogin
      */
     private suspend fun resolvePlayerConfig(
         detail: TitleDetailDto,
@@ -571,6 +583,11 @@ class TitleDetailViewModel : ViewModel() {
             return body to false
         }
 
+        // Сессия есть: пустой/451 config → нет источников (как на сайте), без HTML login-wall.
+        if (hasPlayerSession() && fromApi != null) {
+            return null to false
+        }
+
         val kp = detail.idKp?.takeIf { it > 0 } ?: return null to true
         val html = withContext(Dispatchers.IO) {
             fetchTitlePageHtml(kp, media)
@@ -578,6 +595,9 @@ class TitleDetailViewModel : ViewModel() {
         val fromPage = PlayerConfigPageParser.parse(html)
         if (fromPage != null && fromPage.hasPlayableSource()) {
             return fromPage to false
+        }
+        if (hasPlayerSession()) {
+            return null to false
         }
         return null to PlayerConfigPageParser.needsLogin(html)
     }
