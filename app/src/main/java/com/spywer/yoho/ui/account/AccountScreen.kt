@@ -4,6 +4,7 @@ import android.content.Intent
 import android.net.Uri
 import android.util.Patterns
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -24,17 +25,22 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.automirrored.outlined.Send
 import androidx.compose.material.icons.filled.ErrorOutline
+import androidx.compose.material.icons.outlined.Email
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -47,9 +53,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -57,6 +65,8 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -65,10 +75,14 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import com.spywer.yoho.BuildConfig
 import com.spywer.yoho.R
+import com.spywer.yoho.data.AppSettings
 import com.spywer.yoho.data.remote.SiteHttp
 import com.spywer.yoho.ui.components.YohoBackButton
 import com.spywer.yoho.ui.layout.HomeMetrics
 import com.spywer.yoho.ui.layout.rememberHomeMetrics
+import com.spywer.yoho.ui.legal.LegalDocument
+import com.spywer.yoho.ui.legal.LegalDocumentActivity
+import com.spywer.yoho.ui.support.SupportProjectDialog
 
 private enum class AccountSubPage {
     Settings,
@@ -104,11 +118,13 @@ fun AccountScreen(
             metrics = metrics,
             titleSize = titleSize,
             bodySize = bodySize,
+            onBack = { subPage = null },
         )
         AccountSubPage.About -> AccountAboutPage(
             metrics = metrics,
             titleSize = titleSize,
             bodySize = bodySize,
+            onBack = { subPage = null },
         )
         null -> Box(
         Modifier
@@ -347,25 +363,64 @@ private fun AccountSettingsPage(
     metrics: HomeMetrics,
     titleSize: TextUnit,
     bodySize: TextUnit,
+    onBack: () -> Unit,
 ) {
+    val context = LocalContext.current
+    var pipEnabled by remember {
+        mutableStateOf(AppSettings.pipEnabled(context))
+    }
     Column(
         Modifier
             .fillMaxSize()
             .statusBarsPadding()
             .padding(horizontal = metrics.screenPadding, vertical = metrics.sectionGap),
     ) {
-        Text(
-            text = stringResource(R.string.account_settings),
-            color = MaterialTheme.colorScheme.onBackground,
-            fontSize = titleSize,
-            fontWeight = FontWeight.Bold,
+        AccountSubPageHeader(
+            title = stringResource(R.string.account_settings),
+            titleSize = titleSize,
+            gap = metrics.sectionGap,
+            onBack = onBack,
         )
         Spacer(Modifier.height(metrics.sectionGap * 2))
-        Text(
-            text = stringResource(R.string.account_settings_empty),
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            fontSize = bodySize,
-        )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(16.dp))
+                .background(MaterialTheme.colorScheme.surfaceVariant)
+                .clickable {
+                    val next = !pipEnabled
+                    pipEnabled = next
+                    AppSettings.setPipEnabled(context, next)
+                }
+                .padding(
+                    horizontal = if (metrics.isTablet) 20.dp else 16.dp,
+                    vertical = if (metrics.isTablet) 20.dp else 16.dp,
+                ),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
+                Text(
+                    text = stringResource(R.string.settings_pip),
+                    color = MaterialTheme.colorScheme.onBackground,
+                    fontSize = (bodySize.value + 2f).sp,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    text = stringResource(R.string.settings_pip_subtitle),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontSize = (metrics.cardMetaSize.value + 2f).sp,
+                    lineHeight = metrics.lineOf((metrics.cardMetaSize.value + 2f).sp),
+                )
+            }
+            Switch(
+                checked = pipEnabled,
+                onCheckedChange = { checked ->
+                    pipEnabled = checked
+                    AppSettings.setPipEnabled(context, checked)
+                },
+            )
+        }
     }
 }
 
@@ -374,8 +429,13 @@ private fun AccountAboutPage(
     metrics: HomeMetrics,
     titleSize: TextUnit,
     bodySize: TextUnit,
+    onBack: () -> Unit,
 ) {
     val context = LocalContext.current
+    var showSupportDialog by rememberSaveable { mutableStateOf(false) }
+    if (showSupportDialog) {
+        SupportProjectDialog(onDismiss = { showSupportDialog = false })
+    }
     Column(
         Modifier
             .fillMaxSize()
@@ -383,29 +443,52 @@ private fun AccountAboutPage(
             .verticalScroll(rememberScrollState())
             .padding(horizontal = metrics.screenPadding, vertical = metrics.sectionGap),
     ) {
-        Text(
-            text = stringResource(R.string.account_about),
-            color = MaterialTheme.colorScheme.onBackground,
-            fontSize = titleSize,
-            fontWeight = FontWeight.Bold,
+        AccountSubPageHeader(
+            title = stringResource(R.string.account_about),
+            titleSize = titleSize,
+            gap = metrics.sectionGap,
+            onBack = onBack,
         )
         Spacer(Modifier.height(metrics.sectionGap * 2))
-        Text(
-            text = stringResource(
-                R.string.account_app_version,
-                stringResource(R.string.app_name),
-                BuildConfig.VERSION_NAME,
-            ),
-            color = MaterialTheme.colorScheme.onBackground,
-            fontWeight = FontWeight.SemiBold,
-            fontSize = bodySize,
+        Image(
+            painter = painterResource(R.drawable.ic_launcher_fg),
+            contentDescription = stringResource(R.string.app_name),
+            modifier = Modifier
+                .align(Alignment.CenterHorizontally)
+                .size(if (metrics.isTablet) 96.dp else 80.dp)
+                .clip(RoundedCornerShape(18.dp))
+                .background(Color(0xFF1A2026)),
         )
-        Spacer(Modifier.height(metrics.sectionGap))
+        Spacer(Modifier.height(metrics.sectionGap * 2))
         Text(
             text = stringResource(R.string.account_about_body),
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             fontSize = bodySize,
             lineHeight = metrics.lineOf(bodySize),
+        )
+        Spacer(Modifier.height(metrics.sectionGap * 2))
+        LegalLinkRow(
+            label = stringResource(R.string.legal_terms_title),
+            textSize = bodySize,
+            onClick = {
+                context.startActivity(LegalDocumentActivity.intent(context, LegalDocument.Terms))
+            },
+        )
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+        LegalLinkRow(
+            label = stringResource(R.string.legal_privacy_title),
+            textSize = bodySize,
+            onClick = {
+                context.startActivity(LegalDocumentActivity.intent(context, LegalDocument.Privacy))
+            },
+        )
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+        LegalLinkRow(
+            label = stringResource(R.string.legal_dmca_title),
+            textSize = bodySize,
+            onClick = {
+                context.startActivity(LegalDocumentActivity.intent(context, LegalDocument.Dmca))
+            },
         )
         Spacer(Modifier.height(metrics.sectionGap * 2))
         OutlinedButton(
@@ -425,6 +508,172 @@ private fun AccountAboutPage(
                 fontSize = bodySize,
             )
         }
+        Spacer(Modifier.height(metrics.sectionGap * 2))
+        Text(
+            text = stringResource(R.string.account_about_version, BuildConfig.VERSION_NAME),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            fontSize = bodySize,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth(),
+        )
+        Spacer(Modifier.height(metrics.sectionGap * 2))
+        Text(
+            text = stringResource(R.string.account_about_dev),
+            color = MaterialTheme.colorScheme.onBackground,
+            fontWeight = FontWeight.SemiBold,
+            fontSize = bodySize,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth(),
+        )
+        Spacer(Modifier.height(metrics.sectionGap))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(metrics.cardGap),
+        ) {
+            DevContactChip(
+                icon = Icons.AutoMirrored.Outlined.Send,
+                label = stringResource(R.string.account_about_dev_telegram),
+                value = stringResource(R.string.account_about_dev_telegram_value),
+                textSize = metrics.cardMetaSize,
+                onClick = {
+                    runCatching {
+                        context.startActivity(
+                            Intent(
+                                Intent.ACTION_VIEW,
+                                Uri.parse(context.getString(R.string.account_about_dev_telegram_url)),
+                            ),
+                        )
+                    }
+                },
+                modifier = Modifier.weight(1f),
+            )
+            DevContactChip(
+                icon = Icons.Outlined.Email,
+                label = stringResource(R.string.account_about_dev_email),
+                value = stringResource(R.string.account_about_dev_email_value),
+                textSize = metrics.cardMetaSize,
+                onClick = {
+                    runCatching {
+                        context.startActivity(
+                            Intent(
+                                Intent.ACTION_SENDTO,
+                                Uri.parse(context.getString(R.string.account_about_dev_email_uri)),
+                            ),
+                        )
+                    }
+                },
+                modifier = Modifier.weight(1f),
+            )
+        }
+        Spacer(Modifier.height(metrics.sectionGap))
+        Button(
+            onClick = { showSupportDialog = true },
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(if (metrics.isTablet) 52.dp else metrics.searchHeight),
+        ) {
+            Text(
+                stringResource(R.string.support_development),
+                fontSize = bodySize,
+            )
+        }
+    }
+}
+
+@Composable
+private fun DevContactChip(
+    icon: ImageVector,
+    label: String,
+    value: String,
+    textSize: TextUnit,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = modifier
+            .clip(RoundedCornerShape(14.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 14.dp),
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = label,
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(32.dp),
+        )
+        Spacer(Modifier.size(12.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = label,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontSize = textSize,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Spacer(Modifier.height(2.dp))
+            Text(
+                text = value,
+                color = MaterialTheme.colorScheme.onBackground,
+                fontSize = textSize,
+                fontWeight = FontWeight.Medium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+    }
+}
+
+@Composable
+private fun AccountSubPageHeader(
+    title: String,
+    titleSize: TextUnit,
+    gap: Dp,
+    onBack: () -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = title,
+            color = MaterialTheme.colorScheme.onBackground,
+            fontSize = titleSize,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier
+                .weight(1f)
+                .padding(end = gap),
+        )
+        YohoBackButton(onClick = onBack)
+    }
+}
+
+@Composable
+private fun LegalLinkRow(
+    label: String,
+    textSize: TextUnit,
+    onClick: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = label,
+            color = MaterialTheme.colorScheme.onBackground,
+            fontSize = textSize,
+            modifier = Modifier.weight(1f),
+        )
+        Icon(
+            imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 

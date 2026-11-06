@@ -12,6 +12,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.platform.LocalContext
+import com.spywer.yoho.data.AppSettings
 
 /** PiP для кино-плеера: MainActivity / TitleDetailActivity. */
 class DetailPipController {
@@ -35,10 +36,11 @@ class DetailPipController {
         if (activity == null || !activity.supportsPip() || activity.isInPictureInPictureMode) {
             return
         }
-        if (!changed && appliedAutoEnter == value) return
+        val autoEnter = value && AppSettings.pipEnabled(activity)
+        if (!changed && appliedAutoEnter == autoEnter) return
         runCatching {
-            activity.setPictureInPictureParams(buildDetailPipParams(autoEnter = value))
-            appliedAutoEnter = value
+            activity.setPictureInPictureParams(buildDetailPipParams(autoEnter = autoEnter))
+            appliedAutoEnter = autoEnter
         }
     }
 
@@ -74,14 +76,26 @@ fun buildDetailPipParams(autoEnter: Boolean = false): PictureInPictureParams {
 }
 
 fun Activity.enterDetailPipIfPossible(eligible: Boolean): Boolean {
-    if (!eligible || !supportsPip() || isInPictureInPictureMode || isFinishing) return false
+    if (!eligible ||
+        !AppSettings.pipEnabled(this) ||
+        !supportsPip() ||
+        isInPictureInPictureMode ||
+        isFinishing
+    ) {
+        return false
+    }
     return runCatching {
         enterPictureInPictureMode(buildDetailPipParams(autoEnter = false))
     }.getOrDefault(false)
 }
 
 fun Activity.onDetailPipUserLeave(controller: DetailPipController) {
-    if (!controller.eligible || !supportsPip() || isInPictureInPictureMode || isFinishing) {
+    if (!controller.eligible ||
+        !AppSettings.pipEnabled(this) ||
+        !supportsPip() ||
+        isInPictureInPictureMode ||
+        isFinishing
+    ) {
         return
     }
     // Сначала убрать chrome (Compose pipMode), кадр спустя — enter PiP,
@@ -106,7 +120,11 @@ fun Activity.onDetailPipModeChanged(
     if (isInPictureInPictureMode) {
         controller.keepPlayingInPip()
     } else if (supportsPip()) {
-        setPictureInPictureParams(buildDetailPipParams(autoEnter = controller.eligible))
+        setPictureInPictureParams(
+            buildDetailPipParams(
+                autoEnter = controller.eligible && AppSettings.pipEnabled(this),
+            ),
+        )
     }
 }
 

@@ -78,6 +78,12 @@
             android:parentActivityName=".MainActivity"
             android:resizeableActivity="true"
             android:theme="@style/Theme.Yoho" />
+        <activity
+            android:name=".ui.legal.LegalDocumentActivity"
+            android:exported="false"
+            android:parentActivityName=".MainActivity"
+            android:resizeableActivity="true"
+            android:theme="@style/Theme.Yoho" />
     </application>
 
 </manifest>

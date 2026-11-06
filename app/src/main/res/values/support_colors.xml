@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Свои имена, чтобы не конфликтовать с colors целевого приложения.
+         Можно заменить на @color/text_primary / @color/background_secondary своего проекта. -->
+    <color name="support_text_primary">#FF212121</color>
+    <color name="support_dialog_background">#FFF5F5F5</color>
+</resources>
