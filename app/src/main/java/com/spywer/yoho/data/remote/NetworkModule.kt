@@ -89,7 +89,8 @@ private object SiteFailoverInterceptor : Interceptor {
 
             val next = SiteHttp.failoverFrom(host)
             if (next == null || next.lowercase() in tried) {
-                throw lastIo ?: IOException("Зеркало $host недоступно")
+                // lastIo всегда задан после try/catch выше
+                throw lastIo
             }
             SessionCookieJar.get().migrateSessionTo(next)
             request = rewriteToActive(request, forceHost = next)
