@@ -161,6 +161,8 @@ internal fun PlayerBlock(
         }
     }
     val fsActive = fullscreen || htmlFullscreen || webHolder.isCinemaFullscreen
+    DetailPipEligibilityEffect(eligible = hasPlayer)
+    DetailPipWebViewBindEffect(webView = webHolder.webView)
     PlayerSystemBarsEffect(hidden = fsActive)
     PlayerFullscreenOrientationEffect(active = fsActive)
     // Detach только через exitCinema/крестик — не по enabled=false.
@@ -702,9 +704,36 @@ internal class PlayerWebViewHolder {
     var onHtmlFullscreenChanged: ((Boolean) -> Unit)? = null
     /** Выход из cinema-FS (крестик) → синхрон Compose-state. */
     var onCinemaExit: (() -> Unit)? = null
+    /** Orphan popup WebView cleanup (onCreateWindow). */
+    private val popupCleanups = mutableListOf<Pair<WebView, Runnable>>()
 
     val isHtmlFullscreen: Boolean get() = htmlFsContainer != null
     val isCinemaFullscreen: Boolean get() = fullscreenOverlay != null
+
+    fun trackPopupCleanup(popup: WebView, cleanup: Runnable) {
+        popupCleanups += popup to cleanup
+        popup.tag = cleanup
+        popup.postDelayed(cleanup, 15_000L)
+    }
+
+    fun cancelPopupCleanup(popup: WebView) {
+        val cleanup = popup.tag as? Runnable
+        if (cleanup != null) popup.removeCallbacks(cleanup)
+        popupCleanups.removeAll { it.first === popup }
+        popup.tag = null
+    }
+
+    private fun cancelPopupCleanups() {
+        popupCleanups.toList().forEach { (popup, cleanup) ->
+            runCatching {
+                popup.removeCallbacks(cleanup)
+                popup.stopLoading()
+                (popup.parent as? ViewGroup)?.removeView(popup)
+                popup.destroy()
+            }
+        }
+        popupCleanups.clear()
+    }
 
     /** Снять cinema overlay; WebView вернуть в inline, если он ещё жив. */
     fun detachCinemaFullscreen() {
@@ -824,6 +853,9 @@ internal class PlayerWebViewHolder {
 
     /** Пауза при скрытии плеера (нет URL), без полного destroy. */
     fun pausePlayback() {
+        // Не глушить, если Activity уже в PiP (гайд Google для WebView).
+        val act = webView?.context?.findActivity()
+        if (act?.isInPictureInPictureMode == true) return
         val wv = webView ?: return
         runCatching {
             wv.onPause()
@@ -835,6 +867,7 @@ internal class PlayerWebViewHolder {
 
     fun destroy() {
         runCatching {
+            cancelPopupCleanups()
             val cb = htmlFsCallback
             htmlFsCallback = null
             if (htmlFsContainer != null) hideHtmlFullscreen()
@@ -876,6 +909,74 @@ private fun refreshWebViewSurface(webView: WebView) {
             webView.invalidate()
         }
     }
+}
+
+/**
+ * Поверхность плеера в системном PiP без cinema FS:
+ * WebView в слот Activity; если уже cinema/HTML FS — видео на decor, тут чёрный фон.
+ */
+@Composable
+internal fun PlayerPipSurface(
+    holder: PlayerWebViewHolder,
+    modifier: Modifier = Modifier,
+) {
+    LaunchedEffect(holder) {
+        val wv = holder.webView ?: return@LaunchedEffect
+        refreshWebViewSurface(wv)
+    }
+    val onDecor = holder.isCinemaFullscreen || holder.isHtmlFullscreen
+    if (onDecor) {
+        Box(modifier.background(Color.Black))
+        return
+    }
+    AndroidView(
+        factory = { ctx ->
+            FrameLayout(ctx).apply {
+                setBackgroundColor(android.graphics.Color.BLACK)
+                layoutParams = ViewGroup.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                )
+                holder.inlineContainer = this
+                val webView = holder.webView
+                if (webView != null) {
+                    (webView.parent as? ViewGroup)?.removeView(webView)
+                    addView(
+                        webView,
+                        FrameLayout.LayoutParams(
+                            ViewGroup.LayoutParams.MATCH_PARENT,
+                            ViewGroup.LayoutParams.MATCH_PARENT,
+                        ),
+                    )
+                    refreshWebViewSurface(webView)
+                }
+            }
+        },
+        update = { frame ->
+            holder.inlineContainer = frame
+            val webView = holder.webView ?: return@AndroidView
+            if (!holder.isCinemaFullscreen &&
+                !holder.isHtmlFullscreen &&
+                webView.parent !== frame
+            ) {
+                (webView.parent as? ViewGroup)?.removeView(webView)
+                frame.addView(
+                    webView,
+                    FrameLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                    ),
+                )
+                refreshWebViewSurface(webView)
+            }
+        },
+        onRelease = { frame ->
+            if (holder.inlineContainer === frame) {
+                holder.inlineContainer = null
+            }
+        },
+        modifier = modifier,
+    )
 }
 
 /** Отступ крестика от верха: status bar (и при immersive) + 10dp. */
@@ -1212,6 +1313,7 @@ private fun createPlayerWebView(
                         // Popup нужен только для transport — сразу освобождаем.
                         v.post {
                             runCatching {
+                                holder.cancelPopupCleanup(v)
                                 v.stopLoading()
                                 (v.parent as? ViewGroup)?.removeView(v)
                                 v.destroy()
@@ -1225,22 +1327,25 @@ private fun createPlayerWebView(
             transport.webView = popup
             resultMsg.sendToTarget()
             // Если URL так и не пришёл — не держим orphan WebView.
-            popup.postDelayed({
+            val cleanup = Runnable {
                 runCatching {
+                    holder.cancelPopupCleanup(popup)
                     if (popup.parent == null) {
                         popup.stopLoading()
                         popup.destroy()
                     }
                 }
-            }, 15_000L)
+            }
+            holder.trackPopupCleanup(popup, cleanup)
             return true
         }
 
         override fun onCloseWindow(window: WebView?) {
+            val w = window ?: return
             runCatching {
-                window?.stopLoading()
-                (window?.parent as? ViewGroup)?.removeView(window)
-                window?.destroy()
+                w.stopLoading()
+                (w.parent as? ViewGroup)?.removeView(w)
+                w.destroy()
             }
         }
 

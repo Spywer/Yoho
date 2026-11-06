@@ -82,8 +82,9 @@
 | HTML5 FS | отдельный слой на decor (`onShowCustomView` / `CustomViewCallback`) |
 | Выход из cinema | только крестик / Back / `exitCinema` — не tear-down по `enabled=false` composition |
 | Ориентация в FS | `SCREEN_ORIENTATION_SENSOR` только пока cinema/HTML FS активен; иначе прежняя ориентация Activity |
-| System bars | скрываются на время FS (`PlayerSystemBarsEffect`) |
+| System bars | скрываются на время FS (`PlayerSystemBarsEffect`); в PiP не трогаем |
 | Activity | `TitleDetailActivity` / `MainActivity`: `configChanges` orientation\|screenSize\|… без recreate |
+| PiP | `MainActivity` + `TitleDetailActivity`: Home → `onUserLeaveHint` / `setAutoEnterEnabled`; eligible = плеер загружен; в PiP без `WebView.onPause()`. Трейлеры — без PiP |
 
 Collaps и похожие iframe: shell/`putShell` на стороне моделей плеера — чтобы не перезагружать мусор при смене опций.
 

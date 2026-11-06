@@ -34,6 +34,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -78,6 +79,8 @@ fun TitleDetailScreen(
             onBack()
         }
     }
+
+    val inPip = LocalDetailPip.current?.inPipState?.value == true
 
     CompositionLocalProvider(LocalHomeMetrics provides metrics) {
         Box(
@@ -135,6 +138,8 @@ fun TitleDetailScreen(
                             diaryNotify = state.diaryNotify,
                             playerReaction = state.playerReaction,
                             reactionBusy = state.reactionBusy,
+                            // В PiP — без hero/scroll; видео уже на decor overlay.
+                            pipMode = inPip,
                             onToggleFavorite = viewModel::toggleFavorite,
                             onSetDiaryStatus = viewModel::setDiaryStatus,
                             onRemoveFromDiary = viewModel::removeFromDiary,
@@ -150,11 +155,13 @@ fun TitleDetailScreen(
                 }
             }
 
-            selectedPersonId?.let { personId ->
-                PersonSheet(
-                    personId = personId,
-                    onDismiss = { selectedPersonId = null },
-                )
+            if (!inPip) {
+                selectedPersonId?.let { personId ->
+                    PersonSheet(
+                        personId = personId,
+                        onDismiss = { selectedPersonId = null },
+                    )
+                }
             }
         }
     }
@@ -182,6 +189,7 @@ private fun DetailContent(
     diaryNotify: String?,
     playerReaction: String?,
     reactionBusy: Boolean,
+    pipMode: Boolean = false,
     onToggleFavorite: () -> Unit,
     onSetDiaryStatus: (String) -> Unit,
     onRemoveFromDiary: () -> Unit,
@@ -223,8 +231,28 @@ private fun DetailContent(
             .orEmpty()
     }
     val playerHolder = remember(detail.idKp, detail.idTmdb) { PlayerWebViewHolder() }
+    val pipController = LocalDetailPip.current
+    val pipActivity = context.findActivity()
     DisposableEffect(playerHolder) {
-        onDispose { playerHolder.destroy() }
+        onDispose {
+            pipController?.clearPlayer(pipActivity)
+            playerHolder.destroy()
+        }
+    }
+    if (pipMode) {
+        DetailPipEligibilityEffect(eligible = true)
+        DetailPipWebViewBindEffect(webView = playerHolder.webView)
+        DisposableEffect(playerHolder) {
+            playerHolder.onCinemaExit = {
+                playerHolder.detachCinemaFullscreen()
+                if (playerHolder.isHtmlFullscreen) {
+                    playerHolder.requestExitHtmlFullscreen()
+                }
+            }
+            onDispose { playerHolder.onCinemaExit = null }
+        }
+        PlayerPipSurface(holder = playerHolder, modifier = Modifier.fillMaxSize())
+        return
     }
     // verticalScroll: плеер не dispose при повороте (в отличие от LazyColumn).
     Column(
