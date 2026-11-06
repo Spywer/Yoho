@@ -1,10 +1,9 @@
-package com.spywer.yoho.ui.components
+package com.spywer.yoho.ui.trailer
 
 import android.annotation.SuppressLint
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
-import android.content.pm.ActivityInfo
 import android.graphics.Color as AndroidColor
 import android.view.View
 import android.view.ViewGroup
@@ -55,16 +54,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
-import androidx.compose.ui.window.DialogWindowProvider
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
@@ -101,37 +96,29 @@ fun youtubeEmbedUrl(urlOrKey: String?): String? {
     return "https://www.youtube.com/embed/$id"
 }
 
-@Composable
-fun TrailerPlayerDialog(
+fun Context.openTrailerPlayer(
     urlOrKey: String,
     title: String? = null,
-    onDismiss: () -> Unit,
 ) {
-    val clip = remember(urlOrKey, title) {
-        TrailerClipDto(
-            title = title,
-            youtubeKey = youtubeVideoId(urlOrKey),
-            vkEmbedUrl = urlOrKey.takeIf {
-                it.contains("vk.com", true) || it.contains("vkvideo.ru", true)
-            },
-        )
-    }
-    TrailerPlayerDialog(
-        clips = listOfNotNull(clip.takeIf { it.isPlayable }),
-        title = title,
-        onDismiss = onDismiss,
-    )
+    startActivity(TrailerPlayerActivity.intent(this, urlOrKey, title))
+}
+
+fun Context.openTrailerPlayer(
+    clips: List<TrailerClipDto>,
+    title: String? = null,
+) {
+    startActivity(TrailerPlayerActivity.intent(this, clips, title))
 }
 
 @Composable
-fun TrailerPlayerDialog(
+fun TrailerPlayerScreen(
     clips: List<TrailerClipDto>,
     title: String? = null,
-    onDismiss: () -> Unit,
+    onClose: () -> Unit,
 ) {
     val playable = remember(clips) { clips.filter { it.isPlayable } }
     LaunchedEffect(playable) {
-        if (playable.isEmpty()) onDismiss()
+        if (playable.isEmpty()) onClose()
     }
     if (playable.isEmpty()) return
 
@@ -165,7 +152,6 @@ fun TrailerPlayerDialog(
     var selectedIndex by remember(sourceClips) { mutableIntStateOf(0) }
     val selected = sourceClips.getOrNull(selectedIndex.coerceIn(0, (sourceClips.size - 1).coerceAtLeast(0)))
     var playerFullscreen by remember { mutableStateOf(false) }
-    TrailerHostOrientationEffect(fullscreen = playerFullscreen)
 
     val metrics = LocalHomeMetrics.current
     val showSourceTabs = hasYoutube && hasVk
@@ -174,135 +160,125 @@ fun TrailerPlayerDialog(
     val cardPad = if (metrics.isTablet) 12.dp else 8.dp
     val gapAfterHeader = if (metrics.isTablet) 10.dp else 6.dp
 
-    BackHandler(onBack = onDismiss)
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(
-            usePlatformDefaultWidth = false,
-            dismissOnBackPress = true,
-            dismissOnClickOutside = true,
-            decorFitsSystemWindows = false,
-        ),
+    TrailerFullscreenSystemBarsEffect(hidden = playerFullscreen)
+
+    BackHandler(onBack = onClose)
+    Box(
+        Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.92f))
+            .then(
+                if (playerFullscreen) Modifier
+                else Modifier.statusBarsPadding().navigationBarsPadding(),
+            )
+            .clickable(onClick = onClose),
     ) {
-        // Внутри Dialog — иначе controller сидит на Activity, а FS на окне Dialog.
-        TrailerFullscreenSystemBarsEffect(hidden = playerFullscreen)
-        Box(
+        Column(
             Modifier
                 .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.92f))
-                .then(
-                    if (playerFullscreen) Modifier
-                    else Modifier.statusBarsPadding().navigationBarsPadding(),
-                )
-                .clickable(onClick = onDismiss),
+                .widthIn(max = 720.dp)
+                .align(Alignment.Center)
+                .padding(horizontal = padH),
         ) {
+            Spacer(Modifier.weight(1f))
             Column(
                 Modifier
-                    .fillMaxSize()
-                    .widthIn(max = 720.dp)
-                    .align(Alignment.Center)
-                    .padding(horizontal = padH),
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(if (metrics.isTablet) 16.dp else 12.dp))
+                    .background(Color(0xFF1A1A1A))
+                    .clickable(
+                        indication = null,
+                        interactionSource = remember { MutableInteractionSource() },
+                        onClick = {},
+                    )
+                    .padding(cardPad),
             ) {
-                Spacer(Modifier.weight(1f))
-                Column(
-                    Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(if (metrics.isTablet) 16.dp else 12.dp))
-                        .background(Color(0xFF1A1A1A))
-                        .clickable(
-                            indication = null,
-                            interactionSource = remember { MutableInteractionSource() },
-                            onClick = {},
-                        )
-                        .padding(cardPad),
+                Row(
+                    Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(
+                        if (metrics.isTablet) 8.dp else 6.dp,
+                    ),
                 ) {
-                    Row(
-                        Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(
-                            if (metrics.isTablet) 8.dp else 6.dp,
-                        ),
-                    ) {
-                        if (showSourceTabs) {
-                            SourceChip(
-                                label = stringResource(R.string.detail_trailer_source_youtube),
-                                selected = source == TrailerSource.Youtube,
-                                onClick = {
-                                    source = TrailerSource.Youtube
-                                    selectedIndex = 0
-                                },
-                            )
-                            SourceChip(
-                                label = stringResource(R.string.detail_trailer_source_vk),
-                                selected = source == TrailerSource.Vk,
-                                onClick = {
-                                    source = TrailerSource.Vk
-                                    selectedIndex = 0
-                                },
-                            )
-                            Spacer(Modifier.weight(1f))
-                        } else {
-                            Text(
-                                text = title?.takeIf { it.isNotBlank() }
-                                    ?: selected?.title
-                                    ?: stringResource(R.string.detail_trailer),
-                                color = Color.White,
-                                fontSize = metrics.searchTextSize,
-                                fontWeight = FontWeight.SemiBold,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier.weight(1f),
-                            )
-                        }
-                        TrailerCloseButton(
-                            onClick = onDismiss,
-                            compact = !metrics.isTablet,
+                    if (showSourceTabs) {
+                        SourceChip(
+                            label = stringResource(R.string.detail_trailer_source_youtube),
+                            selected = source == TrailerSource.Youtube,
+                            onClick = {
+                                source = TrailerSource.Youtube
+                                selectedIndex = 0
+                            },
+                        )
+                        SourceChip(
+                            label = stringResource(R.string.detail_trailer_source_vk),
+                            selected = source == TrailerSource.Vk,
+                            onClick = {
+                                source = TrailerSource.Vk
+                                selectedIndex = 0
+                            },
+                        )
+                        Spacer(Modifier.weight(1f))
+                    } else {
+                        Text(
+                            text = title?.takeIf { it.isNotBlank() }
+                                ?: selected?.title
+                                ?: stringResource(R.string.detail_trailer),
+                            color = Color.White,
+                            fontSize = metrics.searchTextSize,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f),
                         )
                     }
-
-                    Spacer(Modifier.padding(top = gapAfterHeader))
-
-                    Box(
-                        Modifier
-                            .fillMaxWidth()
-                            .aspectRatio(16f / 9f)
-                            .clip(RoundedCornerShape(if (metrics.isTablet) 12.dp else 8.dp))
-                            .background(Color.Black),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        TrailerPlayerSlot(
-                            source = source,
-                            selected = selected,
-                            onFullscreenChanged = { playerFullscreen = it },
-                            modifier = Modifier.fillMaxSize(),
-                        )
-                    }
+                    TrailerCloseButton(
+                        onClick = onClose,
+                        compact = !metrics.isTablet,
+                    )
                 }
-                BoxWithConstraints(
+
+                Spacer(Modifier.padding(top = gapAfterHeader))
+
+                Box(
                     Modifier
                         .fillMaxWidth()
-                        .weight(1f)
-                        .padding(top = if (metrics.isTablet) 12.dp else 8.dp),
+                        .aspectRatio(16f / 9f)
+                        .clip(RoundedCornerShape(if (metrics.isTablet) 12.dp else 8.dp))
+                        .background(Color.Black),
+                    contentAlignment = Alignment.Center,
                 ) {
-                    if (showClipPicker) {
-                        ClipGrid(
-                            clips = sourceClips,
-                            selectedIndex = selectedIndex,
-                            onSelect = { selectedIndex = it },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .heightIn(max = maxHeight)
-                                .clip(RoundedCornerShape(if (metrics.isTablet) 12.dp else 8.dp))
-                                .background(Color(0xFF1A1A1A))
-                                .clickable(
-                                    indication = null,
-                                    interactionSource = remember { MutableInteractionSource() },
-                                    onClick = {},
-                                )
-                                .padding(if (metrics.isTablet) 10.dp else 6.dp)
-                                .verticalScroll(rememberScrollState()),
-                        )
-                    }
+                    TrailerPlayerSlot(
+                        source = source,
+                        selected = selected,
+                        onFullscreenChanged = { playerFullscreen = it },
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                }
+            }
+            BoxWithConstraints(
+                Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
+                    .padding(top = if (metrics.isTablet) 12.dp else 8.dp),
+            ) {
+                if (showClipPicker) {
+                    ClipGrid(
+                        clips = sourceClips,
+                        selectedIndex = selectedIndex,
+                        onSelect = { selectedIndex = it },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = maxHeight)
+                            .clip(RoundedCornerShape(if (metrics.isTablet) 12.dp else 8.dp))
+                            .background(Color(0xFF1A1A1A))
+                            .clickable(
+                                indication = null,
+                                interactionSource = remember { MutableInteractionSource() },
+                                onClick = {},
+                            )
+                            .padding(if (metrics.isTablet) 10.dp else 6.dp)
+                            .verticalScroll(rememberScrollState()),
+                    )
                 }
             }
         }
@@ -346,73 +322,25 @@ private fun TrailerPlayerSlot(
     }
 }
 
-/**
- * Диалог — портрет; нативный FS плеера — SENSOR; при закрытии диалога — как было.
- */
-@Composable
-private fun TrailerHostOrientationEffect(fullscreen: Boolean) {
-    val context = LocalContext.current
-    DisposableEffect(Unit) {
-        val activity = context.findActivity()
-        if (activity == null) {
-            return@DisposableEffect onDispose { }
-        }
-        val original = activity.requestedOrientation
-        activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
-        onDispose {
-            activity.requestedOrientation = original
-        }
-    }
-    val activity = LocalContext.current.findActivity()
-    DisposableEffect(fullscreen) {
-        if (activity == null) {
-            return@DisposableEffect onDispose { }
-        }
-        activity.requestedOrientation = if (fullscreen) {
-            ActivityInfo.SCREEN_ORIENTATION_SENSOR
-        } else {
-            ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
-        }
-        onDispose { }
-    }
-}
-
+/** Immersive bars на окне TrailerPlayerActivity (не трогает Main/Detail). */
 @Composable
 private fun TrailerFullscreenSystemBarsEffect(hidden: Boolean) {
-    val view = LocalView.current
-    val activity = LocalContext.current.findActivity()
-    DisposableEffect(hidden, view) {
-        val windows = LinkedHashSet<android.view.Window>()
-        var p: Any? = view.parent
-        while (p != null) {
-            if (p is DialogWindowProvider) {
-                windows.add(p.window)
-                break
-            }
-            p = (p as? View)?.parent
-        }
-        activity?.window?.let { windows.add(it) }
-        val controllers = windows.map { w ->
+    val context = LocalContext.current
+    DisposableEffect(hidden) {
+        val activity = context.findActivity()
+        val window = activity?.window
+        val controller = window?.let { w ->
             WindowCompat.setDecorFitsSystemWindows(w, false)
             WindowCompat.getInsetsController(w, w.decorView)
         }
-        fun applyHide() {
-            controllers.forEach { c ->
-                c.hide(WindowInsetsCompat.Type.systemBars())
-                c.systemBarsBehavior =
-                    WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-            }
-        }
-        if (hidden) {
-            applyHide()
-            // После addView FS / поворота система иногда возвращает bars.
-            view.post { if (hidden) applyHide() }
+        if (hidden && controller != null) {
+            controller.hide(WindowInsetsCompat.Type.systemBars())
+            controller.systemBarsBehavior =
+                WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
         }
         onDispose {
             if (hidden) {
-                controllers.forEach { c ->
-                    c.show(WindowInsetsCompat.Type.systemBars())
-                }
+                controller?.show(WindowInsetsCompat.Type.systemBars())
             }
         }
     }
@@ -515,11 +443,9 @@ private fun YoutubeTrailerPlayer(
     modifier: Modifier = Modifier,
 ) {
     val lifecycleOwner = LocalLifecycleOwner.current
-    val localView = LocalView.current
     val activity = LocalContext.current.findActivity()
     var loading by remember(videoId) { mutableStateOf(true) }
     var errorText by remember(videoId) { mutableStateOf<String?>(null) }
-    // FS-слой держим сами: Dialog — отдельное Window, Activity.decorView под ним → «видео пропало».
     var fsOverlay by remember { mutableStateOf<View?>(null) }
     var exitFs by remember { mutableStateOf<(() -> Unit)?>(null) }
 
@@ -542,7 +468,6 @@ private fun YoutubeTrailerPlayer(
         }
     }
 
-    // Back в FS YouTube → выходим из FS, не закрываем диалог.
     BackHandler(enabled = fsOverlay != null) {
         exitFs?.invoke() ?: clearFullscreenOverlay()
     }
@@ -559,7 +484,7 @@ private fun YoutubeTrailerPlayer(
                                 fullscreenView: View,
                                 exitFullscreen: () -> Unit,
                             ) {
-                                val host = dialogFullscreenHost(localView, activity) ?: return
+                                val host = activity?.window?.decorView as? ViewGroup ?: return
                                 clearFullscreenOverlay()
                                 fullscreenView.setBackgroundColor(AndroidColor.BLACK)
                                 fullscreenView.elevation = 64f
@@ -646,18 +571,6 @@ private tailrec fun Context.findActivity(): Activity? = when (this) {
     else -> null
 }
 
-/** Host для FS: окно Compose Dialog, иначе Activity (иначе слой уходит «под» Dialog). */
-private fun dialogFullscreenHost(localView: View, activity: Activity?): ViewGroup? {
-    var p: Any? = localView.parent
-    while (p != null) {
-        if (p is DialogWindowProvider) {
-            return p.window.decorView as? ViewGroup
-        }
-        p = (p as? View)?.parent
-    }
-    return activity?.window?.decorView as? ViewGroup
-}
-
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
 private fun VkTrailerPlayer(
@@ -665,35 +578,41 @@ private fun VkTrailerPlayer(
     onFullscreenChanged: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val localView = LocalView.current
     val activity = LocalContext.current.findActivity()
     var loading by remember(embedUrl) { mutableStateOf(true) }
     var webViewRef by remember { mutableStateOf<WebView?>(null) }
     var inlineHost by remember { mutableStateOf<FrameLayout?>(null) }
     var fsOverlay by remember { mutableStateOf<View?>(null) }
+    var fsCallback by remember {
+        mutableStateOf<WebChromeClient.CustomViewCallback?>(null)
+    }
     val isFullscreen = fsOverlay != null
 
-    fun exitVkFullscreen() {
-        val overlay = fsOverlay ?: return
-        val web = webViewRef
-        val inline = inlineHost
+    fun exitVkFullscreen(fromWeb: Boolean = false) {
+        val overlay = fsOverlay
+        val cb = fsCallback
         fsOverlay = null
-        // Снять FS-слой (наш FrameLayout или HTML custom view от VK).
-        if (web != null && web.parent === overlay) {
-            (overlay as? ViewGroup)?.removeView(web)
+        fsCallback = null
+        if (overlay != null) {
+            val web = webViewRef
+            val inline = inlineHost
+            if (web != null && web.parent === overlay) {
+                (overlay as? ViewGroup)?.removeView(web)
+            }
+            (overlay.parent as? ViewGroup)?.removeView(overlay)
+            if (web != null && inline != null && web.parent !== inline) {
+                (web.parent as? ViewGroup)?.removeView(web)
+                inline.addView(
+                    web,
+                    FrameLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                    ),
+                )
+            }
         }
-        (overlay.parent as? ViewGroup)?.removeView(overlay)
-        // Вернуть WebView в инлайн, если он был вынут.
-        if (web != null && inline != null && web.parent !== inline) {
-            (web.parent as? ViewGroup)?.removeView(web)
-            inline.addView(
-                web,
-                FrameLayout.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT,
-                    ViewGroup.LayoutParams.MATCH_PARENT,
-                ),
-            )
-        }
+        // Контракт WebView: иначе custom view / декодер могут «залипнуть».
+        if (!fromWeb) runCatching { cb?.onCustomViewHidden() }
     }
 
     LaunchedEffect(isFullscreen) {
@@ -730,17 +649,16 @@ private fun VkTrailerPlayer(
                                     view: View?,
                                     callback: CustomViewCallback?,
                                 ) {
-                                    // VK/HTML FS — тоже на окно диалога.
                                     if (view == null) {
                                         callback?.onCustomViewHidden()
                                         return
                                     }
-                                    val fsHost = dialogFullscreenHost(localView, activity)
+                                    val fsHost = activity?.window?.decorView as? ViewGroup
                                     if (fsHost == null) {
                                         callback?.onCustomViewHidden()
                                         return
                                     }
-                                    exitVkFullscreen()
+                                    exitVkFullscreen(fromWeb = true)
                                     view.setBackgroundColor(AndroidColor.BLACK)
                                     view.elevation = 64f
                                     fsHost.addView(
@@ -751,10 +669,11 @@ private fun VkTrailerPlayer(
                                         ),
                                     )
                                     fsOverlay = view
+                                    fsCallback = callback
                                 }
 
                                 override fun onHideCustomView() {
-                                    exitVkFullscreen()
+                                    exitVkFullscreen(fromWeb = true)
                                 }
                             }
                             webViewClient = object : WebViewClient() {

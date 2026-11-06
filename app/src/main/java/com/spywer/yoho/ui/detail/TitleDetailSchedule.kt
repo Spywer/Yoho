@@ -14,8 +14,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentWidth
-import androidx.compose.foundation.lazy.LazyListScope
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
@@ -268,7 +266,8 @@ private fun formatDaysLeft(days: Long): String = when {
     else -> "$days дн."
 }
 
-internal fun LazyListScope.titleDetailScheduleSection(
+@Composable
+internal fun TitleDetailScheduleSection(
     schedule: TvScheduleDto?,
     scheduleLoading: Boolean,
     selectedSeason: Int?,
@@ -278,34 +277,29 @@ internal fun LazyListScope.titleDetailScheduleSection(
     onSelectSeason: (Int) -> Unit,
 ) {
     if (lastAir?.meta != null) {
-        item {
-            NextEpisodeBlock(
-                lastAir = lastAir,
-                schedule = schedule,
-                padding = screenPadding,
+        NextEpisodeBlock(
+            lastAir = lastAir,
+            schedule = schedule,
+            padding = screenPadding,
+        )
+    }
+
+    if (scheduleLoading) {
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .padding(screenPadding),
+            contentAlignment = Alignment.Center,
+        ) {
+            CircularProgressIndicator(
+                Modifier.size(28.dp),
+                color = MaterialTheme.colorScheme.primary,
+                strokeWidth = 3.dp,
             )
         }
     }
 
-    if (scheduleLoading) {
-        item {
-            Box(
-                Modifier
-                    .fillMaxWidth()
-                    .padding(screenPadding),
-                contentAlignment = Alignment.Center,
-            ) {
-                CircularProgressIndicator(
-                    Modifier.size(28.dp),
-                    color = MaterialTheme.colorScheme.primary,
-                    strokeWidth = 3.dp,
-                )
-            }
-        }
-    }
-
     if (schedule != null && schedule.seasons.isNotEmpty()) {
-        item {
             val metrics = LocalHomeMetrics.current
             Column(
                 Modifier
@@ -365,11 +359,7 @@ internal fun LazyListScope.titleDetailScheduleSection(
                         )
                     }
             }
-        }
-        items(
-            items = selectedSeasonEpisodes,
-            key = { "ep-${it.seasonNumber}-${it.episodeNumber}" },
-        ) { ep ->
+        selectedSeasonEpisodes.forEach { ep ->
             val metrics = LocalHomeMetrics.current
             val daysUntil = daysUntilAir(ep.airDate)
             val aired = daysUntil == null || daysUntil <= 0

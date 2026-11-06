@@ -69,6 +69,13 @@
             android:resizeableActivity="true"
             android:theme="@style/Theme.Yoho"
             android:windowSoftInputMode="adjustResize" />
+        <activity
+            android:name=".ui.trailer.TrailerPlayerActivity"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden"
+            android:exported="false"
+            android:parentActivityName=".MainActivity"
+            android:resizeableActivity="true"
+            android:theme="@style/Theme.Yoho" />
     </application>
 
 </manifest>

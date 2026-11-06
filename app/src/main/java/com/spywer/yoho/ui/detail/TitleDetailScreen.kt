@@ -17,9 +17,10 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PlayArrow
@@ -32,6 +33,7 @@ import androidx.compose.material3.TextButton
 import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -48,16 +50,15 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.spywer.yoho.ui.components.TrailerPlayerDialog
 import coil.compose.AsyncImage
 import com.spywer.yoho.R
 import com.spywer.yoho.data.remote.PlayerChoiceItemDto
 import com.spywer.yoho.data.remote.TitleDetailDto
-import com.spywer.yoho.data.remote.TrailerClipDto
 import com.spywer.yoho.data.remote.TvLastAirDto
 import com.spywer.yoho.data.remote.TvScheduleDto
 import com.spywer.yoho.ui.layout.LocalHomeMetrics
 import com.spywer.yoho.ui.layout.rememberHomeMetrics
+import com.spywer.yoho.ui.trailer.openTrailerPlayer
 
 @Composable
 fun TitleDetailScreen(
@@ -134,7 +135,6 @@ fun TitleDetailScreen(
                             diaryNotify = state.diaryNotify,
                             playerReaction = state.playerReaction,
                             reactionBusy = state.reactionBusy,
-                            onBack = onBack,
                             onToggleFavorite = viewModel::toggleFavorite,
                             onSetDiaryStatus = viewModel::setDiaryStatus,
                             onRemoveFromDiary = viewModel::removeFromDiary,
@@ -182,7 +182,6 @@ private fun DetailContent(
     diaryNotify: String?,
     playerReaction: String?,
     reactionBusy: Boolean,
-    onBack: () -> Unit,
     onToggleFavorite: () -> Unit,
     onSetDiaryStatus: (String) -> Unit,
     onRemoveFromDiary: () -> Unit,
@@ -214,7 +213,6 @@ private fun DetailContent(
         },
     )
     val trailerFallback = stringResource(R.string.detail_trailer)
-    var playingClips by remember { mutableStateOf<List<TrailerClipDto>?>(null) }
     val trailerClips = remember(detail.trailer) { detail.trailer?.playableClips().orEmpty() }
     val showFullCastLink = !detail.castPageHref.isNullOrBlank() && castFullCount > 0
     val selectedSeasonEpisodes = remember(schedule, selectedSeason) {
@@ -224,20 +222,17 @@ private fun DetailContent(
             ?.sortedBy { it.episodeNumber ?: 0 }
             .orEmpty()
     }
-    playingClips?.let { clips ->
-        TrailerPlayerDialog(
-            clips = clips,
-            title = detail.trailer?.title ?: trailerFallback,
-            onDismiss = { playingClips = null },
-        )
+    val playerHolder = remember(detail.idKp, detail.idTmdb) { PlayerWebViewHolder() }
+    DisposableEffect(playerHolder) {
+        onDispose { playerHolder.destroy() }
     }
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(
-            bottom = if (metrics.isTablet) 32.dp else 20.dp,
-        ),
+    // verticalScroll: плеер не dispose при повороте (в отличие от LazyColumn).
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(bottom = if (metrics.isTablet) 32.dp else 20.dp),
     ) {
-        item {
             DetailHero(
                 detail = detail,
                 titleRu = titleRu,
@@ -250,9 +245,7 @@ private fun DetailContent(
                 onToggleFavorite = onToggleFavorite,
                 onOpenGenre = onOpenGenre,
             )
-        }
 
-        item {
             Column(
                 Modifier
                     .fillMaxWidth()
@@ -312,7 +305,12 @@ private fun DetailContent(
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(12.dp))
                         .background(MaterialTheme.colorScheme.surfaceVariant)
-                        .clickable { playingClips = trailerClips }
+                        .clickable {
+                            context.openTrailerPlayer(
+                                clips = trailerClips,
+                                title = detail.trailer?.title ?: trailerFallback,
+                            )
+                        }
                         .padding(if (metrics.isTablet) 12.dp else 10.dp)
                     val thumb = @Composable {
                         Box(
@@ -400,9 +398,7 @@ private fun DetailContent(
                     }
                 }
             }
-        }
 
-        item {
             PlayerBlock(
                 choices = playerChoices,
                 selectedSource = selectedPlayerSource,
@@ -424,11 +420,11 @@ private fun DetailContent(
                 onPlayerReaction = onPlayerReaction,
                 padding = metrics.screenPadding,
                 metaSize = metrics.cardMetaSize,
+                webHolder = playerHolder,
                 modifier = Modifier.padding(top = metrics.sectionGap),
             )
-        }
 
-        titleDetailScheduleSection(
+        TitleDetailScheduleSection(
             schedule = schedule,
             scheduleLoading = scheduleLoading,
             selectedSeason = selectedSeason,
@@ -439,14 +435,11 @@ private fun DetailContent(
         )
 
         if (detail.cast.isNotEmpty()) {
-            item {
                 SectionHeader(
                     castTitle,
                     metrics.sectionTitleSize,
                     metrics.screenPadding,
                 )
-            }
-            item {
                 val castCardW = if (metrics.isTablet) 112.dp else 88.dp
                 val castCardH = if (metrics.isTablet) 148.dp else 116.dp
                 LazyRow(
@@ -509,9 +502,7 @@ private fun DetailContent(
                         }
                     }
                 }
-            }
             if (showFullCastLink) {
-                item {
                     Box(
                         Modifier
                             .fillMaxWidth()
@@ -536,11 +527,10 @@ private fun DetailContent(
                             )
                         }
                     }
-                }
             }
         }
 
-        relatedSection(
+        RelatedSection(
             title = prequelsTitle,
             items = detail.prequels,
             onOpenTitle = onOpenTitle,
@@ -549,7 +539,7 @@ private fun DetailContent(
             cardWidth = metrics.posterLarge,
             gap = metrics.cardGap,
         )
-        relatedSection(
+        RelatedSection(
             title = sequelsTitle,
             items = detail.sequels,
             onOpenTitle = onOpenTitle,
@@ -558,7 +548,7 @@ private fun DetailContent(
             cardWidth = metrics.posterLarge,
             gap = metrics.cardGap,
         )
-        relatedSection(
+        RelatedSection(
             title = similarTitle,
             items = detail.similar,
             onOpenTitle = onOpenTitle,

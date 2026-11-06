@@ -5,6 +5,7 @@ import android.annotation.SuppressLint
 import android.app.Activity
 import android.content.pm.ActivityInfo
 import android.content.pm.PackageManager
+import android.content.res.Configuration
 import android.os.Message
 import android.view.View
 import android.view.ViewGroup
@@ -62,12 +63,13 @@ import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -111,14 +113,17 @@ internal fun PlayerBlock(
     onPlayerReaction: (String) -> Unit,
     padding: androidx.compose.ui.unit.Dp,
     metaSize: androidx.compose.ui.unit.TextUnit,
+    /** Holder с экрана — общий lifecycle WebView на время деталки. */
+    webHolder: PlayerWebViewHolder,
     modifier: Modifier = Modifier,
 ) {
     val playUrl = remember(iframeUrl) { normalizePlayerUrl(iframeUrl) }
     val hasPlayer = !playUrl.isNullOrBlank() || !embedHtml.isNullOrBlank()
     val noSources = !needsLogin && choices.isEmpty() && !hasPlayer
     val context = LocalContext.current
-    var fullscreen by rememberSaveable { mutableStateOf(false) }
-    var htmlFullscreen by remember { mutableStateOf(false) }
+    // Подхват уже открытого cinema на decor при редком remount.
+    var fullscreen by remember(webHolder) { mutableStateOf(webHolder.isCinemaFullscreen) }
+    var htmlFullscreen by remember(webHolder) { mutableStateOf(webHolder.isHtmlFullscreen) }
     // Toast дневника, когда панели под плеером нет (заглушка без источников).
     LaunchedEffect(diaryNotify, hasPlayer) {
         if (hasPlayer) return@LaunchedEffect
@@ -127,32 +132,42 @@ internal fun PlayerBlock(
         onConsumeDiaryNotify()
     }
     // WebView всегда в Compose; FS = reparent на decorView (Dialog ломал surface при возврате)
-    val webHolder = remember { PlayerWebViewHolder() }
-    DisposableEffect(Unit) {
+    DisposableEffect(webHolder) {
         webHolder.onHtmlFullscreenChanged = { htmlFullscreen = it }
-        onDispose { webHolder.destroy() }
+        webHolder.onCinemaExit = {
+            fullscreen = false
+            webHolder.detachCinemaFullscreen()
+            if (webHolder.isHtmlFullscreen) webHolder.requestExitHtmlFullscreen()
+        }
+        onDispose {
+            webHolder.onHtmlFullscreenChanged = null
+            webHolder.onCinemaExit = null
+        }
     }
     DisposableEffect(hasPlayer) {
         if (!hasPlayer) webHolder.pausePlayback()
         onDispose { }
     }
 
+    fun exitCinema() {
+        fullscreen = false
+        if (webHolder.isHtmlFullscreen) webHolder.requestExitHtmlFullscreen()
+        else webHolder.detachCinemaFullscreen()
+    }
     BackHandler(enabled = htmlFullscreen || fullscreen) {
         when {
             htmlFullscreen -> webHolder.requestExitHtmlFullscreen()
-            else -> fullscreen = false
+            else -> exitCinema()
         }
     }
-    val fsActive = (fullscreen || htmlFullscreen) && hasPlayer
+    val fsActive = fullscreen || htmlFullscreen || webHolder.isCinemaFullscreen
     PlayerSystemBarsEffect(hidden = fsActive)
     PlayerFullscreenOrientationEffect(active = fsActive)
+    // Detach только через exitCinema/крестик — не по enabled=false.
     PlayerFullscreenEffect(
-        enabled = fullscreen && hasPlayer,
+        enabled = (fullscreen && hasPlayer) || webHolder.isCinemaFullscreen,
         holder = webHolder,
-        onExit = {
-            if (webHolder.isHtmlFullscreen) webHolder.requestExitHtmlFullscreen()
-            fullscreen = false
-        },
+        onExit = { exitCinema() },
     )
     // Zoom внутри плеера — только на весь экран.
     LaunchedEffect(fullscreen, htmlFullscreen, hasPlayer) {
@@ -643,10 +658,17 @@ private fun PlayerUnderBar(
 @Composable
 private fun PlayerSystemBarsEffect(hidden: Boolean) {
     val context = LocalContext.current
+    val orientation = LocalConfiguration.current.orientation
+    // Не ключ DisposableEffect на orientation: иначе onDispose → show → мигание.
     DisposableEffect(hidden) {
-        val activity = context as? Activity
-        val controller = activity?.window?.let { window ->
-            WindowCompat.getInsetsController(window, window.decorView)
+        val activity = context.findActivity()
+        val window = activity?.window
+        val decor = window?.decorView
+        val controller = if (window != null && decor != null) {
+            WindowCompat.setDecorFitsSystemWindows(window, false)
+            WindowCompat.getInsetsController(window, decor)
+        } else {
+            null
         }
         if (hidden && controller != null) {
             controller.hide(WindowInsetsCompat.Type.systemBars())
@@ -657,10 +679,20 @@ private fun PlayerSystemBarsEffect(hidden: Boolean) {
             controller?.show(WindowInsetsCompat.Type.systemBars())
         }
     }
+    // После поворота система может вернуть bars — только hide, без show.
+    LaunchedEffect(hidden, orientation) {
+        if (!hidden) return@LaunchedEffect
+        val activity = context.findActivity() ?: return@LaunchedEffect
+        val window = activity.window
+        val controller = WindowCompat.getInsetsController(window, window.decorView)
+        controller.hide(WindowInsetsCompat.Type.systemBars())
+        controller.systemBarsBehavior =
+            WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+    }
 }
 
 /** Держит WebView + inline-контейнер для reparent в fullscreen overlay. */
-private class PlayerWebViewHolder {
+internal class PlayerWebViewHolder {
     var webView: WebView? = null
     var inlineContainer: FrameLayout? = null
     var fullscreenOverlay: FrameLayout? = null
@@ -668,8 +700,34 @@ private class PlayerWebViewHolder {
     var htmlFsContainer: FrameLayout? = null
     var htmlFsCallback: WebChromeClient.CustomViewCallback? = null
     var onHtmlFullscreenChanged: ((Boolean) -> Unit)? = null
+    /** Выход из cinema-FS (крестик) → синхрон Compose-state. */
+    var onCinemaExit: (() -> Unit)? = null
 
     val isHtmlFullscreen: Boolean get() = htmlFsContainer != null
+    val isCinemaFullscreen: Boolean get() = fullscreenOverlay != null
+
+    /** Снять cinema overlay; WebView вернуть в inline, если он ещё жив. */
+    fun detachCinemaFullscreen() {
+        val wv = webView
+        val overlay = fullscreenOverlay ?: return
+        val inline = inlineContainer
+        if (wv != null) {
+            (wv.parent as? ViewGroup)?.removeView(wv)
+            if (inline != null && wv.parent == null) {
+                inline.addView(
+                    wv,
+                    FrameLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                    ),
+                )
+                refreshWebViewSurface(wv)
+            }
+        }
+        clearFullscreenLayoutBinding(overlay)
+        (overlay.parent as? ViewGroup)?.removeView(overlay)
+        fullscreenOverlay = null
+    }
 
     fun showHtmlFullscreen(view: View, callback: WebChromeClient.CustomViewCallback?) {
         if (htmlFsContainer != null) {
@@ -744,6 +802,7 @@ private class PlayerWebViewHolder {
         val container = htmlFsContainer ?: return
         htmlFsContainer = null
         htmlFsCallback = null
+        clearFullscreenLayoutBinding(container)
         runCatching {
             container.removeAllViews()
             (container.parent as? ViewGroup)?.removeView(container)
@@ -781,9 +840,7 @@ private class PlayerWebViewHolder {
             if (htmlFsContainer != null) hideHtmlFullscreen()
             // Если HTML FS ещё активен с точки зрения Chromium — отпускаем callback.
             if (cb != null) runCatching { cb.onCustomViewHidden() }
-            fullscreenOverlay?.let { overlay ->
-                (overlay.parent as? ViewGroup)?.removeView(overlay)
-            }
+            if (fullscreenOverlay != null) detachCinemaFullscreen()
             val wv = webView
             if (wv != null) {
                 wv.stopLoading()
@@ -800,6 +857,7 @@ private class PlayerWebViewHolder {
         htmlFsContainer = null
         htmlFsCallback = null
         onHtmlFullscreenChanged = null
+        onCinemaExit = null
     }
 }
 
@@ -837,13 +895,9 @@ private fun fullscreenCloseTopMargin(host: View, density: Float): Int {
 
 private const val FULLSCREEN_CLOSE_TAG = "yoho_fs_close"
 
-private fun isFullscreenLandscape(width: Int, height: Int): Boolean =
-    width > 0 && height > 0 && width * 4 >= height * 5
-
 /** Альбом — без крестика; портрет — показать. */
-private fun syncFullscreenCloseVisibility(container: ViewGroup, width: Int, height: Int) {
-    val visibility =
-        if (isFullscreenLandscape(width, height)) View.GONE else View.VISIBLE
+private fun syncFullscreenCloseVisibility(container: ViewGroup, landscape: Boolean) {
+    val visibility = if (landscape) View.GONE else View.VISIBLE
     for (i in 0 until container.childCount) {
         val child = container.getChildAt(i)
         if (child.tag == FULLSCREEN_CLOSE_TAG && child.visibility != visibility) {
@@ -853,66 +907,69 @@ private fun syncFullscreenCloseVisibility(container: ViewGroup, width: Int, heig
 }
 
 /**
- * Letterbox 16:9 через padding videoHost.
- * Крестик на внешнем overlay — не съезжает в letterbox.
+ * Только крестик при смене orientation.
+ * Letterbox-padding убран: при уходе в альбом setPadding переживал WebView → чёрный кадр/мигание.
+ * Слот всегда edge-to-edge MATCH_PARENT.
  */
-private fun applyFullscreenLetterbox(videoHost: FrameLayout, width: Int, height: Int) {
-    if (width <= 0 || height <= 0) return
-    if (isFullscreenLandscape(width, height)) {
-        if (videoHost.paddingLeft != 0 || videoHost.paddingTop != 0 ||
-            videoHost.paddingRight != 0 || videoHost.paddingBottom != 0
-        ) {
-            videoHost.setPadding(0, 0, 0, 0)
+/** Cleanup postDelayed + OnLayoutChangeListener при detach overlay. */
+private class FullscreenLayoutBinding(
+    private val overlay: FrameLayout,
+) {
+    private var pending: Runnable? = null
+    private var appliedOrientation: Int? = null
+    private val listener = View.OnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
+        schedule(force = false)
+    }
+
+    init {
+        overlay.addOnLayoutChangeListener(listener)
+        overlay.post { schedule(force = true) }
+    }
+
+    fun schedule(force: Boolean) {
+        val orient = overlay.resources.configuration.orientation
+        if (!force && orient == appliedOrientation) return
+        pending?.let { overlay.removeCallbacks(it) }
+        val task = Runnable {
+            pending = null
+            val o = overlay.resources.configuration.orientation
+            appliedOrientation = o
+            syncFullscreenCloseVisibility(
+                overlay,
+                landscape = o == Configuration.ORIENTATION_LANDSCAPE,
+            )
         }
-        return
+        pending = task
+        overlay.postDelayed(task, 120L)
     }
-    val byWidthH = (width * 9f / 16f).toInt()
-    val (padV, padH) = if (byWidthH <= height) {
-        ((height - byWidthH) / 2).coerceAtLeast(0) to 0
-    } else {
-        val contentW = (height * 16f / 9f).toInt()
-        0 to ((width - contentW) / 2).coerceAtLeast(0)
-    }
-    if (videoHost.paddingTop != padV || videoHost.paddingBottom != padV ||
-        videoHost.paddingLeft != padH || videoHost.paddingRight != padH
-    ) {
-        videoHost.setPadding(padH, padV, padH, padV)
+
+    fun clear() {
+        pending?.let { overlay.removeCallbacks(it) }
+        pending = null
+        overlay.removeOnLayoutChangeListener(listener)
+        if (overlay.tag === this) overlay.tag = null
     }
 }
 
-/** Debounce: letterbox на videoHost, крестик — на overlay. */
 private fun bindFullscreenLayoutListener(
     overlay: FrameLayout,
     videoHost: FrameLayout,
 ) {
     videoHost.clipChildren = true
     videoHost.clipToPadding = true
-    var pending: Runnable? = null
-    overlay.addOnLayoutChangeListener { v, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom ->
-        val w = right - left
-        val h = bottom - top
-        val oldW = oldRight - oldLeft
-        val oldH = oldBottom - oldTop
-        if (w == oldW && h == oldH) return@addOnLayoutChangeListener
-        if (w <= 0 || h <= 0) return@addOnLayoutChangeListener
-        pending?.let { v.removeCallbacks(it) }
-        val task = Runnable {
-            pending = null
-            val cw = v.width
-            val ch = v.height
-            if (cw <= 0 || ch <= 0) return@Runnable
-            syncFullscreenCloseVisibility(overlay, cw, ch)
-            applyFullscreenLetterbox(videoHost, cw, ch)
-        }
-        pending = task
-        v.postDelayed(task, 100L)
+    // На всякий случай сбросить letterbox от прошлой сессии.
+    if (videoHost.paddingLeft != 0 || videoHost.paddingTop != 0 ||
+        videoHost.paddingRight != 0 || videoHost.paddingBottom != 0
+    ) {
+        videoHost.setPadding(0, 0, 0, 0)
     }
-    overlay.post {
-        val cw = overlay.width
-        val ch = overlay.height
-        syncFullscreenCloseVisibility(overlay, cw, ch)
-        applyFullscreenLetterbox(videoHost, cw, ch)
-    }
+    (overlay.tag as? FullscreenLayoutBinding)?.clear()
+    overlay.tag = FullscreenLayoutBinding(overlay)
+}
+
+private fun clearFullscreenLayoutBinding(overlay: FrameLayout?) {
+    val binding = overlay?.tag as? FullscreenLayoutBinding ?: return
+    binding.clear()
 }
 
 /** В FS — следовать датчику; иначе вернуть прежнюю ориентацию Activity. */
@@ -942,94 +999,86 @@ private fun PlayerFullscreenEffect(
     onExit: () -> Unit,
 ) {
     val context = LocalContext.current
-    DisposableEffect(enabled) {
-        val activity = context as? Activity
+    val onExitUpdated by rememberUpdatedState(onExit)
+
+    // Только attach. Detach — явный onExit/крестик (иначе remount item срывает FS).
+    LaunchedEffect(enabled) {
+        if (!enabled) return@LaunchedEffect
+        val activity = context.findActivity()
         val webView = holder.webView
-        val container = holder.inlineContainer
-        if (enabled && activity != null && webView != null && container != null) {
-            val decor = activity.window.decorView as ViewGroup
-            val density = context.resources.displayMetrics.density
-            val overlay = FrameLayout(context).apply {
-                setBackgroundColor(android.graphics.Color.BLACK)
-                isClickable = true
-                isFocusable = true
-            }
-            val videoHost = FrameLayout(context)
-            (webView.parent as? ViewGroup)?.removeView(webView)
-            videoHost.addView(
-                webView,
-                FrameLayout.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT,
-                    ViewGroup.LayoutParams.MATCH_PARENT,
-                ),
-            )
-            overlay.addView(
-                videoHost,
-                FrameLayout.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT,
-                    ViewGroup.LayoutParams.MATCH_PARENT,
-                ),
-            )
-            val close = android.widget.ImageButton(context).apply {
-                setImageResource(android.R.drawable.ic_menu_close_clear_cancel)
-                setBackgroundColor(android.graphics.Color.TRANSPARENT)
-                contentDescription =
-                    context.getString(R.string.detail_player_fullscreen_exit)
-                setOnClickListener {
-                    if (holder.isHtmlFullscreen) holder.requestExitHtmlFullscreen()
-                    else onExit()
-                }
-                val pad = (8 * density).toInt()
-                setPadding(pad, pad, pad, pad)
-                tag = FULLSCREEN_CLOSE_TAG
-            }
-            overlay.addView(
-                close,
-                FrameLayout.LayoutParams(
-                    ViewGroup.LayoutParams.WRAP_CONTENT,
-                    ViewGroup.LayoutParams.WRAP_CONTENT,
-                    android.view.Gravity.END or android.view.Gravity.TOP,
-                ).also {
-                    val m = (8 * density).toInt()
-                    it.setMargins(m, fullscreenCloseTopMargin(decor, density), m, m)
-                },
-            )
-            bindFullscreenLayoutListener(overlay, videoHost)
-            decor.addView(
-                overlay,
-                FrameLayout.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT,
-                    ViewGroup.LayoutParams.MATCH_PARENT,
-                ),
-            )
-            holder.fullscreenOverlay = overlay
-            refreshWebViewSurface(webView)
-        }
-        onDispose {
-            if (holder.isHtmlFullscreen) {
-                holder.hideHtmlFullscreen()
-            }
-            val wv = holder.webView
-            val overlay = holder.fullscreenOverlay
-            val inline = holder.inlineContainer
-            if (overlay != null) {
-                if (wv != null) {
-                    (wv.parent as? ViewGroup)?.removeView(wv)
-                    if (inline != null && wv.parent == null) {
-                        inline.addView(
-                            wv,
-                            FrameLayout.LayoutParams(
-                                ViewGroup.LayoutParams.MATCH_PARENT,
-                                ViewGroup.LayoutParams.MATCH_PARENT,
-                            ),
-                        )
-                        refreshWebViewSurface(wv)
+        if (activity == null || webView == null) return@LaunchedEffect
+        // Уже на decor (item пересоздали) — только обновить крестик.
+        holder.fullscreenOverlay?.let { overlay ->
+            for (i in 0 until overlay.childCount) {
+                val child = overlay.getChildAt(i)
+                if (child.tag == FULLSCREEN_CLOSE_TAG) {
+                    child.setOnClickListener {
+                        if (holder.isHtmlFullscreen) holder.requestExitHtmlFullscreen()
+                        else {
+                            holder.onCinemaExit?.invoke() ?: onExitUpdated()
+                        }
                     }
                 }
-                (overlay.parent as? ViewGroup)?.removeView(overlay)
-                holder.fullscreenOverlay = null
             }
+            return@LaunchedEffect
         }
+        val decor = activity.window.decorView as ViewGroup
+        val density = context.resources.displayMetrics.density
+        val overlay = FrameLayout(context).apply {
+            setBackgroundColor(android.graphics.Color.BLACK)
+            isClickable = true
+            isFocusable = true
+        }
+        val videoHost = FrameLayout(context)
+        (webView.parent as? ViewGroup)?.removeView(webView)
+        videoHost.addView(
+            webView,
+            FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT,
+            ),
+        )
+        overlay.addView(
+            videoHost,
+            FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT,
+            ),
+        )
+        val close = android.widget.ImageButton(context).apply {
+            setImageResource(android.R.drawable.ic_menu_close_clear_cancel)
+            setBackgroundColor(android.graphics.Color.TRANSPARENT)
+            contentDescription =
+                context.getString(R.string.detail_player_fullscreen_exit)
+            setOnClickListener {
+                if (holder.isHtmlFullscreen) holder.requestExitHtmlFullscreen()
+                else holder.onCinemaExit?.invoke() ?: onExitUpdated()
+            }
+            val pad = (8 * density).toInt()
+            setPadding(pad, pad, pad, pad)
+            tag = FULLSCREEN_CLOSE_TAG
+        }
+        overlay.addView(
+            close,
+            FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                android.view.Gravity.END or android.view.Gravity.TOP,
+            ).also {
+                val m = (8 * density).toInt()
+                it.setMargins(m, fullscreenCloseTopMargin(decor, density), m, m)
+            },
+        )
+        bindFullscreenLayoutListener(overlay, videoHost)
+        decor.addView(
+            overlay,
+            FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT,
+            ),
+        )
+        holder.fullscreenOverlay = overlay
+        refreshWebViewSurface(webView)
     }
 }
 
@@ -1175,7 +1224,24 @@ private fun createPlayerWebView(
             val transport = resultMsg?.obj as? WebView.WebViewTransport ?: return false
             transport.webView = popup
             resultMsg.sendToTarget()
+            // Если URL так и не пришёл — не держим orphan WebView.
+            popup.postDelayed({
+                runCatching {
+                    if (popup.parent == null) {
+                        popup.stopLoading()
+                        popup.destroy()
+                    }
+                }
+            }, 15_000L)
             return true
+        }
+
+        override fun onCloseWindow(window: WebView?) {
+            runCatching {
+                window?.stopLoading()
+                (window?.parent as? ViewGroup)?.removeView(window)
+                window?.destroy()
+            }
         }
 
         override fun onShowCustomView(view: View?, callback: CustomViewCallback?) {
@@ -1230,7 +1296,6 @@ private fun createPlayerWebView(
         }
 
         override fun onPageFinished(view: WebView?, finishedUrl: String?) {
-            android.util.Log.i("PlayerWebView", "finished $finishedUrl")
             val fs = holder.fullscreenOverlay != null || holder.isHtmlFullscreen
             view?.let { applyPlayerContentZoom(it, enabled = fs) }
         }

@@ -47,7 +47,8 @@ app/src/main/java/com/spywer/yoho/
   ui/
     main/        # нижняя навигация
     home/ search/ favorites/ account/
-    detail/      # TitleDetail* (экран, плеер, расписание, герой)
+    detail/      # TitleDetail* (экран, кино-плеер, расписание, герой)
+    trailer/     # TrailerPlayerActivity + YouTube/VK (общий UI с Home/Detail)
     components/  # PosterCard, TrailerCard
     theme/ layout/
 ```
@@ -55,6 +56,7 @@ app/src/main/java/com/spywer/yoho/
 ## Заметки
 
 - Без входа часть плееров и личные полки недоступны (как на сайте).
+- Кино-плеер и трейлеры — разные поверхности (см. `docs/ANDROID.md` → Плеер и трейлеры).
 - Иконка приложения: белые **YH** на фоне `#1A2026`.
 - Документация: `docs/API.md` (0.1.42), `docs/openapi.yaml`, `docs/ANDROID.md`
 - Локальный mock: `mock-api/` (см. `mock-api/README.md`)

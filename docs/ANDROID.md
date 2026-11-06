@@ -66,3 +66,44 @@
 - `href`: `/series/{kp}` для tv/anime, `/film/{kp}` для movie
 - Дневник `statusLabel`: русские строки UI («Хочу посмотреть», …)
 - `contains` ответ: `{ "inDiary": true, "statusLabel": "…" }`
+
+## Плеер и трейлеры
+
+Две разные поверхности — не смешивать поведение ориентации и lifecycle.
+
+### Карточка: кино-плеер (`ui/detail`)
+
+| Что | Как |
+|-----|-----|
+| UI | `PlayerBlock` + `PlayerWebView` в `TitleDetailScreen` |
+| Скролл деталки | `Column` + `verticalScroll` (не `LazyColumn`): иначе при ландшафте item плеера dispose → мигание FS/WebView |
+| WebView | `PlayerWebViewHolder` живёт на экране деталки (`remember` по id), `destroy()` при уходе |
+| Cinema FS | reparent WebView на `window.decorView` (не Dialog): Dialog ломал surface при возврате |
+| HTML5 FS | отдельный слой на decor (`onShowCustomView` / `CustomViewCallback`) |
+| Выход из cinema | только крестик / Back / `exitCinema` — не tear-down по `enabled=false` composition |
+| Ориентация в FS | `SCREEN_ORIENTATION_SENSOR` только пока cinema/HTML FS активен; иначе прежняя ориентация Activity |
+| System bars | скрываются на время FS (`PlayerSystemBarsEffect`) |
+| Activity | `TitleDetailActivity` / `MainActivity`: `configChanges` orientation\|screenSize\|… без recreate |
+
+Collaps и похожие iframe: shell/`putShell` на стороне моделей плеера — чтобы не перезагружать мусор при смене опций.
+
+### Трейлеры (`ui/trailer`)
+
+| Что | Как |
+|-----|-----|
+| Вход | `Context.openTrailerPlayer(...)` с Home и Detail |
+| UI | `TrailerPlayerActivity` + `TrailerPlayerScreen` (YouTube IFrame lib / VK WebView) |
+| Зачем Activity | своё окно: не крутит SENSOR/config у Main/Detail и не бьёт кино-плеер |
+| Ориентация | **не** форсим (`screenOrientation` не задаём) — решает система / автоповорот пользователя |
+| YouTube FS | `FullscreenListener` → view на decor |
+| VK FS | `onShowCustomView` → decor; при выходе обязателен `CustomViewCallback.onCustomViewHidden()` |
+| System bars | только на окне трейлера (`TrailerFullscreenSystemBarsEffect`) |
+
+Не возвращать трейлер в Compose `Dialog` на хосте деталки: ориентация и WebView surface снова поедут в кино-плеер.
+
+### Утечки / cleanup (кратко)
+
+- Holder: `destroy()` → detach cinema, HTML FS + callback, blank, `WebView.destroy()`
+- Overlay FS: снять `OnLayoutChangeListener` и `postDelayed` при detach
+- Popup `onCreateWindow`: уничтожать в `shouldOverrideUrlLoading` / `onCloseWindow` (+ таймаут)
+- Трейлер YouTube: `lifecycle.removeObserver` + `release()` в `onRelease`

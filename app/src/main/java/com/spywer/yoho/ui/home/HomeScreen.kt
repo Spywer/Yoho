@@ -41,9 +41,6 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -59,8 +56,8 @@ import com.spywer.yoho.R
 import com.spywer.yoho.data.remote.TitleDto
 import com.spywer.yoho.ui.components.PosterCard
 import com.spywer.yoho.ui.components.TrailerCard
-import com.spywer.yoho.ui.components.TrailerPlayerDialog
-import com.spywer.yoho.ui.components.youtubeEmbedUrl
+import com.spywer.yoho.ui.trailer.openTrailerPlayer
+import com.spywer.yoho.ui.trailer.youtubeEmbedUrl
 import com.spywer.yoho.ui.layout.HomeMetrics
 import com.spywer.yoho.ui.layout.LocalHomeMetrics
 import com.spywer.yoho.ui.layout.rememberHomeMetrics
@@ -91,17 +88,6 @@ fun HomeScreen(
             ?: context.startActivity(
                 TitleDetailActivity.intent(context, item.idKp, item.idTmdb, item.mediaType),
             )
-    }
-
-    var playingTrailer by remember {
-        mutableStateOf<Pair<String, String?>?>(null)
-    }
-    playingTrailer?.let { (url, title) ->
-        TrailerPlayerDialog(
-            urlOrKey = url,
-            title = title,
-            onDismiss = { playingTrailer = null },
-        )
     }
 
     CompositionLocalProvider(LocalHomeMetrics provides metrics) {
@@ -286,7 +272,10 @@ fun HomeScreen(
                                             onPlayTrailer = { item ->
                                                 val url = item.trailer?.url
                                                 if (url != null && youtubeEmbedUrl(url) != null) {
-                                                    playingTrailer = url to item.displayTitle()
+                                                    context.openTrailerPlayer(
+                                                        urlOrKey = url,
+                                                        title = item.displayTitle(),
+                                                    )
                                                 } else {
                                                     openTitle(item)
                                                 }

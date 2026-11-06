@@ -199,7 +199,8 @@ internal fun SectionHeader(title: String, size: androidx.compose.ui.unit.TextUni
     )
 }
 
-internal fun androidx.compose.foundation.lazy.LazyListScope.relatedSection(
+@Composable
+internal fun RelatedSection(
     title: String,
     items: List<TitleDto>,
     onOpenTitle: (Int?, Int?, String?) -> Unit,
@@ -209,22 +210,20 @@ internal fun androidx.compose.foundation.lazy.LazyListScope.relatedSection(
     gap: androidx.compose.ui.unit.Dp,
 ) {
     if (items.isEmpty()) return
-    item { SectionHeader(title, titleSize, padding) }
-    item {
-        LazyRow(
-            contentPadding = PaddingValues(horizontal = padding),
-            horizontalArrangement = Arrangement.spacedBy(gap),
-        ) {
-            items(items, key = { it.idKp ?: it.idTmdb ?: it.hashCode() }) { item ->
-                PosterCard(
-                    item = item,
-                    modifier = Modifier.width(cardWidth),
-                    onClick = {
-                        if (item.idKp == null && item.idTmdb == null) return@PosterCard
-                        onOpenTitle(item.idKp, item.idTmdb, item.mediaType)
-                    },
-                )
-            }
+    SectionHeader(title, titleSize, padding)
+    LazyRow(
+        contentPadding = PaddingValues(horizontal = padding),
+        horizontalArrangement = Arrangement.spacedBy(gap),
+    ) {
+        items(items, key = { it.idKp ?: it.idTmdb ?: it.hashCode() }) { item ->
+            PosterCard(
+                item = item,
+                modifier = Modifier.width(cardWidth),
+                onClick = {
+                    if (item.idKp == null && item.idTmdb == null) return@PosterCard
+                    onOpenTitle(item.idKp, item.idTmdb, item.mediaType)
+                },
+            )
         }
     }
 }
