@@ -30,7 +30,7 @@ import androidx.compose.material.icons.automirrored.outlined.Send
 import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.outlined.Email
 import androidx.compose.material.icons.outlined.Info
-import androidx.compose.material.icons.outlined.PhoneAndroid
+import androidx.compose.material.icons.outlined.Apps
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -98,7 +98,8 @@ fun AccountScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
     val metrics = rememberHomeMetrics()
     var registerMode by rememberSaveable { mutableStateOf(false) }
-    var subPage by rememberSaveable { mutableStateOf<AccountSubPage?>(null) }
+    // Не saveable-enum: после добавления AboutApp восстановление могло ронять экран.
+    var subPage by remember { mutableStateOf<AccountSubPage?>(null) }
     val titleSize = (metrics.sectionTitleSize.value + 4f).sp
     val bodySize = (metrics.searchTextSize.value + 2f).sp
     val onAuthForm = state.user == null && !state.loading
@@ -284,7 +285,7 @@ fun AccountScreen(
                 R.string.account_app_version,
                 stringResource(R.string.app_name),
                 BuildConfig.VERSION_NAME,
-                BuildConfig.VERSION_CODE,
+                BuildConfig.VERSION_CODE.toString(),
             ),
             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
             fontSize = metrics.cardMetaSize,
@@ -334,7 +335,7 @@ private fun AccountMenuGrid(
             )
         }
         AccountMenuTile(
-            icon = Icons.Outlined.PhoneAndroid,
+            icon = Icons.Outlined.Apps,
             label = stringResource(R.string.account_about_app),
             textSize = metrics.cardMetaSize,
             onClick = onAboutApp,
@@ -542,7 +543,7 @@ private fun AccountAboutAppPage(
             text = stringResource(
                 R.string.account_about_version,
                 BuildConfig.VERSION_NAME,
-                BuildConfig.VERSION_CODE,
+                BuildConfig.VERSION_CODE.toString(),
             ),
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             fontSize = bodySize,

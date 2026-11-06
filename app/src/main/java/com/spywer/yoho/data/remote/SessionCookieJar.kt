@@ -89,20 +89,23 @@ class SessionCookieJar private constructor(
     }
 
     /**
-     * Перенос session/better-auth cookie на новое зеркало (host-only),
-     * чтобы failover был незаметен для пользователя.
+     * Перенос session/better-auth cookie на новое зеркало (host-only)
+     * при failover — запросы уже идут на [newHost].
      */
     fun migrateSessionTo(newHost: String) {
         val now = System.currentTimeMillis()
         val sessions = memory.values
             .filter { isSessionCookieName(it.name) && it.expiresAt > now }
+            .distinctBy { it.name to it.value }
             .toList()
         if (sessions.isEmpty()) return
 
+        // Убрать копии со старых зеркал, оставить только newHost.
         sessions.forEach { old ->
-            memory.remove(keyOf(old))
+            memory.keys
+                .filter { it.startsWith("${old.name}|") }
+                .forEach { memory.remove(it) }
         }
-        val targetUrl = "https://$newHost/".toHttpUrlOrNull() ?: return
         sessions.forEach { old ->
             val migrated = buildCookie(
                 name = old.name,
@@ -115,7 +118,7 @@ class SessionCookieJar private constructor(
                 httpOnly = old.httpOnly,
             )
             memory[keyOf(migrated)] = migrated
-            syncWebView(targetUrl, migrated)
+            "https://$newHost/".toHttpUrlOrNull()?.let { syncWebView(it, migrated) }
         }
         persistAll()
         flushWebView()

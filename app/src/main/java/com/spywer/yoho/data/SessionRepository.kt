@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import retrofit2.Response
+import java.util.concurrent.atomic.AtomicInteger
 
 data class SessionUiState(
     val loading: Boolean = true,
@@ -29,19 +30,29 @@ object SessionRepository {
     private val _state = MutableStateFlow(SessionUiState())
     val state: StateFlow<SessionUiState> = _state.asStateFlow()
 
+    /** Инвалидирует устаревший refresh (гонка с signIn/signUp). */
+    private val generation = AtomicInteger(0)
+
     suspend fun refresh() {
-        _state.update { it.copy(loading = true, error = null) }
+        val gen = generation.get()
+        _state.update { it.copy(loading = it.user == null, error = null) }
         val user = fetchCurrentUser()
-        _state.update {
-            it.copy(
-                loading = false,
-                user = user,
-                error = null,
-            )
+        if (gen != generation.get()) return
+        _state.update { prev ->
+            when {
+                user != null ->
+                    prev.copy(loading = false, user = user, error = null)
+                // Не затирать успешный логин / сессию, если get-session временно пуст.
+                prev.user != null && SessionCookieJar.get().hasSessionCookie() ->
+                    prev.copy(loading = false, error = null)
+                else ->
+                    prev.copy(loading = false, user = null, error = null)
+            }
         }
     }
 
     suspend fun signIn(email: String, password: String): Boolean {
+        generation.incrementAndGet()
         _state.update { it.copy(busy = true, error = null) }
         return runCatching {
             api.signInEmail(SignInEmailRequest(email = email.trim(), password = password))
@@ -65,6 +76,7 @@ object SessionRepository {
         username: String,
         name: String,
     ): Boolean {
+        generation.incrementAndGet()
         _state.update { it.copy(busy = true, error = null) }
         val nick = username.trim()
         val display = name.trim().ifBlank { nick }
@@ -94,6 +106,7 @@ object SessionRepository {
     }
 
     suspend fun signOut() {
+        generation.incrementAndGet()
         _state.update { it.copy(busy = true, error = null) }
         runCatching { api.signOut() }
         clearCookies()
