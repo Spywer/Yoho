@@ -1,5 +1,11 @@
 <resources>
     <string name="app_name">YoHo</string>
+    <string name="account_app_version">%1$s · %2$s</string>
+    <string name="account_settings">Настройки</string>
+    <string name="account_about">О сервисе</string>
+    <string name="account_settings_empty">Пока нечего настраивать</string>
+    <string name="account_about_body">YoHo — каталог фильмов и сериалов с плеерами и озвучками. Приложение для Android.</string>
+    <string name="account_about_open_site">Открыть сайт</string>
     <string name="nav_home">Главная</string>
     <string name="nav_catalog">Каталог</string>
     <string name="nav_favorites">Избранное</string>

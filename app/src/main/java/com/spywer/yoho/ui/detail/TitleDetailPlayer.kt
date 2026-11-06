@@ -9,6 +9,7 @@ import android.content.res.Configuration
 import android.os.Message
 import android.view.View
 import android.view.ViewGroup
+import android.view.WindowManager
 import android.webkit.CookieManager
 import android.webkit.PermissionRequest
 import android.webkit.WebChromeClient
@@ -165,6 +166,7 @@ internal fun PlayerBlock(
     DetailPipEligibilityEffect(eligible = hasPlayer)
     DetailPipWebViewBindEffect(webView = webHolder.webView)
     PlayerSystemBarsEffect(hidden = fsActive)
+    PlayerKeepScreenOnEffect(enabled = fsActive)
     PlayerFullscreenOrientationEffect(active = fsActive)
     // Detach только через exitCinema/крестик — не по enabled=false.
     PlayerFullscreenEffect(
@@ -654,6 +656,21 @@ private fun PlayerUnderBar(
                     modifier = Modifier.size(iconSize),
                 )
             }
+        }
+    }
+}
+
+@Composable
+private fun PlayerKeepScreenOnEffect(enabled: Boolean) {
+    val context = LocalContext.current
+    DisposableEffect(enabled) {
+        val window = context.findActivity()?.window
+        if (window == null || !enabled) {
+            return@DisposableEffect onDispose { }
+        }
+        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        onDispose {
+            window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         }
     }
 }

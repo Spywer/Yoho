@@ -1,7 +1,11 @@
 package com.spywer.yoho.ui.account
 
+import android.content.Intent
+import android.net.Uri
 import android.util.Patterns
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -21,6 +25,8 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ErrorOutline
+import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -31,7 +37,6 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import com.spywer.yoho.ui.components.YohoBackButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -42,23 +47,33 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
+import com.spywer.yoho.BuildConfig
 import com.spywer.yoho.R
+import com.spywer.yoho.data.remote.SiteHttp
+import com.spywer.yoho.ui.components.YohoBackButton
 import com.spywer.yoho.ui.layout.HomeMetrics
-import androidx.activity.compose.BackHandler
 import com.spywer.yoho.ui.layout.rememberHomeMetrics
+
+private enum class AccountSubPage {
+    Settings,
+    About,
+}
 
 @Composable
 fun AccountScreen(
@@ -68,31 +83,47 @@ fun AccountScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
     val metrics = rememberHomeMetrics()
     var registerMode by rememberSaveable { mutableStateOf(false) }
+    var subPage by rememberSaveable { mutableStateOf<AccountSubPage?>(null) }
     val titleSize = (metrics.sectionTitleSize.value + 4f).sp
     val bodySize = (metrics.searchTextSize.value + 2f).sp
     val onAuthForm = state.user == null && !state.loading
 
-    BackHandler(enabled = onAuthForm && (registerMode || onBack != null)) {
-        if (registerMode) {
-            registerMode = false
-        } else {
-            onBack?.invoke()
+    BackHandler(enabled = subPage != null || (onAuthForm && (registerMode || onBack != null))) {
+        when {
+            subPage != null -> subPage = null
+            registerMode -> registerMode = false
+            else -> onBack?.invoke()
         }
     }
 
     LaunchedEffect(Unit) {
         viewModel.refresh()
     }
-
+    when (val page = subPage) {
+        AccountSubPage.Settings -> AccountSettingsPage(
+            metrics = metrics,
+            titleSize = titleSize,
+            bodySize = bodySize,
+        )
+        AccountSubPage.About -> AccountAboutPage(
+            metrics = metrics,
+            titleSize = titleSize,
+            bodySize = bodySize,
+        )
+        null -> Box(
+        Modifier
+            .fillMaxSize()
+            .statusBarsPadding(),
+    ) {
     Column(
         Modifier
             .fillMaxSize()
-            .statusBarsPadding()
             .verticalScroll(rememberScrollState())
             .padding(
                 horizontal = metrics.screenPadding,
                 vertical = metrics.sectionGap,
-            ),
+            )
+            .padding(bottom = 40.dp),
     ) {
         when {
             state.loading -> {
@@ -216,6 +247,183 @@ fun AccountScreen(
                     onSignUp = viewModel::signUp,
                 )
             }
+        }
+        Spacer(Modifier.height(if (metrics.isTablet) 48.dp else 36.dp))
+        AccountMenuGrid(
+            metrics = metrics,
+            onSettings = { subPage = AccountSubPage.Settings },
+            onAbout = { subPage = AccountSubPage.About },
+        )
+    }
+        Text(
+            text = stringResource(
+                R.string.account_app_version,
+                stringResource(R.string.app_name),
+                BuildConfig.VERSION_NAME,
+            ),
+            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+            fontSize = metrics.cardMetaSize,
+            textAlign = TextAlign.Center,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth()
+                .padding(
+                    horizontal = metrics.screenPadding,
+                    vertical = metrics.sectionGap,
+                ),
+        )
+    }
+    }
+}
+
+@Composable
+private fun AccountMenuGrid(
+    metrics: HomeMetrics,
+    onSettings: () -> Unit,
+    onAbout: () -> Unit,
+) {
+    Row(
+        Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(
+            metrics.cardGap,
+            Alignment.CenterHorizontally,
+        ),
+    ) {
+        val tileHeight = if (metrics.isTablet) 112.dp else 96.dp
+        AccountMenuTile(
+            icon = Icons.Outlined.Settings,
+            label = stringResource(R.string.account_settings),
+            textSize = metrics.cardMetaSize,
+            onClick = onSettings,
+            modifier = Modifier.weight(1f).height(tileHeight),
+        )
+        AccountMenuTile(
+            icon = Icons.Outlined.Info,
+            label = stringResource(R.string.account_about),
+            textSize = metrics.cardMetaSize,
+            onClick = onAbout,
+            modifier = Modifier.weight(1f).height(tileHeight),
+        )
+    }
+}
+
+@Composable
+private fun AccountMenuTile(
+    icon: ImageVector,
+    label: String,
+    textSize: TextUnit,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+        modifier = modifier
+            .clip(RoundedCornerShape(14.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .clickable(onClick = onClick)
+            .padding(12.dp),
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = label,
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(if (textSize.value >= 16f) 36.dp else 32.dp),
+        )
+        Spacer(Modifier.height(10.dp))
+        Text(
+            text = label,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            fontSize = textSize,
+            fontWeight = FontWeight.Medium,
+            textAlign = TextAlign.Center,
+            maxLines = 2,
+        )
+    }
+}
+
+@Composable
+private fun AccountSettingsPage(
+    metrics: HomeMetrics,
+    titleSize: TextUnit,
+    bodySize: TextUnit,
+) {
+    Column(
+        Modifier
+            .fillMaxSize()
+            .statusBarsPadding()
+            .padding(horizontal = metrics.screenPadding, vertical = metrics.sectionGap),
+    ) {
+        Text(
+            text = stringResource(R.string.account_settings),
+            color = MaterialTheme.colorScheme.onBackground,
+            fontSize = titleSize,
+            fontWeight = FontWeight.Bold,
+        )
+        Spacer(Modifier.height(metrics.sectionGap * 2))
+        Text(
+            text = stringResource(R.string.account_settings_empty),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            fontSize = bodySize,
+        )
+    }
+}
+
+@Composable
+private fun AccountAboutPage(
+    metrics: HomeMetrics,
+    titleSize: TextUnit,
+    bodySize: TextUnit,
+) {
+    val context = LocalContext.current
+    Column(
+        Modifier
+            .fillMaxSize()
+            .statusBarsPadding()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = metrics.screenPadding, vertical = metrics.sectionGap),
+    ) {
+        Text(
+            text = stringResource(R.string.account_about),
+            color = MaterialTheme.colorScheme.onBackground,
+            fontSize = titleSize,
+            fontWeight = FontWeight.Bold,
+        )
+        Spacer(Modifier.height(metrics.sectionGap * 2))
+        Text(
+            text = stringResource(
+                R.string.account_app_version,
+                stringResource(R.string.app_name),
+                BuildConfig.VERSION_NAME,
+            ),
+            color = MaterialTheme.colorScheme.onBackground,
+            fontWeight = FontWeight.SemiBold,
+            fontSize = bodySize,
+        )
+        Spacer(Modifier.height(metrics.sectionGap))
+        Text(
+            text = stringResource(R.string.account_about_body),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            fontSize = bodySize,
+            lineHeight = metrics.lineOf(bodySize),
+        )
+        Spacer(Modifier.height(metrics.sectionGap * 2))
+        OutlinedButton(
+            onClick = {
+                runCatching {
+                    context.startActivity(
+                        Intent(Intent.ACTION_VIEW, Uri.parse(SiteHttp.ORIGIN)),
+                    )
+                }
+            },
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(if (metrics.isTablet) 52.dp else metrics.searchHeight),
+        ) {
+            Text(
+                stringResource(R.string.account_about_open_site),
+                fontSize = bodySize,
+            )
         }
     }
 }
