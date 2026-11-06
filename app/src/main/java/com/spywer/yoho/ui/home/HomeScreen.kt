@@ -283,7 +283,9 @@ fun HomeScreen(
                         Spacer(Modifier.height(metrics.sectionGap))
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(metrics.blockGap),
+                            horizontalArrangement = Arrangement.spacedBy(
+                                if (metrics.isTablet) metrics.blockGap else 10.dp,
+                            ),
                         ) {
                             if (searchActive) {
                                 HomeSearchField(
@@ -311,17 +313,22 @@ fun HomeScreen(
                                     modifier = Modifier.weight(1f),
                                 )
                             }
-                            IconButton(
-                                onClick = ::openCatalog,
+                            // Box+clickable: IconButton тянет min 48dp и визуально выше поля 44dp.
+                            Box(
                                 modifier = Modifier
                                     .size(metrics.searchHeight)
                                     .clip(RoundedCornerShape(12.dp))
-                                    .background(MaterialTheme.colorScheme.surfaceVariant),
+                                    .background(MaterialTheme.colorScheme.surfaceVariant)
+                                    .clickable(onClick = ::openCatalog),
+                                contentAlignment = Alignment.Center,
                             ) {
                                 Icon(
                                     imageVector = Icons.Filled.FilterList,
                                     contentDescription = stringResource(R.string.filters),
                                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(
+                                        if (metrics.isTablet) 28.dp else 22.dp,
+                                    ),
                                 )
                             }
                         }
