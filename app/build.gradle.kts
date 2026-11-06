@@ -3,16 +3,6 @@ plugins {
     alias(libs.plugins.kotlin.compose)
 }
 
-val apiBaseUrl: String =
-    rootProject.file("api.properties")
-        .takeIf { it.exists() }
-        ?.readLines()
-        ?.map { it.trim() }
-        ?.firstOrNull { it.startsWith("API_BASE_URL=") }
-        ?.substringAfter("=")
-        ?.trim()
-        ?: "http://10.0.2.2:8787/"
-
 android {
     namespace = "com.spywer.yoho"
     compileSdk {
@@ -27,8 +17,6 @@ android {
         versionName = "1.0.4"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-
-        buildConfigField("String", "API_BASE_URL", "\"$apiBaseUrl\"")
     }
 
     buildTypes {

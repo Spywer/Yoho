@@ -12,18 +12,7 @@
 ## Запуск
 
 1. Android Studio / JDK 11+
-2. База API в `api.properties`:
-
-```properties
-API_BASE_URL=https://reyoho.com/
-```
-
-Для локального mock (эмулятор):
-
-```properties
-API_BASE_URL=http://10.0.2.2:8787/
-```
-
+2. База API — `SiteHttp` (зеркала `reyoho.com` / `reyoho.ru` / `yoho.pw`, failover)
 3. Сборка:
 
 ```bash
@@ -60,4 +49,3 @@ app/src/main/java/com/spywer/yoho/
 - Кино-плеер и трейлеры — разные поверхности (см. `docs/ANDROID.md` → Плеер и трейлеры).
 - Иконка приложения: белые **YH** на фоне `#1A2026`.
 - Документация: `docs/API.md` (0.1.42), `docs/openapi.yaml`, `docs/ANDROID.md`
-- Локальный mock: `mock-api/` (см. `mock-api/README.md`)

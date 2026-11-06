@@ -60,7 +60,9 @@
     <string name="type_tv">Сериалы</string>
     <string name="type_animation">Мультфильмы</string>
     <string name="type_anime">Аниме</string>
-    <string name="error_load">Не удалось загрузить. Проверь mock на :8787</string>
+    <string name="error_load">Не удалось загрузить</string>
+    <string name="error_load_title">Нет соединения</string>
+    <string name="error_load_hint">Проверьте интернет и попробуйте снова</string>
     <string name="detail_about">О фильме</string>
     <string name="detail_about_tv">О сериале</string>
     <string name="detail_about_animation">О мультфильме</string>

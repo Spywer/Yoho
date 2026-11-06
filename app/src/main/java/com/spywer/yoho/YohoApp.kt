@@ -4,11 +4,13 @@ import android.app.Application
 import android.webkit.CookieManager
 import com.spywer.yoho.data.remote.AppContext
 import com.spywer.yoho.data.remote.SessionCookieJar
+import com.spywer.yoho.data.remote.SiteHttp
 
 class YohoApp : Application() {
     override fun onCreate() {
         super.onCreate()
         AppContext.init(this)
+        SiteHttp.ensureLoaded()
         runCatching {
             CookieManager.getInstance().setAcceptCookie(true)
         }

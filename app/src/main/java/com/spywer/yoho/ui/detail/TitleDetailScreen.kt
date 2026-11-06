@@ -54,10 +54,13 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.spywer.yoho.R
+import com.spywer.yoho.data.SessionRepository
 import com.spywer.yoho.data.remote.PlayerChoiceItemDto
+import com.spywer.yoho.data.remote.SessionCookieJar
 import com.spywer.yoho.data.remote.TitleDetailDto
 import com.spywer.yoho.data.remote.TvLastAirDto
 import com.spywer.yoho.data.remote.TvScheduleDto
+import com.spywer.yoho.ui.components.ContentErrorPlaceholder
 import com.spywer.yoho.ui.layout.LocalHomeMetrics
 import com.spywer.yoho.ui.layout.rememberHomeMetrics
 import com.spywer.yoho.ui.trailer.openTrailerPlayer
@@ -70,8 +73,10 @@ fun TitleDetailScreen(
     onOpenGenre: (label: String, mediaType: String?) -> Unit,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val session by SessionRepository.state.collectAsStateWithLifecycle()
     val metrics = rememberHomeMetrics()
     var selectedPersonId by remember { mutableStateOf<Int?>(null) }
+    val playerAllowed = session.isLoggedIn || SessionCookieJar.get().hasSessionCookie()
 
     BackHandler {
         if (selectedPersonId != null) {
@@ -79,6 +84,10 @@ fun TitleDetailScreen(
         } else {
             onBack()
         }
+    }
+
+    LaunchedEffect(playerAllowed) {
+        viewModel.syncPlayerForSession()
     }
 
     val inPip = LocalDetailPip.current?.inPipState?.value == true
@@ -97,23 +106,9 @@ fun TitleDetailScreen(
                 }
 
                 state.error != null && state.detail == null -> {
-                    Column(
-                        Modifier
-                            .fillMaxSize()
-                            .padding(metrics.screenPadding),
-                        verticalArrangement = Arrangement.Center,
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                    ) {
-                        Text(
-                            text = state.error.orEmpty(),
-                            color = MaterialTheme.colorScheme.error,
-                            textAlign = TextAlign.Center,
-                        )
-                        Spacer(Modifier.height(12.dp))
-                        TextButton(onClick = onBack) {
-                            Text(stringResource(R.string.retry))
-                        }
-                    }
+                    ContentErrorPlaceholder(
+                        onRetry = viewModel::retry,
+                    )
                 }
 
                 else -> {
@@ -133,6 +128,7 @@ fun TitleDetailScreen(
                             playerEmbedHtml = state.playerEmbedHtml,
                             playerLoading = state.playerLoading,
                             playerNeedsLogin = state.playerNeedsLogin,
+                            showPlayer = playerAllowed,
                             diaryStatusLabel = state.diaryStatusLabel,
                             diaryBusy = state.diaryBusy,
                             diaryError = state.diaryError,
@@ -184,6 +180,7 @@ private fun DetailContent(
     playerEmbedHtml: String?,
     playerLoading: Boolean,
     playerNeedsLogin: Boolean,
+    showPlayer: Boolean,
     diaryStatusLabel: String?,
     diaryBusy: Boolean,
     diaryError: String?,
@@ -240,7 +237,7 @@ private fun DetailContent(
             playerHolder.destroy()
         }
     }
-    if (pipMode) {
+    if (pipMode && showPlayer) {
         DetailPipEligibilityEffect(eligible = true)
         DetailPipWebViewBindEffect(webView = playerHolder.webView)
         DisposableEffect(playerHolder) {
@@ -420,30 +417,32 @@ private fun DetailContent(
                 }
             }
 
-            PlayerBlock(
-                choices = playerChoices,
-                selectedSource = selectedPlayerSource,
-                iframeUrl = playerIframeUrl,
-                embedHtml = playerEmbedHtml,
-                loading = playerLoading,
-                needsLogin = playerNeedsLogin,
-                mediaType = detail.mediaType,
-                diaryStatusLabel = diaryStatusLabel,
-                diaryBusy = diaryBusy,
-                diaryError = diaryError,
-                diaryNotify = diaryNotify,
-                playerReaction = playerReaction,
-                reactionBusy = reactionBusy,
-                onSelectSource = onSelectPlayerSource,
-                onSetDiaryStatus = onSetDiaryStatus,
-                onRemoveFromDiary = onRemoveFromDiary,
-                onConsumeDiaryNotify = onConsumeDiaryNotify,
-                onPlayerReaction = onPlayerReaction,
-                padding = metrics.screenPadding,
-                metaSize = metrics.cardMetaSize,
-                webHolder = playerHolder,
-                modifier = Modifier.padding(top = metrics.sectionGap),
-            )
+            if (showPlayer) {
+                PlayerBlock(
+                    choices = playerChoices,
+                    selectedSource = selectedPlayerSource,
+                    iframeUrl = playerIframeUrl,
+                    embedHtml = playerEmbedHtml,
+                    loading = playerLoading,
+                    needsLogin = playerNeedsLogin,
+                    mediaType = detail.mediaType,
+                    diaryStatusLabel = diaryStatusLabel,
+                    diaryBusy = diaryBusy,
+                    diaryError = diaryError,
+                    diaryNotify = diaryNotify,
+                    playerReaction = playerReaction,
+                    reactionBusy = reactionBusy,
+                    onSelectSource = onSelectPlayerSource,
+                    onSetDiaryStatus = onSetDiaryStatus,
+                    onRemoveFromDiary = onRemoveFromDiary,
+                    onConsumeDiaryNotify = onConsumeDiaryNotify,
+                    onPlayerReaction = onPlayerReaction,
+                    padding = metrics.screenPadding,
+                    metaSize = metrics.cardMetaSize,
+                    webHolder = playerHolder,
+                    modifier = Modifier.padding(top = metrics.sectionGap),
+                )
+            }
 
         TitleDetailScheduleSection(
             schedule = schedule,

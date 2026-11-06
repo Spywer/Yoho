@@ -6,8 +6,10 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -35,6 +37,7 @@ import com.spywer.yoho.R
 import com.spywer.yoho.data.remote.FavoriteItemDto
 import com.spywer.yoho.data.remote.TitleDto
 import com.spywer.yoho.data.remote.TitleNameDto
+import com.spywer.yoho.ui.components.ContentErrorPlaceholder
 import com.spywer.yoho.ui.components.PosterCard
 import com.spywer.yoho.ui.detail.TitleDetailActivity
 import com.spywer.yoho.ui.layout.LocalHomeMetrics
@@ -87,10 +90,16 @@ fun FavoritesScreen(
                 }
 
                 state.needsLogin -> {
+                    val loginTextSize = if (metrics.isTablet) {
+                        metrics.sectionTitleSize
+                    } else {
+                        metrics.searchTextSize
+                    }
+                    val loginBtnHeight = if (metrics.isTablet) 56.dp else metrics.searchHeight
                     Column(
                         Modifier
                             .fillMaxSize()
-                            .padding(24.dp),
+                            .padding(if (metrics.isTablet) 40.dp else 24.dp),
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.Center,
                     ) {
@@ -98,29 +107,33 @@ fun FavoritesScreen(
                             text = stringResource(R.string.favorites_need_login),
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             textAlign = TextAlign.Center,
+                            fontSize = loginTextSize,
+                            lineHeight = metrics.lineOf(loginTextSize),
+                            fontWeight = if (metrics.isTablet) FontWeight.Medium else FontWeight.Normal,
                         )
                         Button(
                             onClick = onNeedLogin,
-                            modifier = Modifier.padding(top = 16.dp),
+                            modifier = Modifier
+                                .padding(top = if (metrics.isTablet) 28.dp else 16.dp)
+                                .widthIn(min = if (metrics.isTablet) 280.dp else 0.dp)
+                                .height(loginBtnHeight),
                         ) {
-                            Text(stringResource(R.string.account_sign_in))
+                            Text(
+                                text = stringResource(R.string.account_sign_in),
+                                fontSize = if (metrics.isTablet) {
+                                    metrics.searchTextSize
+                                } else {
+                                    metrics.chipTextSize
+                                },
+                            )
                         }
                     }
                 }
 
                 state.error != null && state.favorites.isEmpty() && state.history.isEmpty() -> {
-                    Column(
-                        Modifier
-                            .fillMaxSize()
-                            .padding(24.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center,
-                    ) {
-                        Text(state.error!!, color = MaterialTheme.colorScheme.error)
-                        TextButton(onClick = { viewModel.load() }) {
-                            Text(stringResource(R.string.retry))
-                        }
-                    }
+                    ContentErrorPlaceholder(
+                        onRetry = { viewModel.load() },
+                    )
                 }
 
                 else -> {

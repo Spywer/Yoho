@@ -2,7 +2,6 @@ package com.spywer.yoho.data.remote
 
 import android.content.Context
 import android.webkit.CookieManager
-import com.spywer.yoho.BuildConfig
 import okhttp3.Cookie
 import okhttp3.CookieJar
 import okhttp3.HttpUrl
@@ -87,6 +86,39 @@ class SessionCookieJar private constructor(
         }
         restorePersisted()
         return memory.values.any { isSessionCookieName(it.name) }
+    }
+
+    /**
+     * Перенос session/better-auth cookie на новое зеркало (host-only),
+     * чтобы failover был незаметен для пользователя.
+     */
+    fun migrateSessionTo(newHost: String) {
+        val now = System.currentTimeMillis()
+        val sessions = memory.values
+            .filter { isSessionCookieName(it.name) && it.expiresAt > now }
+            .toList()
+        if (sessions.isEmpty()) return
+
+        sessions.forEach { old ->
+            memory.remove(keyOf(old))
+        }
+        val targetUrl = "https://$newHost/".toHttpUrlOrNull() ?: return
+        sessions.forEach { old ->
+            val migrated = buildCookie(
+                name = old.name,
+                value = old.value,
+                domain = newHost,
+                path = old.path.ifBlank { "/" },
+                expiresAt = old.expiresAt,
+                secure = true,
+                hostOnly = true,
+                httpOnly = old.httpOnly,
+            )
+            memory[keyOf(migrated)] = migrated
+            syncWebView(targetUrl, migrated)
+        }
+        persistAll()
+        flushWebView()
     }
 
     private fun persistAll() {
@@ -308,7 +340,7 @@ class SessionCookieJar private constructor(
         }
 
         private fun apiBaseUrl(): HttpUrl? =
-            BuildConfig.API_BASE_URL.toHttpUrlOrNull()
+            SiteHttp.REFERER.toHttpUrlOrNull()
 
         private fun apiHost(): String? = apiBaseUrl()?.host
     }

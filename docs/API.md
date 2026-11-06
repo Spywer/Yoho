@@ -1610,7 +1610,7 @@ Content-Type: application/json
 
 ## 27. Android-клиент (YoHo app)
 
-Пути, которые реально дергает приложение (`app/.../YohoApi.kt`), база из `api.properties` (`API_BASE_URL`):
+Пути, которые реально дергает приложение (`app/.../YohoApi.kt`), база — `SiteHttp` (`https://reyoho.com/`):
 
 | Группа | Методы |
 |--------|--------|

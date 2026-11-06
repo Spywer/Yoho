@@ -24,6 +24,7 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
@@ -31,8 +32,6 @@ import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -47,6 +46,8 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -54,9 +55,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -68,6 +74,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.spywer.yoho.R
 import com.spywer.yoho.data.remote.TitleDto
+import com.spywer.yoho.ui.components.ContentErrorPlaceholder
 import com.spywer.yoho.ui.components.PosterCard
 import com.spywer.yoho.ui.components.YohoBackButton
 import com.spywer.yoho.ui.detail.TitleDetailActivity
@@ -75,6 +82,7 @@ import com.spywer.yoho.ui.layout.HomeMetrics
 import com.spywer.yoho.ui.layout.LocalHomeMetrics
 import com.spywer.yoho.ui.layout.rememberHomeMetrics
 import com.spywer.yoho.ui.theme.YohoThemeExtras
+import kotlinx.coroutines.delay
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -83,18 +91,27 @@ fun SearchScreen(
     onBack: () -> Unit,
     showBack: Boolean = true,
     title: String? = null,
+    /** false, пока поверх каталога открыта карточка тайтла. */
+    restoreSearchFocus: Boolean = true,
     onOpenTitle: ((idKp: Int?, idTmdb: Int?, mediaType: String?) -> Unit)? = null,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val metrics = rememberHomeMetrics()
     val context = LocalContext.current
     var showFilterSheet by remember { mutableStateOf(false) }
+    val searchFocus = remember { FocusRequester() }
 
     BackHandler(enabled = showFilterSheet || showBack) {
         when {
             showFilterSheet -> showFilterSheet = false
             else -> onBack()
         }
+    }
+
+    LaunchedEffect(restoreSearchFocus) {
+        if (!restoreSearchFocus || state.query.isBlank()) return@LaunchedEffect
+        delay(50)
+        runCatching { searchFocus.requestFocus() }
     }
 
     fun openTitle(item: TitleDto) {
@@ -144,6 +161,7 @@ fun SearchScreen(
                                 onClear = viewModel::clearQuery,
                                 height = metrics.searchHeight,
                                 textSize = metrics.searchTextSize,
+                                focusRequester = searchFocus,
                                 modifier = Modifier.weight(1f),
                             )
                         }
@@ -182,6 +200,7 @@ fun SearchScreen(
                     state = state,
                     metrics = metrics,
                     onLoadMore = viewModel::loadMore,
+                    onRetry = viewModel::refresh,
                     onOpenTitle = ::openTitle,
                 )
             }
@@ -385,6 +404,7 @@ private fun SearchResultsPane(
     state: SearchUiState,
     metrics: HomeMetrics,
     onLoadMore: () -> Unit,
+    onRetry: () -> Unit,
     onOpenTitle: (TitleDto) -> Unit,
 ) {
     SearchContentColumn(metrics) {
@@ -395,6 +415,13 @@ private fun SearchResultsPane(
                 }
             }
 
+            state.error != null && state.results.isEmpty() -> {
+                ContentErrorPlaceholder(
+                    onRetry = onRetry,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
+
             state.results.isEmpty() -> {
                 Column(
                     Modifier.fillMaxSize().padding(24.dp),
@@ -402,26 +429,29 @@ private fun SearchResultsPane(
                     verticalArrangement = Arrangement.Center,
                 ) {
                     Text(
-                        text = if (state.error != null) {
-                            stringResource(R.string.error_load)
-                        } else {
-                            stringResource(R.string.search_empty)
-                        },
+                        text = stringResource(R.string.search_empty),
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         fontSize = metrics.searchTextSize,
                     )
-                    if (!state.error.isNullOrBlank()) {
-                        Text(
-                            text = state.error.orEmpty(),
-                            color = MaterialTheme.colorScheme.error,
-                            fontSize = metrics.cardMetaSize,
-                            modifier = Modifier.padding(top = 8.dp),
-                        )
-                    }
                 }
             }
 
             else -> {
+                val gridState = rememberLazyGridState()
+                val shouldLoadMore by remember(state.hasMore, state.loadingMore, state.loading) {
+                    derivedStateOf {
+                        val info = gridState.layoutInfo
+                        val total = info.totalItemsCount
+                        if (!state.hasMore || state.loadingMore || state.loading || total == 0) {
+                            return@derivedStateOf false
+                        }
+                        val last = info.visibleItemsInfo.lastOrNull()?.index ?: return@derivedStateOf false
+                        last >= total - 6
+                    }
+                }
+                LaunchedEffect(shouldLoadMore) {
+                    if (shouldLoadMore) onLoadMore()
+                }
                 Column(Modifier.fillMaxSize()) {
                     Text(
                         text = stringResource(R.string.search_found, state.total),
@@ -434,6 +464,7 @@ private fun SearchResultsPane(
                     )
                     LazyVerticalGrid(
                         columns = GridCells.Adaptive(metrics.posterLarge),
+                        state = gridState,
                         contentPadding = PaddingValues(
                             horizontal = metrics.screenPadding,
                             vertical = 8.dp,
@@ -451,9 +482,9 @@ private fun SearchResultsPane(
                                 onClick = { onOpenTitle(item) },
                             )
                         }
-                        if (state.hasMore) {
+                        if (state.hasMore || state.loadingMore) {
                             item(
-                                key = "search_show_more",
+                                key = "search_load_more",
                                 span = { GridItemSpan(maxLineSpan) },
                             ) {
                                 Box(
@@ -467,18 +498,6 @@ private fun SearchResultsPane(
                                             color = MaterialTheme.colorScheme.primary,
                                             modifier = Modifier.size(28.dp),
                                         )
-                                    } else {
-                                        Button(
-                                            onClick = onLoadMore,
-                                            colors = ButtonDefaults.buttonColors(
-                                                containerColor = MaterialTheme.colorScheme.primary,
-                                            ),
-                                        ) {
-                                            Text(
-                                                text = stringResource(R.string.search_show_more),
-                                                fontSize = metrics.searchTextSize,
-                                            )
-                                        }
                                     }
                                 }
                             }
@@ -497,8 +516,12 @@ private fun SearchBar(
     onClear: () -> Unit,
     height: Dp,
     textSize: TextUnit,
+    focusRequester: FocusRequester,
     modifier: Modifier = Modifier,
 ) {
+    var focused by remember { mutableStateOf(false) }
+    val keyboard = LocalSoftwareKeyboardController.current
+    val focusManager = LocalFocusManager.current
     Row(
         modifier = modifier
             .height(height)
@@ -523,7 +546,10 @@ private fun SearchBar(
                 fontSize = textSize,
             ),
             cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-            modifier = Modifier.weight(1f),
+            modifier = Modifier
+                .weight(1f)
+                .focusRequester(focusRequester)
+                .onFocusChanged { focused = it.isFocused },
             decorationBox = { inner ->
                 if (query.isEmpty()) {
                     Text(
@@ -544,8 +570,15 @@ private fun SearchBar(
                 inner()
             },
         )
-        if (query.isNotEmpty()) {
-            IconButton(onClick = onClear, modifier = Modifier.size(32.dp)) {
+        if (focused) {
+            IconButton(
+                onClick = {
+                    onClear()
+                    keyboard?.hide()
+                    focusManager.clearFocus()
+                },
+                modifier = Modifier.size(32.dp),
+            ) {
                 Icon(
                     imageVector = Icons.Filled.Clear,
                     contentDescription = null,

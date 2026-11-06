@@ -86,6 +86,7 @@ import com.spywer.yoho.data.remote.SuggestItemDto
 import com.spywer.yoho.data.remote.TitleDto
 import com.spywer.yoho.data.remote.absMediaUrl
 import com.spywer.yoho.data.remote.displayTitle
+import com.spywer.yoho.ui.components.ContentErrorPlaceholder
 import com.spywer.yoho.ui.components.PosterCard
 import com.spywer.yoho.ui.components.TrailerCard
 import com.spywer.yoho.ui.detail.PersonSheet
@@ -369,28 +370,9 @@ fun HomeScreen(
                     }
 
                     state.error != null && !state.hasContent -> {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .padding(24.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.Center,
-                        ) {
-                            Text(
-                                text = stringResource(R.string.error_load),
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                fontSize = metrics.searchTextSize,
-                            )
-                            Text(
-                                text = state.error.orEmpty(),
-                                color = MaterialTheme.colorScheme.error,
-                                fontSize = metrics.cardMetaSize,
-                                modifier = Modifier.padding(top = 8.dp),
-                            )
-                            TextButton(onClick = { viewModel.load() }) {
-                                Text(stringResource(R.string.retry), fontSize = metrics.searchTextSize)
-                            }
-                        }
+                        ContentErrorPlaceholder(
+                            onRetry = { viewModel.load() },
+                        )
                     }
 
                     else -> {

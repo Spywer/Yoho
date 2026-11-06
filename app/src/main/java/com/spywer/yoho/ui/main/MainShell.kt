@@ -254,6 +254,7 @@ fun MainShell() {
                         onBack = { tab = MainTab.Home },
                         showBack = false,
                         title = stringResource(R.string.nav_catalog),
+                        restoreSearchFocus = titleStack.isEmpty(),
                         onOpenTitle = ::openTitle,
                     )
                     MainTab.Favorites -> FavoritesScreen(

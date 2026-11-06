@@ -1,7 +1,6 @@
 package com.spywer.yoho.data.remote
 
 import com.google.gson.annotations.SerializedName
-import com.spywer.yoho.BuildConfig
 import kotlin.jvm.Transient
 
 data class TrendingResponse(
@@ -619,7 +618,7 @@ private fun PlayerTurboDto.toEmbedUrl(): String? =
     baseUrl?.takeIf { it.isNotBlank() }?.ensureAbsHttpUrl()?.withQueryParam("api", "1")
 
 private fun String.toCollapsEmbedUrl(): String =
-    ensureAbsHttpUrl().withQueryParam("host", "reyoho.com")
+    ensureAbsHttpUrl().withQueryParam("host", SiteHttp.HOST)
 
 private fun PlayerVideoseedDto.toEmbedUrl(): String? =
     baseUrl?.takeIf { it.isNotBlank() }?.ensureAbsHttpUrl()
@@ -1210,7 +1209,7 @@ fun TitleDto.typeLabel(): String = when (mediaType) {
 fun String?.absMediaUrl(): String? {
     if (isNullOrBlank()) return null
     if (startsWith("http://") || startsWith("https://")) return this
-    val base = BuildConfig.API_BASE_URL.trimEnd('/')
+    val base = SiteHttp.ORIGIN
     return base + if (startsWith("/")) this else "/$this"
 }
 
@@ -1228,7 +1227,7 @@ fun TitleDetailDto.withResolvedMediaUrls(): TitleDetailDto = copy(
 
 fun String?.toRelativeMediaPath(): String? {
     if (isNullOrBlank()) return null
-    val base = BuildConfig.API_BASE_URL.trimEnd('/')
+    val base = SiteHttp.ORIGIN
     return when {
         startsWith(base) -> removePrefix(base).ifBlank { "/" }
         startsWith("http://") || startsWith("https://") -> {

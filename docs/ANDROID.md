@@ -4,7 +4,11 @@
 
 ## Конфиг
 
-`api.properties` → `BuildConfig.API_BASE_URL` (по умолчанию `https://reyoho.com/`).
+Зеркала в `SiteHttp.CANDIDATES`: `reyoho.com`, `reyoho.ru`, `yoho.pw`.
+
+Активный хост: `SiteHttp.HOST` → `ORIGIN` / `REFERER` (persist в `site_endpoints`).
+
+При `IOException` или HTTP 502/503/504 OkHttp failover: cooldown **10 мин** на мёртвое зеркало, перенос session-cookie на следующее (`SessionCookieJar.migrateSessionTo`), retry без участия пользователя.
 
 Сессия: OkHttp `SessionCookieJar` + Better Auth cookie (`__Secure-better-auth.session_token` / `yoho_session`).
 

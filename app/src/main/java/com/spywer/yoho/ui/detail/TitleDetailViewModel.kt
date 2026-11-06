@@ -74,12 +74,22 @@ class TitleDetailViewModel : ViewModel() {
     private var playerJob: Job? = null
     private var scheduleJob: Job? = null
     private var lastAirJob: Job? = null
+    private var lastIdKp: Int? = null
+    private var lastIdTmdb: Int? = null
+    private var lastMediaType: String? = null
+
+    fun retry() {
+        load(lastIdKp, lastIdTmdb, lastMediaType)
+    }
 
     fun load(idKp: Int?, idTmdb: Int?, mediaType: String?) {
         if ((idKp == null || idKp <= 0) && (idTmdb == null || idTmdb <= 0)) {
             _state.update { it.copy(loading = false, error = "Нет id тайтла", detail = null) }
             return
         }
+        lastIdKp = idKp
+        lastIdTmdb = idTmdb
+        lastMediaType = mediaType
         loadJob?.cancel()
         playerJob?.cancel()
         scheduleJob?.cancel()
@@ -121,7 +131,7 @@ class TitleDetailViewModel : ViewModel() {
                 refreshFavoriteState(detail.idKp)
                 refreshDiaryState(detail.playerItemId())
                 refreshPlayerReaction(detail.playerItemId())
-                loadPlayerBlock(detail)
+                syncPlayerForSession()
                 if (detail.isSeriesLike()) {
                     loadSchedule(detail.idTmdb, detail.idKp)
                     loadLastAir(detail.idTmdb)
@@ -402,6 +412,31 @@ class TitleDetailViewModel : ViewModel() {
         }
     }
 
+    /** Плеер только для авторизованных; гости — без блока и без запросов. */
+    fun syncPlayerForSession() {
+        val detail = _state.value.detail ?: return
+        if (hasPlayerSession()) {
+            loadPlayerBlock(detail)
+        } else {
+            clearPlayerBlock()
+        }
+    }
+
+    private fun clearPlayerBlock() {
+        playerJob?.cancel()
+        _state.update {
+            it.copy(
+                playerLoading = false,
+                playerChoices = emptyList(),
+                playerSources = emptyList(),
+                selectedPlayerSource = null,
+                playerIframeUrl = null,
+                playerEmbedHtml = null,
+                playerNeedsLogin = false,
+            )
+        }
+    }
+
     private fun loadPlayerBlock(detail: TitleDetailDto) {
         playerJob?.cancel()
         val itemId = detail.playerItemId()
@@ -412,17 +447,7 @@ class TitleDetailViewModel : ViewModel() {
         }
         val playerId = (detail.idTmdb?.takeIf { it > 0 } ?: detail.idKp)?.toString()
         if (itemId == null || playerId == null) {
-            _state.update {
-                it.copy(
-                    playerLoading = false,
-                    playerChoices = emptyList(),
-                    playerSources = emptyList(),
-                    selectedPlayerSource = null,
-                    playerIframeUrl = null,
-                    playerEmbedHtml = null,
-                    playerNeedsLogin = false,
-                )
-            }
+            clearPlayerBlock()
             return
         }
         playerJob = viewModelScope.launch {
