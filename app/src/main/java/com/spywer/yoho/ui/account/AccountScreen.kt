@@ -30,6 +30,7 @@ import androidx.compose.material.icons.automirrored.outlined.Send
 import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.outlined.Email
 import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.PhoneAndroid
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -86,6 +87,7 @@ import com.spywer.yoho.ui.support.SupportProjectDialog
 private enum class AccountSubPage {
     Settings,
     About,
+    AboutApp,
 }
 
 @Composable
@@ -119,7 +121,13 @@ fun AccountScreen(
             bodySize = bodySize,
             onBack = { subPage = null },
         )
-        AccountSubPage.About -> AccountAboutPage(
+        AccountSubPage.About -> AccountAboutServicePage(
+            metrics = metrics,
+            titleSize = titleSize,
+            bodySize = bodySize,
+            onBack = { subPage = null },
+        )
+        AccountSubPage.AboutApp -> AccountAboutAppPage(
             metrics = metrics,
             titleSize = titleSize,
             bodySize = bodySize,
@@ -268,6 +276,7 @@ fun AccountScreen(
             metrics = metrics,
             onSettings = { subPage = AccountSubPage.Settings },
             onAbout = { subPage = AccountSubPage.About },
+            onAboutApp = { subPage = AccountSubPage.AboutApp },
         )
     }
         Text(
@@ -275,6 +284,7 @@ fun AccountScreen(
                 R.string.account_app_version,
                 stringResource(R.string.app_name),
                 BuildConfig.VERSION_NAME,
+                BuildConfig.VERSION_CODE,
             ),
             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
             fontSize = metrics.cardMetaSize,
@@ -296,28 +306,39 @@ private fun AccountMenuGrid(
     metrics: HomeMetrics,
     onSettings: () -> Unit,
     onAbout: () -> Unit,
+    onAboutApp: () -> Unit,
 ) {
-    Row(
+    val tileHeight = if (metrics.isTablet) 112.dp else 96.dp
+    val gap = metrics.cardGap
+    Column(
         Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(
-            metrics.cardGap,
-            Alignment.CenterHorizontally,
-        ),
+        verticalArrangement = Arrangement.spacedBy(gap),
     ) {
-        val tileHeight = if (metrics.isTablet) 112.dp else 96.dp
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(gap),
+        ) {
+            AccountMenuTile(
+                icon = Icons.Outlined.Settings,
+                label = stringResource(R.string.account_settings),
+                textSize = metrics.cardMetaSize,
+                onClick = onSettings,
+                modifier = Modifier.weight(1f).height(tileHeight),
+            )
+            AccountMenuTile(
+                icon = Icons.Outlined.Info,
+                label = stringResource(R.string.account_about),
+                textSize = metrics.cardMetaSize,
+                onClick = onAbout,
+                modifier = Modifier.weight(1f).height(tileHeight),
+            )
+        }
         AccountMenuTile(
-            icon = Icons.Outlined.Settings,
-            label = stringResource(R.string.account_settings),
+            icon = Icons.Outlined.PhoneAndroid,
+            label = stringResource(R.string.account_about_app),
             textSize = metrics.cardMetaSize,
-            onClick = onSettings,
-            modifier = Modifier.weight(1f).height(tileHeight),
-        )
-        AccountMenuTile(
-            icon = Icons.Outlined.Info,
-            label = stringResource(R.string.account_about),
-            textSize = metrics.cardMetaSize,
-            onClick = onAbout,
-            modifier = Modifier.weight(1f).height(tileHeight),
+            onClick = onAboutApp,
+            modifier = Modifier.fillMaxWidth().height(tileHeight),
         )
     }
 }
@@ -379,6 +400,7 @@ private fun AccountSettingsPage(
             titleSize = titleSize,
             gap = metrics.sectionGap,
             onBack = onBack,
+            showBack = metrics.isTablet,
         )
         Spacer(Modifier.height(metrics.sectionGap * 2))
         Row(
@@ -424,17 +446,13 @@ private fun AccountSettingsPage(
 }
 
 @Composable
-private fun AccountAboutPage(
+private fun AccountAboutServicePage(
     metrics: HomeMetrics,
     titleSize: TextUnit,
     bodySize: TextUnit,
     onBack: () -> Unit,
 ) {
     val context = LocalContext.current
-    var showSupportDialog by rememberSaveable { mutableStateOf(false) }
-    if (showSupportDialog) {
-        SupportProjectDialog(onDismiss = { showSupportDialog = false })
-    }
     Column(
         Modifier
             .fillMaxSize()
@@ -447,16 +465,7 @@ private fun AccountAboutPage(
             titleSize = titleSize,
             gap = metrics.sectionGap,
             onBack = onBack,
-        )
-        Spacer(Modifier.height(metrics.sectionGap * 2))
-        Image(
-            painter = painterResource(R.drawable.ic_launcher_fg),
-            contentDescription = stringResource(R.string.app_name),
-            modifier = Modifier
-                .align(Alignment.CenterHorizontally)
-                .size(if (metrics.isTablet) 96.dp else 80.dp)
-                .clip(RoundedCornerShape(18.dp))
-                .background(Color(0xFF1A2026)),
+            showBack = metrics.isTablet,
         )
         Spacer(Modifier.height(metrics.sectionGap * 2))
         Text(
@@ -489,9 +498,52 @@ private fun AccountAboutPage(
                 context.startActivity(LegalDocumentActivity.intent(context, LegalDocument.Dmca))
             },
         )
+    }
+}
+
+@Composable
+private fun AccountAboutAppPage(
+    metrics: HomeMetrics,
+    titleSize: TextUnit,
+    bodySize: TextUnit,
+    onBack: () -> Unit,
+) {
+    val context = LocalContext.current
+    var showSupportDialog by rememberSaveable { mutableStateOf(false) }
+    if (showSupportDialog) {
+        SupportProjectDialog(onDismiss = { showSupportDialog = false })
+    }
+    Column(
+        Modifier
+            .fillMaxSize()
+            .statusBarsPadding()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = metrics.screenPadding, vertical = metrics.sectionGap),
+    ) {
+        AccountSubPageHeader(
+            title = stringResource(R.string.account_about_app),
+            titleSize = titleSize,
+            gap = metrics.sectionGap,
+            onBack = onBack,
+            showBack = metrics.isTablet,
+        )
+        Spacer(Modifier.height(metrics.sectionGap * 2))
+        Image(
+            painter = painterResource(R.drawable.ic_launcher_fg),
+            contentDescription = stringResource(R.string.app_name),
+            modifier = Modifier
+                .align(Alignment.CenterHorizontally)
+                .size(if (metrics.isTablet) 96.dp else 80.dp)
+                .clip(RoundedCornerShape(18.dp))
+                .background(Color(0xFF1A2026)),
+        )
         Spacer(Modifier.height(metrics.sectionGap * 2))
         Text(
-            text = stringResource(R.string.account_about_version, BuildConfig.VERSION_NAME),
+            text = stringResource(
+                R.string.account_about_version,
+                BuildConfig.VERSION_NAME,
+                BuildConfig.VERSION_CODE,
+            ),
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             fontSize = bodySize,
             textAlign = TextAlign.Center,
@@ -507,15 +559,16 @@ private fun AccountAboutPage(
             modifier = Modifier.fillMaxWidth(),
         )
         Spacer(Modifier.height(metrics.sectionGap))
-        Row(
+        Column(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(metrics.cardGap),
+            verticalArrangement = Arrangement.spacedBy(metrics.cardGap),
         ) {
             DevContactChip(
                 icon = Icons.AutoMirrored.Outlined.Send,
                 label = stringResource(R.string.account_about_dev_telegram),
                 value = stringResource(R.string.account_about_dev_telegram_value),
                 textSize = metrics.cardMetaSize,
+                compact = !metrics.isTablet,
                 onClick = {
                     runCatching {
                         context.startActivity(
@@ -526,13 +579,14 @@ private fun AccountAboutPage(
                         )
                     }
                 },
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.fillMaxWidth(),
             )
             DevContactChip(
                 icon = Icons.Outlined.Email,
                 label = stringResource(R.string.account_about_dev_email),
                 value = stringResource(R.string.account_about_dev_email_value),
                 textSize = metrics.cardMetaSize,
+                compact = !metrics.isTablet,
                 onClick = {
                     runCatching {
                         context.startActivity(
@@ -543,7 +597,7 @@ private fun AccountAboutPage(
                         )
                     }
                 },
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.fillMaxWidth(),
             )
         }
         Spacer(Modifier.height(metrics.sectionGap))
@@ -569,22 +623,27 @@ private fun DevContactChip(
     textSize: TextUnit,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    compact: Boolean = false,
 ) {
+    val iconSize = if (compact) 22.dp else 32.dp
+    val padH = if (compact) 10.dp else 12.dp
+    val padV = if (compact) 8.dp else 14.dp
+    val gap = if (compact) 8.dp else 12.dp
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = modifier
-            .clip(RoundedCornerShape(14.dp))
+            .clip(RoundedCornerShape(if (compact) 12.dp else 14.dp))
             .background(MaterialTheme.colorScheme.surfaceVariant)
             .clickable(onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 14.dp),
+            .padding(horizontal = padH, vertical = padV),
     ) {
         Icon(
             imageVector = icon,
             contentDescription = label,
             tint = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.size(32.dp),
+            modifier = Modifier.size(iconSize),
         )
-        Spacer(Modifier.size(12.dp))
+        Spacer(Modifier.size(gap))
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = label,
@@ -593,7 +652,7 @@ private fun DevContactChip(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
-            Spacer(Modifier.height(2.dp))
+            Spacer(Modifier.height(if (compact) 1.dp else 2.dp))
             Text(
                 text = value,
                 color = MaterialTheme.colorScheme.onBackground,
@@ -612,6 +671,8 @@ private fun AccountSubPageHeader(
     titleSize: TextUnit,
     gap: Dp,
     onBack: () -> Unit,
+    showBack: Boolean = true,
+    backSize: Dp = 44.dp,
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -625,9 +686,11 @@ private fun AccountSubPageHeader(
             fontWeight = FontWeight.Bold,
             modifier = Modifier
                 .weight(1f)
-                .padding(end = gap),
+                .then(if (showBack) Modifier.padding(end = gap) else Modifier),
         )
-        YohoBackButton(onClick = onBack)
+        if (showBack) {
+            YohoBackButton(onClick = onBack, size = backSize)
+        }
     }
 }
 

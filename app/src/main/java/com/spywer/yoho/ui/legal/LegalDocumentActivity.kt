@@ -93,7 +93,9 @@ private fun LegalDocumentScreen(
                     .weight(1f)
                     .padding(end = metrics.sectionGap),
             )
-            YohoBackButton(onClick = onBack)
+            if (metrics.isTablet) {
+                YohoBackButton(onClick = onBack)
+            }
         }
         Spacer(Modifier.height(metrics.sectionGap))
         Text(

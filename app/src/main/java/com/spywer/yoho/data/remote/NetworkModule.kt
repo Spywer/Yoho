@@ -75,19 +75,19 @@ private object SiteFailoverInterceptor : Interceptor {
             val host = request.url.host
             tried.add(host.lowercase())
 
-            try {
+            val error: IOException = try {
                 val response = chain.proceed(request)
                 if (response.code !in gatewayCodes) {
                     return response
                 }
                 val code = response.code
                 response.close()
-                lastIo = IOException("gateway $code on $host")
+                IOException("gateway $code on $host")
             } catch (e: IOException) {
-                lastIo = e
+                e
             }
+            lastIo = error
 
-            val error = lastIo ?: IOException("Зеркало $host недоступно")
             val next = SiteHttp.failoverFrom(host)
             if (next == null || next.lowercase() in tried) {
                 throw error

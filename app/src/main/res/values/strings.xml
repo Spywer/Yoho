@@ -1,13 +1,14 @@
 <resources>
     <string name="app_name">YoHo</string>
-    <string name="account_app_version">%1$s · %2$s</string>
+    <string name="account_app_version">%1$s · %2$s (%3$d)</string>
     <string name="account_settings">Настройки</string>
     <string name="account_about">О сервисе</string>
+    <string name="account_about_app">О приложении</string>
     <string name="account_settings_empty">Пока нечего настраивать</string>
     <string name="settings_pip">Картинка в картинке</string>
     <string name="settings_pip_subtitle">При сворачивании во время просмотра</string>
     <string name="account_about_body">YoHo – приложение-справочник по фильмам, сериалам, мультфильмам и аниме: карточки тайтлов, описания, постеры, рейтинги, дневник просмотров, профили и иные функции сообщества.\n\nПриложение не размещает, не хранит, не транслирует и не распространяет аудиовизуальные произведения на своих серверах. Оно не является видеохостингом, стриминговой платформой, кинотеатром, правообладателем или официальным дистрибьютором контента.\n\nЛюбой просмотр, если он доступен в приложении, осуществляется исключительно через сторонние плееры, iframe и ссылки, которые приложение не создаёт, не загружает и не контролирует.</string>
-    <string name="account_about_version">Версия приложения: %1$s</string>
+    <string name="account_about_version">Версия приложения: %1$s (%2$d)</string>
     <string name="account_about_dev">Разработка</string>
     <string name="account_about_dev_telegram">Telegram</string>
     <string name="account_about_dev_telegram_value">@Spywer</string>
