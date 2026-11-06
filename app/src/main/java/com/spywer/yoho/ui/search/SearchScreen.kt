@@ -516,6 +516,7 @@ private fun SearchBar(
             value = query,
             onValueChange = onQueryChange,
             singleLine = true,
+            maxLines = 1,
             textStyle = TextStyle(
                 color = MaterialTheme.colorScheme.onBackground,
                 fontSize = textSize,
@@ -525,9 +526,18 @@ private fun SearchBar(
             decorationBox = { inner ->
                 if (query.isEmpty()) {
                     Text(
-                        text = stringResource(R.string.search_hint),
+                        text = stringResource(
+                            if (LocalHomeMetrics.current.isTablet) {
+                                R.string.search_hint
+                            } else {
+                                R.string.search_hint_compact
+                            },
+                        ),
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         fontSize = textSize,
+                        maxLines = 1,
+                        softWrap = false,
+                        overflow = TextOverflow.Ellipsis,
                     )
                 }
                 inner()

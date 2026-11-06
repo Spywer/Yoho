@@ -569,9 +569,18 @@ private fun HomeSearchEntry(
         )
         Spacer(Modifier.width(8.dp))
         Text(
-            text = stringResource(R.string.search_hint),
+            text = stringResource(
+                if (LocalHomeMetrics.current.isTablet) {
+                    R.string.search_hint
+                } else {
+                    R.string.search_hint_compact
+                },
+            ),
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             fontSize = textSize,
+            maxLines = 1,
+            softWrap = false,
+            overflow = TextOverflow.Ellipsis,
         )
     }
 }
@@ -604,6 +613,7 @@ private fun HomeSearchField(
             value = query,
             onValueChange = onQueryChange,
             singleLine = true,
+            maxLines = 1,
             textStyle = TextStyle(
                 color = MaterialTheme.colorScheme.onBackground,
                 fontSize = textSize,
@@ -615,9 +625,18 @@ private fun HomeSearchField(
             decorationBox = { inner ->
                 if (query.isEmpty()) {
                     Text(
-                        text = stringResource(R.string.search_hint),
+                        text = stringResource(
+                            if (LocalHomeMetrics.current.isTablet) {
+                                R.string.search_hint
+                            } else {
+                                R.string.search_hint_compact
+                            },
+                        ),
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         fontSize = textSize,
+                        maxLines = 1,
+                        softWrap = false,
+                        overflow = TextOverflow.Ellipsis,
                     )
                 }
                 inner()
@@ -746,14 +765,22 @@ private fun SuggestTitleRow(
     val posterH = if (metrics.isTablet) 118.dp else 68.dp
     val titleSize = if (metrics.isTablet) metrics.cardTitleSize else metrics.searchTextSize
     val metaSize = metrics.cardMetaSize
-    val favHit = if (metrics.isTablet) 56.dp else 44.dp
-    val favIcon = if (metrics.isTablet) 36.dp else 28.dp
+    val favHit = if (metrics.isTablet) 56.dp else 36.dp
+    val favIcon = if (metrics.isTablet) 36.dp else 24.dp
     val genres = genreLabelsOf(item.genres, limit = if (metrics.isTablet) 4 else 3)
-    val meta = listOfNotNull(
+    val typeYear = listOfNotNull(
         item.typeLabelRu().takeIf { it.isNotBlank() },
         item.year?.takeIf { it.isNotBlank() },
-        genres.takeIf { it.isNotBlank() },
     ).joinToString(" · ")
+    // Планшет: тип · год · жанры в одной строке; compact — жанры отдельной строкой.
+    val metaInline = if (metrics.isTablet) {
+        listOfNotNull(
+            typeYear.takeIf { it.isNotBlank() },
+            genres.takeIf { it.isNotBlank() },
+        ).joinToString(" · ")
+    } else {
+        typeYear
+    }
     val canFavorite = item.favoriteItemId() != null
 
     Row(
@@ -784,7 +811,8 @@ private fun SuggestTitleRow(
                     color = MaterialTheme.colorScheme.onBackground,
                     fontSize = titleSize,
                     lineHeight = metrics.lineOf(titleSize),
-                    maxLines = if (metrics.isTablet) 2 else 1,
+                    maxLines = 1,
+                    softWrap = false,
                     overflow = TextOverflow.Ellipsis,
                     fontWeight = FontWeight.SemiBold,
                 )
@@ -812,26 +840,40 @@ private fun SuggestTitleRow(
                         }
                     },
                     lineHeight = metrics.lineOf(titleSize),
-                    maxLines = if (metrics.isTablet) 2 else 1,
+                    maxLines = 1,
+                    softWrap = false,
                     overflow = TextOverflow.Ellipsis,
                 )
             }
-            if (meta.isNotBlank()) {
+            if (metaInline.isNotBlank()) {
                 Text(
-                    text = meta,
+                    text = metaInline,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     fontSize = metaSize,
                     lineHeight = metrics.lineOf(metaSize),
-                    maxLines = if (metrics.isTablet) 2 else 1,
+                    maxLines = 1,
+                    softWrap = false,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.padding(top = 2.dp),
+                )
+            }
+            if (!metrics.isTablet && genres.isNotBlank()) {
+                Text(
+                    text = genres,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontSize = metaSize,
+                    lineHeight = metrics.lineOf(metaSize),
+                    maxLines = 1,
+                    softWrap = false,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(top = 1.dp),
                 )
             }
         }
         val kp = item.kpScore()
         val imdb = item.imdbScore()
         if (kp != null || imdb != null) {
-            Spacer(Modifier.width(if (metrics.isTablet) 12.dp else 8.dp))
+            Spacer(Modifier.width(if (metrics.isTablet) 12.dp else 6.dp))
             Column(horizontalAlignment = Alignment.End) {
                 kp?.let {
                     SuggestRatingChip(
@@ -855,7 +897,7 @@ private fun SuggestTitleRow(
             }
         }
         if (canFavorite) {
-            Spacer(Modifier.width(if (metrics.isTablet) 16.dp else 12.dp))
+            Spacer(Modifier.width(if (metrics.isTablet) 16.dp else 4.dp))
             IconButton(
                 onClick = onToggleFavorite,
                 enabled = !favoriteBusy,
@@ -922,7 +964,8 @@ private fun SuggestPersonRow(
                 color = MaterialTheme.colorScheme.onBackground,
                 fontSize = titleSize,
                 lineHeight = metrics.lineOf(titleSize),
-                maxLines = if (metrics.isTablet) 2 else 1,
+                maxLines = 1,
+                softWrap = false,
                 overflow = TextOverflow.Ellipsis,
                 fontWeight = FontWeight.SemiBold,
             )
@@ -933,6 +976,7 @@ private fun SuggestPersonRow(
                     fontSize = metaSize,
                     lineHeight = metrics.lineOf(metaSize),
                     maxLines = 1,
+                    softWrap = false,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.padding(top = 2.dp),
                 )

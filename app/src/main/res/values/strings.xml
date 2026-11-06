@@ -28,6 +28,7 @@
     <string name="account_error_username_blank">Введите логин</string>
     <string name="account_password_hint">Минимум 8 символов</string>
     <string name="search_hint">Поиск фильма, сериала или актёра</string>
+    <string name="search_hint_compact">Поиск фильмов и сериалов</string>
     <string name="search_section_titles">Фильмы и сериалы</string>
     <string name="search_section_persons">Люди</string>
     <string name="search_title">Поиск</string>
