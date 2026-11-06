@@ -615,7 +615,7 @@ private fun TitleSuggestField(
         }
         delay(280)
         suggestions = runCatching {
-            NetworkModule.api.suggest(value.trim(), limit = 8)
+            NetworkModule.api.suggest(value.trim(), limit = 8).results
         }.getOrDefault(emptyList())
     }
 
@@ -669,7 +669,7 @@ private fun TitleSuggestField(
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         AsyncImage(
-                            model = item.poster.absMediaUrl(),
+                            model = item.displayPoster.absMediaUrl(),
                             contentDescription = null,
                             contentScale = ContentScale.Crop,
                             modifier = Modifier
@@ -687,7 +687,7 @@ private fun TitleSuggestField(
                                 fontWeight = FontWeight.Medium,
                             )
                             Text(
-                                text = listOfNotNull(item.type, item.year?.toString())
+                                text = listOfNotNull(item.displayType, item.year)
                                     .joinToString(" · "),
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 fontSize = HintSp,
@@ -962,7 +962,7 @@ private fun PersonEditor(
             return@LaunchedEffect
         }
         suggestions = runCatching {
-            NetworkModule.api.searchPersons(qNow).persons
+            NetworkModule.api.searchPersons(qNow, source = "kinodata").persons
         }.getOrDefault(emptyList())
     }
 

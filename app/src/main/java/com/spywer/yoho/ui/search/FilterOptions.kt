@@ -45,6 +45,7 @@ val AllGenres = listOf(
     FacetItemDto("adventure", "Приключения"),
     FacetItemDto("biography", "Биография"),
     FacetItemDto("comedy", "Комедия"),
+    FacetItemDto("concert", "Концерт"),
     FacetItemDto("crime", "Криминал"),
     FacetItemDto("documentary", "Документальный"),
     FacetItemDto("drama", "Драма"),
@@ -61,6 +62,7 @@ val AllGenres = listOf(
     FacetItemDto("romance", "Мелодрама"),
     FacetItemDto("speculative_fiction", "Фантастика"),
     FacetItemDto("sport", "Спорт"),
+    FacetItemDto("theatre", "Театр"),
     FacetItemDto("thriller", "Триллер"),
     FacetItemDto("war", "Военный"),
     FacetItemDto("western", "Вестерн"),
@@ -73,6 +75,18 @@ fun genreSlugOf(nameOrSlug: String): String? {
     AllGenres.firstOrNull { it.value.equals(key, ignoreCase = true) }?.value?.let { return it }
     return AllGenres.firstOrNull { it.label?.lowercase() == key }?.value
 }
+
+/** slug → RU-подпись для UI. */
+fun genreLabelOf(slug: String): String =
+    AllGenres.firstOrNull { it.value.equals(slug, ignoreCase = true) }?.label
+        ?: slug.replace('_', ' ')
+
+fun genreLabelsOf(slugs: List<String>, limit: Int = 3): String =
+    slugs.asSequence()
+        .filter { it.isNotBlank() }
+        .take(limit)
+        .map(::genreLabelOf)
+        .joinToString(", ")
 
 val AllCountries = listOf(
     FacetItemDto("RU", "Россия"),

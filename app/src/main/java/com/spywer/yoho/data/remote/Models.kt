@@ -1015,15 +1015,74 @@ fun FilmInfoResponseDto.toTitleDetail(): TitleDetailDto {
     )
 }
 
+/** Элемент GET /api/search/suggest — как на reyoho.com (`results[]`). */
 data class SuggestItemDto(
+    val key: String? = null,
+    val mediaType: String? = null,
+    val title: String? = null,
+    val originalTitle: String? = null,
+    val year: String? = null,
+    val posterUrl: String? = null,
+    val kinopoiskId: String? = null,
+    val tmdbId: Int? = null,
+    val rating: Double? = null,
+    val ratingKinopoisk: Double? = null,
+    val ratingImdb: Double? = null,
+    val genres: List<String> = emptyList(),
+    /** Legacy openapi-поля (на случай голого массива). */
     @SerializedName("id") val id: Int? = null,
     @SerializedName("type") val type: String? = null,
-    @SerializedName("title") val title: String? = null,
-    @SerializedName("year") val year: Int? = null,
     @SerializedName("poster") val poster: String? = null,
+) {
+    val displayPoster: String? get() = posterUrl ?: poster
+    val displayType: String? get() = mediaType ?: type
+    val kpId: Int? get() = kinopoiskId?.toIntOrNull() ?: id?.takeIf { it > 0 }
+
+    fun typeLabelRu(): String = when (displayType?.lowercase()) {
+        "tv", "series" -> "Сериал"
+        "anime" -> "Аниме"
+        "animation" -> "Мультфильм"
+        "movie", "film", null, "" -> "Фильм"
+        else -> displayType.orEmpty()
+    }
+
+    fun kpScore(): Double? = ratingKinopoisk?.takeIf { it > 0 }
+    fun imdbScore(): Double? = (ratingImdb ?: rating)?.takeIf { it > 0 }
+
+    fun favoriteItemId(): String? = kpId?.takeIf { it > 0 }?.let { "kp:$it" }
+
+    fun normalizedMediaType(): String = when (displayType?.lowercase()) {
+        "tv", "series" -> "tv"
+        "anime" -> "anime"
+        "animation" -> "animation"
+        else -> "movie"
+    }
+
+    fun toFavoriteActivityItem(): MeActivityItemDto? {
+        val kp = kpId?.takeIf { it > 0 } ?: return null
+        val titleText = title?.takeIf { it.isNotBlank() } ?: return null
+        val media = normalizedMediaType()
+        val href = when (media) {
+            "tv", "anime" -> "/series/$kp"
+            else -> "/film/$kp"
+        }
+        return MeActivityItemDto(
+            id = "kp:$kp",
+            href = href,
+            title = titleText,
+            year = year,
+            posterUrl = displayPoster.toFavoritePosterPath(),
+            mediaType = media,
+        )
+    }
+}
+
+data class SuggestResponseDto(
+    val results: List<SuggestItemDto> = emptyList(),
+    val degraded: Boolean = false,
 )
 
-/** GET /api/search/persons?source=kinodata&q= */
+/** GET /api/search/persons?q= */
 data class SearchPersonDto(
     val id: Int? = null,
     val name: String? = null,
@@ -1033,6 +1092,7 @@ data class SearchPersonDto(
 
 data class SearchPersonsResponse(
     val persons: List<SearchPersonDto> = emptyList(),
+    val degraded: Boolean = false,
 )
 
 data class SearchResponseDto(

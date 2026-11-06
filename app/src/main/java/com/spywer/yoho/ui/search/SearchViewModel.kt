@@ -5,7 +5,6 @@ import androidx.lifecycle.viewModelScope
 import com.spywer.yoho.data.remote.NetworkModule
 import com.spywer.yoho.data.remote.SearchFacetsDto
 import com.spywer.yoho.data.remote.SearchFiltersCatalogDto
-import com.spywer.yoho.data.remote.SuggestItemDto
 import com.spywer.yoho.data.remote.TitleDto
 import com.spywer.yoho.data.remote.toTitle
 import kotlinx.coroutines.Job
@@ -20,7 +19,6 @@ import kotlinx.coroutines.launch
 
 data class SearchUiState(
     val query: String = "",
-    val suggestions: List<SuggestItemDto> = emptyList(),
     val filters: SearchFilterState = SearchFilterState(),
     val facets: SearchFacetsDto = SearchFacetsDto(),
     val filterCatalog: SearchFiltersCatalogDto = SearchFiltersCatalogDto(),
@@ -38,7 +36,6 @@ class SearchViewModel : ViewModel() {
     private val _state = MutableStateFlow(SearchUiState(loading = true))
     val state: StateFlow<SearchUiState> = _state.asStateFlow()
 
-    private var suggestJob: Job? = null
     private var searchJob: Job? = null
 
     init {
@@ -95,30 +92,11 @@ class SearchViewModel : ViewModel() {
 
     fun onQueryChange(query: String) {
         _state.update { it.copy(query = query) }
-        suggestJob?.cancel()
-        if (query.isBlank()) {
-            _state.update { it.copy(suggestions = emptyList()) }
-            scheduleSearch()
-            return
-        }
-        suggestJob = viewModelScope.launch {
-            delay(250)
-            runCatching { api.suggest(query.trim()) }
-                .onSuccess { list -> _state.update { it.copy(suggestions = list) } }
-                .onFailure { _state.update { it.copy(suggestions = emptyList()) } }
-        }
-        scheduleSearch()
-    }
-
-    fun applySuggestion(title: String) {
-        suggestJob?.cancel()
-        _state.update { it.copy(query = title, suggestions = emptyList()) }
         scheduleSearch()
     }
 
     fun clearQuery() {
-        suggestJob?.cancel()
-        _state.update { it.copy(query = "", suggestions = emptyList()) }
+        _state.update { it.copy(query = "") }
         scheduleSearch()
     }
 

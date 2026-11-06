@@ -27,7 +27,9 @@
     <string name="account_error_password_short">Пароль не меньше 8 символов</string>
     <string name="account_error_username_blank">Введите логин</string>
     <string name="account_password_hint">Минимум 8 символов</string>
-    <string name="search_hint">Поиск фильма или сериала</string>
+    <string name="search_hint">Поиск фильма, сериала или актёра</string>
+    <string name="search_section_titles">Фильмы и сериалы</string>
+    <string name="search_section_persons">Люди</string>
     <string name="search_title">Поиск</string>
     <string name="filters">Фильтры</string>
     <string name="filter">Фильтр</string>
@@ -68,6 +70,7 @@
     <string name="detail_favorite_add">В избранное</string>
     <string name="detail_favorite_remove">В избранном</string>
     <string name="detail_favorite_error">Не удалось обновить избранное</string>
+    <string name="detail_favorite_login">Войдите, чтобы добавить в избранное</string>
     <string name="detail_seasons">Сезоны</string>
     <string name="detail_season_n">Сезон %d</string>
     <string name="detail_season_meta">%1$d серий · %2$s</string>

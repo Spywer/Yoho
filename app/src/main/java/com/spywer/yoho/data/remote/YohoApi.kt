@@ -142,13 +142,13 @@ interface YohoApi {
     suspend fun suggest(
         @Query("q") query: String,
         @Query("limit") limit: Int = 8,
-    ): List<SuggestItemDto>
+    ): SuggestResponseDto
 
-    /** Автодополнение людей в фильтре: /api/search/persons?source=kinodata&q= */
+    /** Автодополнение людей: /api/search/persons?q= (в фильтрах — source=kinodata). */
     @GET("api/search/persons")
     suspend fun searchPersons(
         @Query("q") query: String,
-        @Query("source") source: String = "kinodata",
+        @Query("source") source: String? = null,
     ): SearchPersonsResponse
 
     /** Детали тайтла как на сайте: /api/film-info?kinopoiskId=&tmdbId=&mediaType= */

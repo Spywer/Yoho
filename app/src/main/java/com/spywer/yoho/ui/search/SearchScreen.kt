@@ -56,7 +56,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
@@ -67,11 +66,8 @@ import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import coil.compose.AsyncImage
 import com.spywer.yoho.R
-import com.spywer.yoho.data.remote.SuggestItemDto
 import com.spywer.yoho.data.remote.TitleDto
-import com.spywer.yoho.data.remote.absMediaUrl
 import com.spywer.yoho.ui.components.PosterCard
 import com.spywer.yoho.ui.components.YohoBackButton
 import com.spywer.yoho.ui.detail.TitleDetailActivity
@@ -149,13 +145,6 @@ fun SearchScreen(
                                 height = metrics.searchHeight,
                                 textSize = metrics.searchTextSize,
                                 modifier = Modifier.weight(1f),
-                            )
-                        }
-                        if (state.suggestions.isNotEmpty()) {
-                            SuggestDropdown(
-                                items = state.suggestions,
-                                textSize = metrics.searchTextSize,
-                                onPick = viewModel::applySuggestion,
                             )
                         }
                         Spacer(Modifier.height(metrics.sectionGap))
@@ -551,60 +540,6 @@ private fun SearchBar(
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-            }
-        }
-    }
-}
-
-@Composable
-private fun SuggestDropdown(
-    items: List<SuggestItemDto>,
-    textSize: TextUnit,
-    onPick: (String) -> Unit,
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(top = 8.dp)
-            .clip(RoundedCornerShape(12.dp))
-            .background(MaterialTheme.colorScheme.surface)
-            .padding(vertical = 4.dp),
-    ) {
-        items.forEach { item ->
-            val title = item.title.orEmpty()
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable {
-                        if (title.isNotBlank()) onPick(title)
-                    }
-                    .padding(horizontal = 12.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                AsyncImage(
-                    model = item.poster.absMediaUrl(),
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier
-                        .size(40.dp, 56.dp)
-                        .clip(RoundedCornerShape(6.dp)),
-                )
-                Spacer(Modifier.width(12.dp))
-                Column(Modifier.weight(1f)) {
-                    Text(
-                        text = title,
-                        color = MaterialTheme.colorScheme.onBackground,
-                        fontSize = textSize,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        fontWeight = FontWeight.Medium,
-                    )
-                    Text(
-                        text = listOfNotNull(item.type, item.year?.toString()).joinToString(" · "),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        fontSize = (textSize.value - 4).sp,
-                    )
-                }
             }
         }
     }

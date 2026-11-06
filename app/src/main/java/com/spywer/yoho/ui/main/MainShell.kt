@@ -40,8 +40,11 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.toMutableStateList
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -61,7 +64,6 @@ import com.spywer.yoho.ui.search.SearchActivity
 import com.spywer.yoho.ui.search.SearchScreen
 import com.spywer.yoho.ui.search.SearchViewModel
 import com.spywer.yoho.ui.search.genreSlugOf
-import androidx.compose.ui.graphics.Color
 
 enum class MainTab {
     Home,
@@ -101,6 +103,8 @@ fun MainShell() {
     var tab by rememberSaveable { mutableStateOf(MainTab.Home) }
     val catalogVm: SearchViewModel = viewModel()
     val context = LocalContext.current
+    val focusManager = LocalFocusManager.current
+    val keyboard = LocalSoftwareKeyboardController.current
 
     val titleStack = rememberSaveable(
         saver = listSaver(
@@ -124,6 +128,14 @@ fun MainShell() {
 
     LaunchedEffect(Unit) {
         SessionRepository.refresh()
+    }
+
+    // Каталог держит IME; при уходе с вкладки / открытии карточки — закрыть.
+    LaunchedEffect(tab, titleStack.size) {
+        if (tab != MainTab.Catalog || titleStack.isNotEmpty()) {
+            focusManager.clearFocus(force = true)
+            keyboard?.hide()
+        }
     }
 
     val tabs = listOf(
