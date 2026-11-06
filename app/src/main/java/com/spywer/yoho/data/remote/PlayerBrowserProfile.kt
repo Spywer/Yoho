@@ -19,6 +19,12 @@ import androidx.webkit.WebViewFeature
 object PlayerBrowserProfile {
     private const val TAG_APPLIED = "yoho_browser_profile_v2"
 
+    /** Масштаб текста WebView в fullscreen (100 = как в браузере). */
+    const val PLAYER_TEXT_ZOOM = 145
+
+    /** CSS zoom оболочки embed в fullscreen. */
+    const val PLAYER_CSS_ZOOM = "1.35"
+
     /** Sec-CH / Accept для navigate и OkHttp-прокси. */
     fun browserHeaders(context: android.content.Context? = null): Map<String, String> {
         val ua = SiteHttp.userAgent(context)
@@ -55,7 +61,6 @@ object PlayerBrowserProfile {
         val ua = SiteHttp.userAgent(ctx)
         settings.javaScriptEnabled = true
         settings.domStorageEnabled = true
-        settings.databaseEnabled = true
         settings.mediaPlaybackRequiresUserGesture = false
         settings.loadWithOverviewMode = true
         settings.useWideViewPort = true
@@ -66,11 +71,14 @@ object PlayerBrowserProfile {
         settings.blockNetworkImage = false
         settings.javaScriptCanOpenWindowsAutomatically = true
         settings.setSupportMultipleWindows(true)
-        settings.setSupportZoom(true)
-        settings.builtInZoomControls = true
+        // Pinch/CSS zoom — только Expanded (≥840dp); Compact/Medium выкл.
+        val wide = ctx.resources.configuration.screenWidthDp >= 840
+        settings.setSupportZoom(wide)
+        settings.builtInZoomControls = wide
         settings.displayZoomControls = false
         settings.setGeolocationEnabled(true)
         settings.cacheMode = WebSettings.LOAD_DEFAULT
+        // textZoom поднимаем только в fullscreen на Expanded (см. applyPlayerContentZoom).
         settings.textZoom = 100
         settings.userAgentString = ua
 

@@ -3,7 +3,9 @@
 import android.Manifest
 import android.annotation.SuppressLint
 import android.app.Activity
+import android.content.pm.ActivityInfo
 import android.content.pm.PackageManager
+import android.content.res.Configuration
 import android.os.Message
 import android.view.View
 import android.view.ViewGroup
@@ -20,6 +22,8 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -28,6 +32,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -46,8 +51,6 @@ import androidx.compose.material.icons.filled.ThumbUp
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -60,19 +63,21 @@ import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
+import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
@@ -84,6 +89,8 @@ import com.spywer.yoho.data.remote.PlayerChoiceItemDto
 import com.spywer.yoho.data.remote.PlayerWebViewHttp
 import com.spywer.yoho.data.remote.SiteHttp
 import com.spywer.yoho.data.remote.displayPlayerSourceName
+import com.spywer.yoho.ui.layout.LocalHomeMetrics
+
 @Composable
 internal fun PlayerBlock(
     choices: List<PlayerChoiceItemDto>,
@@ -92,70 +99,92 @@ internal fun PlayerBlock(
     embedHtml: String?,
     loading: Boolean,
     needsLogin: Boolean,
+    mediaType: String?,
     diaryStatusLabel: String?,
     diaryBusy: Boolean,
     diaryError: String?,
     diaryNotify: String?,
+    playerReaction: String?,
+    reactionBusy: Boolean,
     onSelectSource: (String) -> Unit,
     onSetDiaryStatus: (String) -> Unit,
     onRemoveFromDiary: () -> Unit,
     onConsumeDiaryNotify: () -> Unit,
+    onPlayerReaction: (String) -> Unit,
     padding: androidx.compose.ui.unit.Dp,
     metaSize: androidx.compose.ui.unit.TextUnit,
+    /** Holder с экрана — общий lifecycle WebView на время деталки. */
+    webHolder: PlayerWebViewHolder,
     modifier: Modifier = Modifier,
 ) {
     val playUrl = remember(iframeUrl) { normalizePlayerUrl(iframeUrl) }
     val hasPlayer = !playUrl.isNullOrBlank() || !embedHtml.isNullOrBlank()
-    var fullscreen by remember { mutableStateOf(false) }
-    var htmlFullscreen by remember { mutableStateOf(false) }
+    // Заглушка «нет источников» — без учёта player-choice (чипы).
+    val noSources = !needsLogin && !hasPlayer
+    val context = LocalContext.current
+    // Подхват уже открытого cinema на decor при редком remount.
+    var fullscreen by remember(webHolder) { mutableStateOf(webHolder.isCinemaFullscreen) }
+    var htmlFullscreen by remember(webHolder) { mutableStateOf(webHolder.isHtmlFullscreen) }
+    // Toast дневника, когда панели под плеером нет (заглушка без источников).
+    LaunchedEffect(diaryNotify, hasPlayer) {
+        if (hasPlayer) return@LaunchedEffect
+        val msg = diaryNotify ?: return@LaunchedEffect
+        Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+        onConsumeDiaryNotify()
+    }
     // WebView всегда в Compose; FS = reparent на decorView (Dialog ломал surface при возврате)
-    val webHolder = remember { PlayerWebViewHolder() }
-    DisposableEffect(Unit) {
+    DisposableEffect(webHolder) {
         webHolder.onHtmlFullscreenChanged = { htmlFullscreen = it }
-        onDispose { webHolder.destroy() }
+        webHolder.onCinemaExit = {
+            fullscreen = false
+            webHolder.detachCinemaFullscreen()
+            if (webHolder.isHtmlFullscreen) webHolder.requestExitHtmlFullscreen()
+        }
+        onDispose {
+            webHolder.onHtmlFullscreenChanged = null
+            webHolder.onCinemaExit = null
+        }
     }
     DisposableEffect(hasPlayer) {
         if (!hasPlayer) webHolder.pausePlayback()
         onDispose { }
     }
 
+    fun exitCinema() {
+        fullscreen = false
+        if (webHolder.isHtmlFullscreen) webHolder.requestExitHtmlFullscreen()
+        else webHolder.detachCinemaFullscreen()
+    }
     BackHandler(enabled = htmlFullscreen || fullscreen) {
         when {
             htmlFullscreen -> webHolder.requestExitHtmlFullscreen()
-            else -> fullscreen = false
+            else -> exitCinema()
         }
     }
-    PlayerSystemBarsEffect(hidden = fullscreen || htmlFullscreen)
+    val fsActive = fullscreen || htmlFullscreen || webHolder.isCinemaFullscreen
+    DetailPipEligibilityEffect(eligible = hasPlayer)
+    DetailPipWebViewBindEffect(webView = webHolder.webView)
+    PlayerSystemBarsEffect(hidden = fsActive)
+    PlayerFullscreenOrientationEffect(active = fsActive)
+    // Detach только через exitCinema/крестик — не по enabled=false.
     PlayerFullscreenEffect(
-        enabled = fullscreen && hasPlayer,
+        enabled = (fullscreen && hasPlayer) || webHolder.isCinemaFullscreen,
         holder = webHolder,
-        onExit = {
-            if (webHolder.isHtmlFullscreen) webHolder.requestExitHtmlFullscreen()
-            fullscreen = false
-        },
+        onExit = { exitCinema() },
     )
-
+    // Zoom внутри плеера — только на весь экран.
+    LaunchedEffect(fullscreen, htmlFullscreen, hasPlayer) {
+        val wv = webHolder.webView ?: return@LaunchedEffect
+        if (!hasPlayer) return@LaunchedEffect
+        applyPlayerContentZoom(wv, enabled = fullscreen || htmlFullscreen)
+    }
     Column(
         modifier
             .fillMaxWidth()
             .padding(horizontal = padding)
             .padding(top = 8.dp, bottom = 8.dp),
     ) {
-        if (loading) {
-            Box(
-                Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 24.dp),
-                contentAlignment = Alignment.Center,
-            ) {
-                CircularProgressIndicator(
-                    Modifier.size(28.dp),
-                    color = MaterialTheme.colorScheme.primary,
-                    strokeWidth = 3.dp,
-                )
-            }
-        } else {
-            if (choices.isNotEmpty()) {
+            if (choices.isNotEmpty() && !loading) {
                 Row(
                     Modifier
                         .horizontalScroll(rememberScrollState())
@@ -165,31 +194,17 @@ internal fun PlayerBlock(
                     choices.forEach { item ->
                         val source = item.source ?: return@forEach
                         val selected = source.equals(selectedSource, ignoreCase = true)
-                        val pct = ((item.share ?: 0.0) * 100).toInt()
-                        FilterChip(
+                        PlayerSourceChip(
+                            label = displayPlayerSourceName(source),
+                            share = item.share ?: 0.0,
                             selected = selected,
                             onClick = { onSelectSource(source) },
-                            modifier = Modifier.height(48.dp),
-                            label = {
-                                Text(
-                                    text = buildString {
-                                        append(displayPlayerSourceName(source))
-                                        append(" · $pct%")
-                                    },
-                                    fontSize = 20.sp,
-                                    fontWeight = FontWeight.Medium,
-                                )
-                            },
-                            colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = MaterialTheme.colorScheme.primary,
-                                selectedLabelColor = MaterialTheme.colorScheme.onPrimary,
-                            ),
                         )
                     }
                 }
+                Spacer(Modifier.height(LocalHomeMetrics.current.blockGap))
             }
 
-            Spacer(Modifier.height(12.dp))
             Box(
                 Modifier
                     .fillMaxWidth()
@@ -199,6 +214,8 @@ internal fun PlayerBlock(
                 contentAlignment = Alignment.Center,
             ) {
                 when {
+                    // Не снимать WebView на время loading — иначе первый loadUrl до attach
+                    // иногда даёт пустой кадр до ручного переключения источника.
                     hasPlayer -> {
                         PlayerWebView(
                             url = playUrl,
@@ -216,6 +233,17 @@ internal fun PlayerBlock(
                                 modifier = Modifier.padding(16.dp),
                             )
                         }
+                    }
+                    loading -> Unit
+                    noSources -> {
+                        NoSourcesPlaceholder(
+                            mediaType = mediaType,
+                            diaryStatusLabel = diaryStatusLabel,
+                            diaryBusy = diaryBusy,
+                            onSetDiaryStatus = onSetDiaryStatus,
+                            onRemoveFromDiary = onRemoveFromDiary,
+                            metaSize = metaSize,
+                        )
                     }
                     else -> {
                         Column(
@@ -252,21 +280,155 @@ internal fun PlayerBlock(
                         }
                     }
                 }
+                if (loading) {
+                    Box(
+                        Modifier
+                            .fillMaxSize()
+                            .background(Color.Black),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        CircularProgressIndicator(
+                            Modifier.size(28.dp),
+                            color = MaterialTheme.colorScheme.primary,
+                            strokeWidth = 3.dp,
+                        )
+                    }
+                }
             }
 
             // Как на сайте: панель под плеером (без «Запретки»)
-            if (hasPlayer) {
+            if (hasPlayer && !loading) {
                 PlayerUnderBar(
                     diaryStatusLabel = diaryStatusLabel,
                     diaryBusy = diaryBusy,
                     diaryNotify = diaryNotify,
+                    playerReaction = playerReaction,
+                    reactionBusy = reactionBusy,
                     onSetDiaryStatus = onSetDiaryStatus,
                     onRemoveFromDiary = onRemoveFromDiary,
                     onConsumeDiaryNotify = onConsumeDiaryNotify,
+                    onPlayerReaction = onPlayerReaction,
                     onCinema = { fullscreen = true },
                 )
             }
+    }
+}
+
+@Composable
+private fun NoSourcesPlaceholder(
+    mediaType: String?,
+    diaryStatusLabel: String?,
+    diaryBusy: Boolean,
+    onSetDiaryStatus: (String) -> Unit,
+    onRemoveFromDiary: () -> Unit,
+    metaSize: androidx.compose.ui.unit.TextUnit,
+) {
+    val wantLabel = stringResource(R.string.detail_diary_want)
+    val kind = stringResource(
+        when (mediaType?.lowercase()) {
+            "tv" -> R.string.detail_player_no_sources_tv
+            "anime" -> R.string.detail_player_no_sources_anime
+            "animation" -> R.string.detail_player_no_sources_animation
+            else -> R.string.detail_player_no_sources_movie
+        },
+    )
+    val wantActive = diaryStatusLabel.equals(wantLabel, ignoreCase = true)
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = Modifier.padding(horizontal = 20.dp, vertical = 24.dp),
+    ) {
+        Text(
+            text = stringResource(R.string.detail_player_no_sources, kind),
+            color = Color.White.copy(alpha = 0.88f),
+            fontSize = metaSize * 1.05f,
+            fontWeight = FontWeight.SemiBold,
+            textAlign = TextAlign.Center,
+        )
+        Text(
+            text = stringResource(R.string.detail_player_no_sources_hint),
+            color = Color(0xFF8D9EB0),
+            fontSize = metaSize,
+            textAlign = TextAlign.Center,
+        )
+        val pillBg = if (wantActive) Color(0xFF3A4A5A) else Color(0xFF242D36)
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier
+                .padding(top = 4.dp)
+                .clip(RoundedCornerShape(percent = 50))
+                .background(pillBg)
+                .border(1.dp, Color.White.copy(alpha = 0.16f), RoundedCornerShape(percent = 50))
+                .clickable(enabled = !diaryBusy) {
+                    if (wantActive) onRemoveFromDiary() else onSetDiaryStatus(wantLabel)
+                }
+                .padding(horizontal = 18.dp, vertical = 10.dp),
+        ) {
+            Icon(
+                Icons.AutoMirrored.Filled.PlaylistAdd,
+                contentDescription = null,
+                tint = Color(0xFFE8E8E8),
+                modifier = Modifier.size(16.dp),
+            )
+            Text(
+                text = wantLabel,
+                color = Color(0xFFE8E8E8),
+                fontSize = metaSize,
+            )
         }
+    }
+}
+
+@Composable
+private fun PlayerSourceChip(
+    label: String,
+    share: Double,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    val metrics = LocalHomeMetrics.current
+    val fraction = share.toFloat().coerceIn(0f, 1f)
+    val shape = RoundedCornerShape(percent = 50)
+    val primary = MaterialTheme.colorScheme.primary
+    val onPrimary = MaterialTheme.colorScheme.onPrimary
+    val onSurface = MaterialTheme.colorScheme.onSurface
+    Box(
+        modifier = Modifier
+            .height(metrics.playerChipHeight)
+            .clip(shape)
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .then(
+                if (selected) {
+                    Modifier.border(2.dp, primary, shape)
+                } else {
+                    Modifier
+                },
+            )
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.CenterStart,
+    ) {
+        Box(
+            Modifier
+                .fillMaxHeight()
+                .fillMaxWidth(fraction)
+                .background(
+                    if (selected) primary else primary.copy(alpha = 0.45f),
+                ),
+        )
+        Text(
+            text = label,
+            fontSize = metrics.playerChipText,
+            fontWeight = FontWeight.Medium,
+            color = when {
+                selected -> onPrimary
+                fraction >= 0.55f -> onPrimary
+                else -> onSurface
+            },
+            modifier = Modifier
+                .align(Alignment.Center)
+                .padding(horizontal = if (metrics.isTablet) 18.dp else 14.dp),
+        )
     }
 }
 
@@ -284,9 +446,12 @@ private fun PlayerUnderBar(
     diaryStatusLabel: String?,
     diaryBusy: Boolean,
     diaryNotify: String?,
+    playerReaction: String?,
+    reactionBusy: Boolean,
     onSetDiaryStatus: (String) -> Unit,
     onRemoveFromDiary: () -> Unit,
     onConsumeDiaryNotify: () -> Unit,
+    onPlayerReaction: (String) -> Unit,
     onCinema: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -294,8 +459,8 @@ private fun PlayerUnderBar(
     fun toastSoon() {
         Toast.makeText(context, soon, Toast.LENGTH_SHORT).show()
     }
-    var liked by remember { mutableStateOf(false) }
-    var disliked by remember { mutableStateOf(false) }
+    val liked = playerReaction == "like"
+    val disliked = playerReaction == "dislike"
     var diaryMenuOpen by remember { mutableStateOf(false) }
     val inDiary = diaryStatusLabel != null
 
@@ -305,13 +470,14 @@ private fun PlayerUnderBar(
         onConsumeDiaryNotify()
     }
 
-    val iconMod = Modifier.size(72.dp)
-    val iconSize = 40.dp
+    val metrics = LocalHomeMetrics.current
+    val iconMod = Modifier.size(metrics.playerBarBtn)
+    val iconSize = metrics.playerBarIcon
 
     Row(
         Modifier
             .fillMaxWidth()
-            .padding(top = 10.dp),
+            .padding(top = 8.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -327,18 +493,15 @@ private fun PlayerUnderBar(
         }
         Row(verticalAlignment = Alignment.CenterVertically) {
             IconButton(
-                onClick = {
-                    liked = !liked
-                    if (liked) disliked = false
-                    toastSoon()
-                },
+                onClick = { if (!reactionBusy) onPlayerReaction("like") },
+                enabled = !reactionBusy,
                 modifier = iconMod,
             ) {
                 Icon(
                     Icons.Filled.ThumbUp,
                     contentDescription = stringResource(R.string.detail_player_like),
                     tint = if (liked) {
-                        MaterialTheme.colorScheme.primary
+                        Color(0xFF43A047)
                     } else {
                         MaterialTheme.colorScheme.onSurface
                     },
@@ -374,7 +537,7 @@ private fun PlayerUnderBar(
                 DropdownMenu(
                     expanded = diaryMenuOpen,
                     onDismissRequest = { diaryMenuOpen = false },
-                    modifier = Modifier.widthIn(min = 340.dp),
+                    modifier = Modifier.widthIn(min = if (metrics.isTablet) 340.dp else 180.dp),
                 ) {
                     Text(
                         text = stringResource(
@@ -385,9 +548,12 @@ private fun PlayerUnderBar(
                             },
                         ).uppercase(),
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        fontSize = 22.sp,
+                        fontSize = metrics.diaryMenuTitle,
                         fontWeight = FontWeight.Medium,
-                        modifier = Modifier.padding(horizontal = 24.dp, vertical = 16.dp),
+                        modifier = Modifier.padding(
+                            horizontal = if (metrics.isTablet) 20.dp else 10.dp,
+                            vertical = if (metrics.isTablet) 14.dp else 4.dp,
+                        ),
                     )
                     diaryStatusLabelRes.forEach { labelRes ->
                         val label = stringResource(labelRes)
@@ -396,7 +562,7 @@ private fun PlayerUnderBar(
                             text = {
                                 Text(
                                     text = label,
-                                    fontSize = 26.sp,
+                                    fontSize = metrics.diaryMenuItem,
                                     fontWeight = FontWeight.Medium,
                                     color = if (selected) {
                                         Color.White
@@ -410,8 +576,16 @@ private fun PlayerUnderBar(
                                 if (!selected) onSetDiaryStatus(label)
                             },
                             modifier = Modifier
-                                .padding(horizontal = 10.dp, vertical = 4.dp)
-                                .clip(RoundedCornerShape(12.dp))
+                                .then(
+                                    if (metrics.isTablet) {
+                                        Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                                    } else {
+                                        Modifier
+                                            .padding(horizontal = 4.dp)
+                                            .height(36.dp)
+                                    },
+                                )
+                                .clip(RoundedCornerShape(if (metrics.isTablet) 10.dp else 6.dp))
                                 .then(
                                     if (selected) {
                                         Modifier.background(MaterialTheme.colorScheme.primary)
@@ -419,19 +593,22 @@ private fun PlayerUnderBar(
                                         Modifier
                                     },
                                 ),
-                            contentPadding = PaddingValues(horizontal = 18.dp, vertical = 16.dp),
+                            contentPadding = PaddingValues(
+                                horizontal = if (metrics.isTablet) 16.dp else 10.dp,
+                                vertical = if (metrics.isTablet) 12.dp else 0.dp,
+                            ),
                         )
                     }
                     if (inDiary) {
                         HorizontalDivider(
-                            Modifier.padding(vertical = 10.dp),
+                            Modifier.padding(vertical = if (metrics.isTablet) 8.dp else 2.dp),
                             color = MaterialTheme.colorScheme.outline.copy(alpha = 0.4f),
                         )
                         DropdownMenuItem(
                             text = {
                                 Text(
                                     text = stringResource(R.string.detail_diary_remove),
-                                    fontSize = 26.sp,
+                                    fontSize = metrics.diaryMenuItem,
                                     fontWeight = FontWeight.Medium,
                                     color = Color(0xFFF87171),
                                 )
@@ -440,24 +617,29 @@ private fun PlayerUnderBar(
                                 diaryMenuOpen = false
                                 onRemoveFromDiary()
                             },
-                            contentPadding = PaddingValues(horizontal = 24.dp, vertical = 16.dp),
+                            modifier = if (metrics.isTablet) {
+                                Modifier
+                            } else {
+                                Modifier.height(36.dp)
+                            },
+                            contentPadding = PaddingValues(
+                                horizontal = if (metrics.isTablet) 20.dp else 10.dp,
+                                vertical = if (metrics.isTablet) 14.dp else 0.dp,
+                            ),
                         )
                     }
                 }
             }
             IconButton(
-                onClick = {
-                    disliked = !disliked
-                    if (disliked) liked = false
-                    toastSoon()
-                },
+                onClick = { if (!reactionBusy) onPlayerReaction("dislike") },
+                enabled = !reactionBusy,
                 modifier = iconMod,
             ) {
                 Icon(
                     Icons.Filled.ThumbDown,
                     contentDescription = stringResource(R.string.detail_player_dislike),
                     tint = if (disliked) {
-                        MaterialTheme.colorScheme.error
+                        Color(0xFFE53935)
                     } else {
                         MaterialTheme.colorScheme.onSurface
                     },
@@ -479,10 +661,17 @@ private fun PlayerUnderBar(
 @Composable
 private fun PlayerSystemBarsEffect(hidden: Boolean) {
     val context = LocalContext.current
+    val orientation = LocalConfiguration.current.orientation
+    // Не ключ DisposableEffect на orientation: иначе onDispose → show → мигание.
     DisposableEffect(hidden) {
-        val activity = context as? Activity
-        val controller = activity?.window?.let { window ->
-            WindowCompat.getInsetsController(window, window.decorView)
+        val activity = context.findActivity()
+        val window = activity?.window
+        val decor = window?.decorView
+        val controller = if (window != null && decor != null) {
+            WindowCompat.setDecorFitsSystemWindows(window, false)
+            WindowCompat.getInsetsController(window, decor)
+        } else {
+            null
         }
         if (hidden && controller != null) {
             controller.hide(WindowInsetsCompat.Type.systemBars())
@@ -493,10 +682,20 @@ private fun PlayerSystemBarsEffect(hidden: Boolean) {
             controller?.show(WindowInsetsCompat.Type.systemBars())
         }
     }
+    // После поворота система может вернуть bars — только hide, без show.
+    LaunchedEffect(hidden, orientation) {
+        if (!hidden) return@LaunchedEffect
+        val activity = context.findActivity() ?: return@LaunchedEffect
+        val window = activity.window
+        val controller = WindowCompat.getInsetsController(window, window.decorView)
+        controller.hide(WindowInsetsCompat.Type.systemBars())
+        controller.systemBarsBehavior =
+            WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+    }
 }
 
 /** Держит WebView + inline-контейнер для reparent в fullscreen overlay. */
-private class PlayerWebViewHolder {
+internal class PlayerWebViewHolder {
     var webView: WebView? = null
     var inlineContainer: FrameLayout? = null
     var fullscreenOverlay: FrameLayout? = null
@@ -504,8 +703,61 @@ private class PlayerWebViewHolder {
     var htmlFsContainer: FrameLayout? = null
     var htmlFsCallback: WebChromeClient.CustomViewCallback? = null
     var onHtmlFullscreenChanged: ((Boolean) -> Unit)? = null
+    /** Выход из cinema-FS (крестик) → синхрон Compose-state. */
+    var onCinemaExit: (() -> Unit)? = null
+    /** Orphan popup WebView cleanup (onCreateWindow). */
+    private val popupCleanups = mutableListOf<Pair<WebView, Runnable>>()
 
     val isHtmlFullscreen: Boolean get() = htmlFsContainer != null
+    val isCinemaFullscreen: Boolean get() = fullscreenOverlay != null
+
+    fun trackPopupCleanup(popup: WebView, cleanup: Runnable) {
+        popupCleanups += popup to cleanup
+        popup.tag = cleanup
+        popup.postDelayed(cleanup, 15_000L)
+    }
+
+    fun cancelPopupCleanup(popup: WebView) {
+        val cleanup = popup.tag as? Runnable
+        if (cleanup != null) popup.removeCallbacks(cleanup)
+        popupCleanups.removeAll { it.first === popup }
+        popup.tag = null
+    }
+
+    private fun cancelPopupCleanups() {
+        popupCleanups.toList().forEach { (popup, cleanup) ->
+            runCatching {
+                popup.removeCallbacks(cleanup)
+                popup.stopLoading()
+                (popup.parent as? ViewGroup)?.removeView(popup)
+                popup.destroy()
+            }
+        }
+        popupCleanups.clear()
+    }
+
+    /** Снять cinema overlay; WebView вернуть в inline, если он ещё жив. */
+    fun detachCinemaFullscreen() {
+        val wv = webView
+        val overlay = fullscreenOverlay ?: return
+        val inline = inlineContainer
+        if (wv != null) {
+            (wv.parent as? ViewGroup)?.removeView(wv)
+            if (inline != null && wv.parent == null) {
+                inline.addView(
+                    wv,
+                    FrameLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                    ),
+                )
+                refreshWebViewSurface(wv)
+            }
+        }
+        clearFullscreenLayoutBinding(overlay)
+        (overlay.parent as? ViewGroup)?.removeView(overlay)
+        fullscreenOverlay = null
+    }
 
     fun showHtmlFullscreen(view: View, callback: WebChromeClient.CustomViewCallback?) {
         if (htmlFsContainer != null) {
@@ -517,22 +769,59 @@ private class PlayerWebViewHolder {
             ?: webView?.context?.findActivity()
             ?: return
         val decor = activity.window.decorView as ViewGroup
-        val container = FrameLayout(activity).apply {
+        val density = activity.resources.displayMetrics.density
+        val root = FrameLayout(activity).apply {
             setBackgroundColor(android.graphics.Color.BLACK)
             isClickable = true
             isFocusable = true
             elevation = 64f
         }
+        val videoHost = FrameLayout(activity)
         (view.parent as? ViewGroup)?.removeView(view)
-        container.addView(view, centeredPlayerLayoutParams(activity))
-        decor.addView(
-            container,
+        videoHost.addView(
+            view,
             FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT,
             ),
         )
-        htmlFsContainer = container
+        root.addView(
+            videoHost,
+            FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT,
+            ),
+        )
+        val close = android.widget.ImageButton(activity).apply {
+            setImageResource(android.R.drawable.ic_menu_close_clear_cancel)
+            setBackgroundColor(android.graphics.Color.TRANSPARENT)
+            contentDescription =
+                activity.getString(R.string.detail_player_fullscreen_exit)
+            setOnClickListener { requestExitHtmlFullscreen() }
+            val pad = (8 * density).toInt()
+            setPadding(pad, pad, pad, pad)
+            tag = FULLSCREEN_CLOSE_TAG
+        }
+        root.addView(
+            close,
+            FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                android.view.Gravity.END or android.view.Gravity.TOP,
+            ).also {
+                val m = (8 * density).toInt()
+                it.setMargins(m, fullscreenCloseTopMargin(decor, density), m, m)
+            },
+        )
+        bindFullscreenLayoutListener(root, videoHost)
+        decor.addView(
+            root,
+            FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT,
+            ),
+        )
+        htmlFsContainer = root
         htmlFsCallback = callback
         // WebView остаётся в app-overlay / inline; прячем, пока играет custom view
         webView?.visibility = View.INVISIBLE
@@ -543,6 +832,7 @@ private class PlayerWebViewHolder {
         val container = htmlFsContainer ?: return
         htmlFsContainer = null
         htmlFsCallback = null
+        clearFullscreenLayoutBinding(container)
         runCatching {
             container.removeAllViews()
             (container.parent as? ViewGroup)?.removeView(container)
@@ -564,6 +854,9 @@ private class PlayerWebViewHolder {
 
     /** Пауза при скрытии плеера (нет URL), без полного destroy. */
     fun pausePlayback() {
+        // Не глушить, если Activity уже в PiP (гайд Google для WebView).
+        val act = webView?.context?.findActivity()
+        if (act?.isInPictureInPictureMode == true) return
         val wv = webView ?: return
         runCatching {
             wv.onPause()
@@ -575,14 +868,13 @@ private class PlayerWebViewHolder {
 
     fun destroy() {
         runCatching {
+            cancelPopupCleanups()
             val cb = htmlFsCallback
             htmlFsCallback = null
             if (htmlFsContainer != null) hideHtmlFullscreen()
             // Если HTML FS ещё активен с точки зрения Chromium — отпускаем callback.
             if (cb != null) runCatching { cb.onCustomViewHidden() }
-            fullscreenOverlay?.let { overlay ->
-                (overlay.parent as? ViewGroup)?.removeView(overlay)
-            }
+            if (fullscreenOverlay != null) detachCinemaFullscreen()
             val wv = webView
             if (wv != null) {
                 wv.stopLoading()
@@ -599,6 +891,7 @@ private class PlayerWebViewHolder {
         htmlFsContainer = null
         htmlFsCallback = null
         onHtmlFullscreenChanged = null
+        onCinemaExit = null
     }
 }
 
@@ -613,28 +906,192 @@ private fun refreshWebViewSurface(webView: WebView) {
         runCatching {
             webView.onResume()
             webView.resumeTimers()
-            webView.visibility = View.INVISIBLE
-            webView.visibility = View.VISIBLE
             webView.requestLayout()
             webView.invalidate()
         }
     }
 }
 
-/** Максимальный 16:9 прямоугольник по центру экрана. */
-private fun centeredPlayerLayoutParams(
-    context: android.content.Context,
-): FrameLayout.LayoutParams {
-    val dm = context.resources.displayMetrics
-    val screenW = dm.widthPixels
-    val screenH = dm.heightPixels
-    val byWidthH = (screenW * 9f / 16f).toInt()
-    val (w, h) = if (byWidthH <= screenH) {
-        screenW to byWidthH
-    } else {
-        (screenH * 16f / 9f).toInt() to screenH
+/**
+ * Поверхность плеера в системном PiP без cinema FS:
+ * WebView в слот Activity; если уже cinema/HTML FS — видео на decor, тут чёрный фон.
+ */
+@Composable
+internal fun PlayerPipSurface(
+    holder: PlayerWebViewHolder,
+    modifier: Modifier = Modifier,
+) {
+    LaunchedEffect(holder) {
+        val wv = holder.webView ?: return@LaunchedEffect
+        refreshWebViewSurface(wv)
     }
-    return FrameLayout.LayoutParams(w, h, android.view.Gravity.CENTER)
+    val onDecor = holder.isCinemaFullscreen || holder.isHtmlFullscreen
+    if (onDecor) {
+        Box(modifier.background(Color.Black))
+        return
+    }
+    AndroidView(
+        factory = { ctx ->
+            FrameLayout(ctx).apply {
+                setBackgroundColor(android.graphics.Color.BLACK)
+                layoutParams = ViewGroup.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                )
+                holder.inlineContainer = this
+                val webView = holder.webView
+                if (webView != null) {
+                    (webView.parent as? ViewGroup)?.removeView(webView)
+                    addView(
+                        webView,
+                        FrameLayout.LayoutParams(
+                            ViewGroup.LayoutParams.MATCH_PARENT,
+                            ViewGroup.LayoutParams.MATCH_PARENT,
+                        ),
+                    )
+                    refreshWebViewSurface(webView)
+                }
+            }
+        },
+        update = { frame ->
+            holder.inlineContainer = frame
+            val webView = holder.webView ?: return@AndroidView
+            if (!holder.isCinemaFullscreen &&
+                !holder.isHtmlFullscreen &&
+                webView.parent !== frame
+            ) {
+                (webView.parent as? ViewGroup)?.removeView(webView)
+                frame.addView(
+                    webView,
+                    FrameLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                    ),
+                )
+                refreshWebViewSurface(webView)
+            }
+        },
+        onRelease = { frame ->
+            if (holder.inlineContainer === frame) {
+                holder.inlineContainer = null
+            }
+        },
+        modifier = modifier,
+    )
+}
+
+/** Отступ крестика от верха: status bar (и при immersive) + 10dp. */
+private fun fullscreenCloseTopMargin(host: View, density: Float): Int {
+    val inset = ViewCompat.getRootWindowInsets(host)
+        ?.getInsetsIgnoringVisibility(WindowInsetsCompat.Type.statusBars())
+        ?.top
+        ?: 0
+    val status = if (inset > 0) {
+        inset
+    } else {
+        val id = host.resources.getIdentifier("status_bar_height", "dimen", "android")
+        if (id > 0) host.resources.getDimensionPixelSize(id) else (24 * density).toInt()
+    }
+    return status + (10 * density).toInt()
+}
+
+private const val FULLSCREEN_CLOSE_TAG = "yoho_fs_close"
+
+/** Альбом — без крестика; портрет — показать. */
+private fun syncFullscreenCloseVisibility(container: ViewGroup, landscape: Boolean) {
+    val visibility = if (landscape) View.GONE else View.VISIBLE
+    for (i in 0 until container.childCount) {
+        val child = container.getChildAt(i)
+        if (child.tag == FULLSCREEN_CLOSE_TAG && child.visibility != visibility) {
+            child.visibility = visibility
+        }
+    }
+}
+
+/**
+ * Только крестик при смене orientation.
+ * Letterbox-padding убран: при уходе в альбом setPadding переживал WebView → чёрный кадр/мигание.
+ * Слот всегда edge-to-edge MATCH_PARENT.
+ */
+/** Cleanup postDelayed + OnLayoutChangeListener при detach overlay. */
+private class FullscreenLayoutBinding(
+    private val overlay: FrameLayout,
+) {
+    private var pending: Runnable? = null
+    private var appliedOrientation: Int? = null
+    private val listener = View.OnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
+        schedule(force = false)
+    }
+
+    init {
+        overlay.addOnLayoutChangeListener(listener)
+        overlay.post { schedule(force = true) }
+    }
+
+    fun schedule(force: Boolean) {
+        val orient = overlay.resources.configuration.orientation
+        if (!force && orient == appliedOrientation) return
+        pending?.let { overlay.removeCallbacks(it) }
+        val task = Runnable {
+            pending = null
+            val o = overlay.resources.configuration.orientation
+            appliedOrientation = o
+            syncFullscreenCloseVisibility(
+                overlay,
+                landscape = o == Configuration.ORIENTATION_LANDSCAPE,
+            )
+        }
+        pending = task
+        overlay.postDelayed(task, 120L)
+    }
+
+    fun clear() {
+        pending?.let { overlay.removeCallbacks(it) }
+        pending = null
+        overlay.removeOnLayoutChangeListener(listener)
+        if (overlay.tag === this) overlay.tag = null
+    }
+}
+
+private fun bindFullscreenLayoutListener(
+    overlay: FrameLayout,
+    videoHost: FrameLayout,
+) {
+    videoHost.clipChildren = true
+    videoHost.clipToPadding = true
+    // На всякий случай сбросить letterbox от прошлой сессии.
+    if (videoHost.paddingLeft != 0 || videoHost.paddingTop != 0 ||
+        videoHost.paddingRight != 0 || videoHost.paddingBottom != 0
+    ) {
+        videoHost.setPadding(0, 0, 0, 0)
+    }
+    (overlay.tag as? FullscreenLayoutBinding)?.clear()
+    overlay.tag = FullscreenLayoutBinding(overlay)
+}
+
+private fun clearFullscreenLayoutBinding(overlay: FrameLayout?) {
+    val binding = overlay?.tag as? FullscreenLayoutBinding ?: return
+    binding.clear()
+}
+
+/** В FS — следовать датчику; иначе вернуть прежнюю ориентацию Activity. */
+@Composable
+private fun PlayerFullscreenOrientationEffect(active: Boolean) {
+    val context = LocalContext.current
+    DisposableEffect(active) {
+        val activity = context.findActivity()
+        if (activity == null) {
+            return@DisposableEffect onDispose { }
+        }
+        val previous = activity.requestedOrientation
+        if (active) {
+            // SENSOR без reverse — меньше дёрганий при почти горизонтальном наклоне.
+            activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR
+        }
+        onDispose {
+            activity.requestedOrientation = previous
+        }
+    }
 }
 
 @Composable
@@ -644,79 +1101,86 @@ private fun PlayerFullscreenEffect(
     onExit: () -> Unit,
 ) {
     val context = LocalContext.current
-    DisposableEffect(enabled) {
-        val activity = context as? Activity
+    val onExitUpdated by rememberUpdatedState(onExit)
+
+    // Только attach. Detach — явный onExit/крестик (иначе remount item срывает FS).
+    LaunchedEffect(enabled) {
+        if (!enabled) return@LaunchedEffect
+        val activity = context.findActivity()
         val webView = holder.webView
-        val container = holder.inlineContainer
-        if (enabled && activity != null && webView != null && container != null) {
-            val decor = activity.window.decorView as ViewGroup
-            val density = context.resources.displayMetrics.density
-            val overlay = FrameLayout(context).apply {
-                setBackgroundColor(android.graphics.Color.BLACK)
-                isClickable = true
-                isFocusable = true
-            }
-            val close = android.widget.ImageButton(context).apply {
-                setImageResource(android.R.drawable.ic_menu_close_clear_cancel)
-                setBackgroundColor(android.graphics.Color.TRANSPARENT)
-                contentDescription =
-                    context.getString(R.string.detail_player_fullscreen_exit)
-                setOnClickListener {
-                    if (holder.isHtmlFullscreen) holder.requestExitHtmlFullscreen()
-                    else onExit()
-                }
-                val pad = (8 * density).toInt()
-                setPadding(pad, pad, pad, pad)
-            }
-            (webView.parent as? ViewGroup)?.removeView(webView)
-            // 16:9 по центру окна — иначе контент плеера часто липнет к верху
-            overlay.addView(webView, centeredPlayerLayoutParams(context))
-            overlay.addView(
-                close,
-                FrameLayout.LayoutParams(
-                    ViewGroup.LayoutParams.WRAP_CONTENT,
-                    ViewGroup.LayoutParams.WRAP_CONTENT,
-                    android.view.Gravity.TOP or android.view.Gravity.END,
-                ).also {
-                    val m = (8 * density).toInt()
-                    it.setMargins(m, m, m, m)
-                },
-            )
-            decor.addView(
-                overlay,
-                FrameLayout.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT,
-                    ViewGroup.LayoutParams.MATCH_PARENT,
-                ),
-            )
-            holder.fullscreenOverlay = overlay
-            refreshWebViewSurface(webView)
-        }
-        onDispose {
-            if (holder.isHtmlFullscreen) {
-                holder.hideHtmlFullscreen()
-            }
-            val wv = holder.webView
-            val overlay = holder.fullscreenOverlay
-            val inline = holder.inlineContainer
-            if (overlay != null) {
-                if (wv != null) {
-                    (wv.parent as? ViewGroup)?.removeView(wv)
-                    if (inline != null && wv.parent == null) {
-                        inline.addView(
-                            wv,
-                            FrameLayout.LayoutParams(
-                                ViewGroup.LayoutParams.MATCH_PARENT,
-                                ViewGroup.LayoutParams.MATCH_PARENT,
-                            ),
-                        )
-                        refreshWebViewSurface(wv)
+        if (activity == null || webView == null) return@LaunchedEffect
+        // Уже на decor (item пересоздали) — только обновить крестик.
+        holder.fullscreenOverlay?.let { overlay ->
+            for (i in 0 until overlay.childCount) {
+                val child = overlay.getChildAt(i)
+                if (child.tag == FULLSCREEN_CLOSE_TAG) {
+                    child.setOnClickListener {
+                        if (holder.isHtmlFullscreen) holder.requestExitHtmlFullscreen()
+                        else {
+                            holder.onCinemaExit?.invoke() ?: onExitUpdated()
+                        }
                     }
                 }
-                (overlay.parent as? ViewGroup)?.removeView(overlay)
-                holder.fullscreenOverlay = null
             }
+            return@LaunchedEffect
         }
+        val decor = activity.window.decorView as ViewGroup
+        val density = context.resources.displayMetrics.density
+        val overlay = FrameLayout(context).apply {
+            setBackgroundColor(android.graphics.Color.BLACK)
+            isClickable = true
+            isFocusable = true
+        }
+        val videoHost = FrameLayout(context)
+        (webView.parent as? ViewGroup)?.removeView(webView)
+        videoHost.addView(
+            webView,
+            FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT,
+            ),
+        )
+        overlay.addView(
+            videoHost,
+            FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT,
+            ),
+        )
+        val close = android.widget.ImageButton(context).apply {
+            setImageResource(android.R.drawable.ic_menu_close_clear_cancel)
+            setBackgroundColor(android.graphics.Color.TRANSPARENT)
+            contentDescription =
+                context.getString(R.string.detail_player_fullscreen_exit)
+            setOnClickListener {
+                if (holder.isHtmlFullscreen) holder.requestExitHtmlFullscreen()
+                else holder.onCinemaExit?.invoke() ?: onExitUpdated()
+            }
+            val pad = (8 * density).toInt()
+            setPadding(pad, pad, pad, pad)
+            tag = FULLSCREEN_CLOSE_TAG
+        }
+        overlay.addView(
+            close,
+            FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                android.view.Gravity.END or android.view.Gravity.TOP,
+            ).also {
+                val m = (8 * density).toInt()
+                it.setMargins(m, fullscreenCloseTopMargin(decor, density), m, m)
+            },
+        )
+        bindFullscreenLayoutListener(overlay, videoHost)
+        decor.addView(
+            overlay,
+            FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT,
+            ),
+        )
+        holder.fullscreenOverlay = overlay
+        refreshWebViewSurface(webView)
     }
 }
 
@@ -763,45 +1227,16 @@ private fun PlayerWebView(
                 context = ctx,
                 holder = holder,
                 sourceState = sourceState,
-            ).also { created ->
-                holder.webView = created
-                created.tag = loadKey
-                loadPlayerContent(created, url, embedHtml)
-            }
-            if (holder.fullscreenOverlay == null) {
-                (webView.parent as? ViewGroup)?.removeView(webView)
-                frame.addView(
-                    webView,
-                    FrameLayout.LayoutParams(
-                        ViewGroup.LayoutParams.MATCH_PARENT,
-                        ViewGroup.LayoutParams.MATCH_PARENT,
-                    ),
-                )
-                refreshWebViewSurface(webView)
-            }
+            ).also { holder.webView = it }
+            attachPlayerWebViewIfNeeded(holder, frame, webView)
+            schedulePlayerContentLoad(webView, loadKey, url, embedHtml)
             frame
         },
         update = { frame ->
             holder.inlineContainer = frame
             val webView = holder.webView ?: return@AndroidView
-            if (webView.tag != loadKey) {
-                webView.tag = loadKey
-                loadPlayerContent(webView, url, embedHtml)
-            }
-            if (holder.fullscreenOverlay == null &&
-                !holder.isHtmlFullscreen &&
-                webView.parent !== frame
-            ) {
-                (webView.parent as? ViewGroup)?.removeView(webView)
-                frame.addView(
-                    webView,
-                    FrameLayout.LayoutParams(
-                        ViewGroup.LayoutParams.MATCH_PARENT,
-                        ViewGroup.LayoutParams.MATCH_PARENT,
-                    ),
-                )
-                refreshWebViewSurface(webView)
-            }
+            attachPlayerWebViewIfNeeded(holder, frame, webView)
+            schedulePlayerContentLoad(webView, loadKey, url, embedHtml)
         },
         onRelease = { frame ->
             if (holder.inlineContainer === frame) {
@@ -810,6 +1245,43 @@ private fun PlayerWebView(
         },
         modifier = modifier,
     )
+}
+
+/** Сначала в иерархию, потом load — иначе WebView иногда остаётся пустым. */
+private fun attachPlayerWebViewIfNeeded(
+    holder: PlayerWebViewHolder,
+    frame: FrameLayout,
+    webView: WebView,
+) {
+    if (holder.fullscreenOverlay != null || holder.isHtmlFullscreen) return
+    if (webView.parent === frame) {
+        refreshWebViewSurface(webView)
+        return
+    }
+    (webView.parent as? ViewGroup)?.removeView(webView)
+    frame.addView(
+        webView,
+        FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.MATCH_PARENT,
+        ),
+    )
+    refreshWebViewSurface(webView)
+}
+
+private fun schedulePlayerContentLoad(
+    webView: WebView,
+    loadKey: String,
+    url: String?,
+    embedHtml: String?,
+) {
+    if (webView.tag == loadKey) return
+    webView.tag = loadKey
+    val key = loadKey
+    webView.post {
+        if (webView.tag != key) return@post
+        loadPlayerContent(webView, url, embedHtml)
+    }
 }
 
 @SuppressLint("SetJavaScriptEnabled")
@@ -850,6 +1322,7 @@ private fun createPlayerWebView(
                         // Popup нужен только для transport — сразу освобождаем.
                         v.post {
                             runCatching {
+                                holder.cancelPopupCleanup(v)
                                 v.stopLoading()
                                 (v.parent as? ViewGroup)?.removeView(v)
                                 v.destroy()
@@ -862,7 +1335,27 @@ private fun createPlayerWebView(
             val transport = resultMsg?.obj as? WebView.WebViewTransport ?: return false
             transport.webView = popup
             resultMsg.sendToTarget()
+            // Если URL так и не пришёл — не держим orphan WebView.
+            val cleanup = Runnable {
+                runCatching {
+                    holder.cancelPopupCleanup(popup)
+                    if (popup.parent == null) {
+                        popup.stopLoading()
+                        popup.destroy()
+                    }
+                }
+            }
+            holder.trackPopupCleanup(popup, cleanup)
             return true
+        }
+
+        override fun onCloseWindow(window: WebView?) {
+            val w = window ?: return
+            runCatching {
+                w.stopLoading()
+                (w.parent as? ViewGroup)?.removeView(w)
+                w.destroy()
+            }
         }
 
         override fun onShowCustomView(view: View?, callback: CustomViewCallback?) {
@@ -917,9 +1410,37 @@ private fun createPlayerWebView(
         }
 
         override fun onPageFinished(view: WebView?, finishedUrl: String?) {
-            android.util.Log.i("PlayerWebView", "finished $finishedUrl")
+            val fs = holder.fullscreenOverlay != null || holder.isHtmlFullscreen
+            view?.let { applyPlayerContentZoom(it, enabled = fs) }
         }
     }
+}
+
+/** true только Expanded (≥840dp sw); Compact/Medium — без zoom. */
+private fun playerZoomAllowed(context: android.content.Context): Boolean =
+    context.resources.configuration.smallestScreenWidthDp >= 840
+
+/** Масштаб оболочки плеера; только fullscreen и только Expanded. */
+private fun applyPlayerContentZoom(webView: WebView, enabled: Boolean) {
+    val on = enabled && playerZoomAllowed(webView.context)
+    val z = if (on) PlayerBrowserProfile.PLAYER_CSS_ZOOM else "1"
+    webView.settings.textZoom =
+        if (on) PlayerBrowserProfile.PLAYER_TEXT_ZOOM else 100
+    val js =
+        """
+        (function(){
+          try {
+            var z = '$z';
+            document.documentElement.style.zoom = z;
+            if (document.body) document.body.style.zoom = z;
+            var ifr = document.querySelectorAll('iframe');
+            for (var i = 0; i < ifr.length; i++) {
+              ifr[i].style.zoom = z;
+            }
+          } catch (e) {}
+        })();
+        """.trimIndent()
+    webView.evaluateJavascript(js, null)
 }
 
 /** Polyfill до скриптов во всех фреймах (в т.ч. player.cdnvideohub.com). */

@@ -10,6 +10,53 @@ data class TrendingResponse(
     val builtAt: Long? = null,
 )
 
+/** GET /api/anime — блоки как на reyoho.com/anime. */
+data class AnimeHomeResponse(
+    val trending: AnimeListPageDto? = null,
+    val season: AnimeListPageDto? = null,
+    val popular: AnimeListPageDto? = null,
+    val top: List<AnimeItemDto> = emptyList(),
+    val seasonTop: List<AnimeItemDto> = emptyList(),
+    val seasonLabel: AnimeSeasonLabelDto? = null,
+)
+
+data class AnimeListResponse(
+    val items: List<AnimeItemDto> = emptyList(),
+    val nextPage: Int? = null,
+)
+
+data class AnimeListPageDto(
+    val items: List<AnimeItemDto> = emptyList(),
+    val nextPage: Int? = null,
+)
+
+data class AnimeSeasonLabelDto(
+    val season: String? = null,
+    val year: Int? = null,
+)
+
+data class AnimeItemDto(
+    val anilistId: Int? = null,
+    val idMal: Int? = null,
+    val title: String? = null,
+    val romaji: String? = null,
+    val russian: String? = null,
+    val ruTitle: String? = null,
+    val year: Int? = null,
+    val score: Double? = null,
+    val coverImage: String? = null,
+    val ruPosterUrl: String? = null,
+    val format: String? = null,
+    val status: String? = null,
+    val episodes: Int? = null,
+    val mediaType: String? = null,
+    val tmdbId: Int? = null,
+    val kpId: Int? = null,
+    val kpRating: Double? = null,
+    val imdbRating: Double? = null,
+    val ruOverview: String? = null,
+)
+
 data class TrendingItemDto(
     val id: Int? = null,
     val title: String? = null,
@@ -111,12 +158,47 @@ data class ScoreDto(
     @SerializedName("votes") val votes: Int? = null,
 )
 
+/** Один ролик из trailer.clips (YouTube и/или VK). */
+data class TrailerClipDto(
+    val title: String? = null,
+    val youtubeKey: String? = null,
+    val vkEmbedUrl: String? = null,
+    val durationSec: Int? = null,
+) {
+    val youtubeWatchUrl: String?
+        get() = youtubeKey?.takeIf { it.isNotBlank() }?.let { "https://www.youtube.com/watch?v=$it" }
+
+    val hasYoutube: Boolean get() = !youtubeKey.isNullOrBlank()
+    val hasVk: Boolean get() = !vkEmbedUrl.isNullOrBlank()
+    val isPlayable: Boolean get() = hasYoutube || hasVk
+}
+
 data class TrailerDto(
     @SerializedName("url") val url: String? = null,
     @SerializedName("title") val title: String? = null,
     @SerializedName("date") val date: String? = null,
     @SerializedName("thumbnail") val thumbnail: String? = null,
-)
+    val vkEmbedUrl: String? = null,
+    val clips: List<TrailerClipDto> = emptyList(),
+) {
+    /** Клипы для плеера; если clips пуст — собираем из корневых youtube/vk/url. */
+    fun playableClips(): List<TrailerClipDto> {
+        val fromApi = clips.filter { it.isPlayable }
+        if (fromApi.isNotEmpty()) return fromApi
+        val single = TrailerClipDto(
+            title = title,
+            youtubeKey = youtubeKeyFromWatchUrl(url),
+            vkEmbedUrl = vkEmbedUrl,
+        )
+        return if (single.isPlayable) listOf(single) else emptyList()
+    }
+}
+
+private fun youtubeKeyFromWatchUrl(url: String?): String? {
+    if (url.isNullOrBlank()) return null
+    val m = Regex("""(?:v=|/embed/|youtu\.be/)([A-Za-z0-9_-]{6,})""").find(url)
+    return m?.groupValues?.getOrNull(1)
+}
 
 data class CastMemberDto(
     val id: Int? = null,
@@ -136,7 +218,7 @@ data class PersonDto(
     val knownFor: List<String> = emptyList(),
 )
 
-/** POST /api/diary → 201 { entry } */
+/** POST /api/diary → 201 { entry }; like/dislike без statusLabel (409 = уже есть). */
 data class DiaryRequestDto(
     val itemId: String,
     val href: String,
@@ -144,8 +226,8 @@ data class DiaryRequestDto(
     val year: String? = null,
     val mediaType: String,
     val sourceReaction: String = "manual",
-    val statusLabel: String,
-    val updateStatusIfItemExists: Boolean = true,
+    val statusLabel: String? = null,
+    val updateStatusIfItemExists: Boolean? = null,
 )
 
 data class DiaryResponseDto(
@@ -174,10 +256,17 @@ data class DiaryRemoveResponseDto(
     val removed: Boolean? = null,
 )
 
-/** POST /api/me/activity */
+/**
+ * POST /api/me/activity — формы body зависят от op:
+ * - addFavorite/removeFavorite/recordWatch: `item`
+ * - setRating: `input`
+ * - clearRating/removeFavorite(alt)/removeWatch: `itemId`
+ */
 data class MeActivityRequest(
     val op: String,
-    val item: MeActivityItemDto,
+    val item: MeActivityItemDto? = null,
+    val input: MeActivityRatingInputDto? = null,
+    val itemId: String? = null,
 )
 
 data class MeActivityItemDto(
@@ -188,6 +277,16 @@ data class MeActivityItemDto(
     val posterUrl: String? = null,
     val mediaType: String? = null,
     val ts: Long = System.currentTimeMillis(),
+)
+
+/** input для op=setRating (лайк → value=10, дизлайк → isNotInterested). */
+data class MeActivityRatingInputDto(
+    val itemId: String,
+    val href: String,
+    val title: String,
+    val mediaType: String,
+    val value: Int? = null,
+    val isNotInterested: Boolean = false,
 )
 
 /** Элемент полки: favorites / watchHistory из GET /api/sync */
@@ -209,6 +308,23 @@ data class SyncResponseDto(
     val ok: Boolean = false,
     val favorites: List<FavoriteItemDto> = emptyList(),
     val watchHistory: List<FavoriteItemDto> = emptyList(),
+)
+
+/** GET /api/ratings — реакции like/dislike. */
+data class UserRatingsResponse(
+    val ratings: List<UserReactionDto> = emptyList(),
+)
+
+data class UserReactionDto(
+    val id: String? = null,
+    val href: String? = null,
+    val title: String? = null,
+    val year: String? = null,
+    val posterUrl: String? = null,
+    val mediaType: String? = null,
+    val reaction: String? = null,
+    val aliases: List<String> = emptyList(),
+    val ts: Long? = null,
 )
 
 /** POST /api/auth/sign-in/email */
@@ -531,10 +647,6 @@ fun PlayerConfigDto.toPlayerSources(): List<PlayerSourceDto> {
     val byKey = linkedMapOf<String, PlayerSourceDto>()
     val titleId = resolvedKinopoiskId?.takeIf { it.isNotBlank() }
 
-    fun putDirect(name: String, url: String?) {
-        byKey[name] = PlayerSourceDto(name = name, iframeUrl = url?.takeIf { it.isNotBlank() })
-    }
-
     /** iframe + parent origin reyoho.com (как Alloha на сайте). */
     fun putShell(name: String, url: String?) {
         val src = url?.takeIf { it.isNotBlank() } ?: return
@@ -552,9 +664,9 @@ fun PlayerConfigDto.toPlayerSources(): List<PlayerSourceDto> {
     if (alloha != null) putShell("alloha", alloha.toEmbedUrl())
     // Turbo как на сайте: iframe под parent reyoho.com (top-level obrut часто пустой)
     if (turbo != null) putShell("turbo", turbo.toEmbedUrl())
-    // Collaps на WebView играет top-level
+    // Collaps в iframe-shell (как Alloha) — стабильнее viewport при повороте, чем top-level.
     if (!collapsUrl.isNullOrBlank() || capabilities?.get("collapsCatalog") == true) {
-        putDirect("collaps", collapsUrl?.takeIf { it.isNotBlank() }?.toCollapsEmbedUrl())
+        putShell("collaps", collapsUrl?.takeIf { it.isNotBlank() }?.toCollapsEmbedUrl())
     }
     if (vibix != null) {
         // Прямой kinescope URL → «контент ещё не добавлен»; на сайте — rendex+ins.
@@ -568,8 +680,7 @@ fun PlayerConfigDto.toPlayerSources(): List<PlayerSourceDto> {
     if (byKey.isEmpty()) {
         iframeUrl?.takeIf { it.isNotBlank() }?.let { url ->
             val name = primaryPlayer?.trim()?.lowercase()?.ifBlank { null } ?: "player"
-            if (name == "collaps") putDirect(name, url.ensureAbsHttpUrl())
-            else putShell(name, url.ensureAbsHttpUrl())
+            putShell(name, url.ensureAbsHttpUrl())
         }
     }
 
@@ -770,11 +881,21 @@ data class FilmInfoCastPreviewDto(
     val href: String? = null,
 )
 
+data class FilmInfoTrailerClipDto(
+    val title: String? = null,
+    val youtubeKey: String? = null,
+    val vkEmbedUrl: String? = null,
+    val durationSec: Int? = null,
+)
+
 data class FilmInfoTrailerDto(
     val title: String? = null,
     val youtubeKey: String? = null,
     val publishedAt: String? = null,
     val thumbnailUrl: String? = null,
+    val vkEmbedUrl: String? = null,
+    val durationSec: Int? = null,
+    val clips: List<FilmInfoTrailerClipDto> = emptyList(),
 )
 
 data class FilmInfoRtRatingDto(
@@ -847,11 +968,32 @@ fun FilmInfoResponseDto.toTitleDetail(): TitleDetailDto {
         poster = d?.posterUrl,
         backdrop = backdropUrl ?: d?.posterUrl,
         trailer = trailer?.let { t ->
+            val mappedClips = t.clips.map { c ->
+                TrailerClipDto(
+                    title = c.title,
+                    youtubeKey = c.youtubeKey,
+                    vkEmbedUrl = c.vkEmbedUrl,
+                    durationSec = c.durationSec,
+                )
+            }
             TrailerDto(
-                url = t.youtubeKey?.let { "https://www.youtube.com/watch?v=$it" },
+                url = t.youtubeKey?.let { "https://www.youtube.com/watch?v=$it" }
+                    ?: mappedClips.firstOrNull { it.hasYoutube }?.youtubeWatchUrl,
                 title = t.title,
                 date = t.publishedAt?.take(10),
                 thumbnail = t.thumbnailUrl,
+                vkEmbedUrl = t.vkEmbedUrl
+                    ?: mappedClips.firstOrNull { it.hasVk }?.vkEmbedUrl,
+                clips = mappedClips.ifEmpty {
+                    listOfNotNull(
+                        TrailerClipDto(
+                            title = t.title,
+                            youtubeKey = t.youtubeKey,
+                            vkEmbedUrl = t.vkEmbedUrl,
+                            durationSec = t.durationSec,
+                        ).takeIf { it.isPlayable },
+                    )
+                },
             )
         },
         similar = recommendations.map {
@@ -873,12 +1015,84 @@ fun FilmInfoResponseDto.toTitleDetail(): TitleDetailDto {
     )
 }
 
+/** Элемент GET /api/search/suggest — как на reyoho.com (`results[]`). */
 data class SuggestItemDto(
+    val key: String? = null,
+    val mediaType: String? = null,
+    val title: String? = null,
+    val originalTitle: String? = null,
+    val year: String? = null,
+    val posterUrl: String? = null,
+    val kinopoiskId: String? = null,
+    val tmdbId: Int? = null,
+    val rating: Double? = null,
+    val ratingKinopoisk: Double? = null,
+    val ratingImdb: Double? = null,
+    val genres: List<String> = emptyList(),
+    /** Legacy openapi-поля (на случай голого массива). */
     @SerializedName("id") val id: Int? = null,
     @SerializedName("type") val type: String? = null,
-    @SerializedName("title") val title: String? = null,
-    @SerializedName("year") val year: Int? = null,
     @SerializedName("poster") val poster: String? = null,
+) {
+    val displayPoster: String? get() = posterUrl ?: poster
+    val displayType: String? get() = mediaType ?: type
+    val kpId: Int? get() = kinopoiskId?.toIntOrNull() ?: id?.takeIf { it > 0 }
+
+    fun typeLabelRu(): String = when (displayType?.lowercase()) {
+        "tv", "series" -> "Сериал"
+        "anime" -> "Аниме"
+        "animation" -> "Мультфильм"
+        "movie", "film", null, "" -> "Фильм"
+        else -> displayType.orEmpty()
+    }
+
+    fun kpScore(): Double? = ratingKinopoisk?.takeIf { it > 0 }
+    fun imdbScore(): Double? = (ratingImdb ?: rating)?.takeIf { it > 0 }
+
+    fun favoriteItemId(): String? = kpId?.takeIf { it > 0 }?.let { "kp:$it" }
+
+    fun normalizedMediaType(): String = when (displayType?.lowercase()) {
+        "tv", "series" -> "tv"
+        "anime" -> "anime"
+        "animation" -> "animation"
+        else -> "movie"
+    }
+
+    fun toFavoriteActivityItem(): MeActivityItemDto? {
+        val kp = kpId?.takeIf { it > 0 } ?: return null
+        val titleText = title?.takeIf { it.isNotBlank() } ?: return null
+        val media = normalizedMediaType()
+        val href = when (media) {
+            "tv", "anime" -> "/series/$kp"
+            else -> "/film/$kp"
+        }
+        return MeActivityItemDto(
+            id = "kp:$kp",
+            href = href,
+            title = titleText,
+            year = year,
+            posterUrl = displayPoster.toFavoritePosterPath(),
+            mediaType = media,
+        )
+    }
+}
+
+data class SuggestResponseDto(
+    val results: List<SuggestItemDto> = emptyList(),
+    val degraded: Boolean = false,
+)
+
+/** GET /api/search/persons?q= */
+data class SearchPersonDto(
+    val id: Int? = null,
+    val name: String? = null,
+    val originalName: String? = null,
+    val photoUrl: String? = null,
+)
+
+data class SearchPersonsResponse(
+    val persons: List<SearchPersonDto> = emptyList(),
+    val degraded: Boolean = false,
 )
 
 data class SearchResponseDto(
@@ -1077,6 +1291,48 @@ fun TitleDetailDto.toDiaryRequest(statusLabel: String): DiaryRequestDto? {
     )
 }
 
+/** Реакция с плеера: sourceReaction=like|dislike, без statusLabel. */
+fun TitleDetailDto.toDiaryReactionRequest(reaction: String): DiaryRequestDto? {
+    val kp = idKp?.takeIf { it > 0 } ?: return null
+    val href = siteHref() ?: return null
+    val titleText = title?.ru ?: title?.original ?: return null
+    return DiaryRequestDto(
+        itemId = "kp:$kp",
+        href = href,
+        title = titleText,
+        year = (year ?: yearStart)?.toString(),
+        mediaType = normalizedMediaType(),
+        sourceReaction = reaction,
+    )
+}
+
+/**
+ * Body setRating как на сайте:
+ * like → value:10, isNotInterested:false
+ * dislike → value:null, isNotInterested:true (null обязан быть в JSON).
+ */
+fun TitleDetailDto.toSetRatingBody(reaction: String): com.google.gson.JsonObject? {
+    val kp = idKp?.takeIf { it > 0 } ?: return null
+    val href = siteHref() ?: return null
+    val titleText = title?.ru ?: title?.original ?: return null
+    val input = com.google.gson.JsonObject().apply {
+        addProperty("itemId", "kp:$kp")
+        addProperty("href", href)
+        addProperty("title", titleText)
+        addProperty("mediaType", normalizedMediaType())
+        if (reaction == "like") {
+            addProperty("value", 10)
+        } else {
+            add("value", com.google.gson.JsonNull.INSTANCE)
+        }
+        addProperty("isNotInterested", reaction == "dislike")
+    }
+    return com.google.gson.JsonObject().apply {
+        addProperty("op", "setRating")
+        add("input", input)
+    }
+}
+
 /** Постер для /api/me/activity — относительный path с w185, как на сайте. */
 fun String?.toFavoritePosterPath(): String? {
     val path = toRelativeMediaPath() ?: return null
@@ -1109,6 +1365,39 @@ fun RecommendationItemDto.toTitle(): TitleDto {
         reason = sourceTitle?.takeIf { it.isNotBlank() }
             ?: reason?.takeIf { it.isNotBlank() },
     )
+}
+
+fun AnimeItemDto.toTitle(): TitleDto {
+    val display = ruTitle?.takeIf { it.isNotBlank() }
+        ?: russian?.takeIf { it.isNotBlank() }
+        ?: title
+    return TitleDto(
+        idKp = kpId,
+        idTmdb = tmdbId,
+        mediaType = mediaType ?: "anime",
+        title = TitleNameDto(ru = display, original = romaji ?: title),
+        year = year,
+        poster = (ruPosterUrl ?: coverImage).absMediaUrl(),
+        ratings = RatingsDto(
+            kinopoisk = (kpRating ?: score)?.let { ScoreDto(it) },
+            imdb = imdbRating?.let { ScoreDto(it) },
+        ),
+    )
+}
+
+fun AnimeSeasonLabelDto?.displayRu(): String {
+    if (this == null) return ""
+    val seasonRu = when (season?.uppercase()) {
+        "WINTER" -> "зима"
+        "SPRING" -> "весна"
+        "SUMMER" -> "лето"
+        "FALL" -> "осень"
+        else -> season?.lowercase().orEmpty()
+    }
+    return listOfNotNull(
+        seasonRu.takeIf { it.isNotBlank() },
+        year?.toString(),
+    ).joinToString(" ")
 }
 
 fun TrendingItemDto.toTitle(ratings: Map<String, TrendingRatingDto>): TitleDto {

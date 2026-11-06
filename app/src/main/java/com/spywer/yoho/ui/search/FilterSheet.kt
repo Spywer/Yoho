@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
@@ -24,6 +25,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
@@ -47,11 +49,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
@@ -59,6 +64,7 @@ import com.spywer.yoho.data.remote.FacetItemDto
 import com.spywer.yoho.data.remote.NetworkModule
 import com.spywer.yoho.data.remote.SearchFacetsDto
 import com.spywer.yoho.data.remote.SearchFiltersCatalogDto
+import com.spywer.yoho.data.remote.SearchPersonDto
 import com.spywer.yoho.data.remote.SuggestItemDto
 import com.spywer.yoho.data.remote.absMediaUrl
 import com.spywer.yoho.ui.layout.LocalHomeMetrics
@@ -66,14 +72,71 @@ import com.spywer.yoho.ui.theme.YohoColors
 import com.spywer.yoho.ui.theme.YohoThemeExtras
 import kotlinx.coroutines.delay
 
-private val TitleSp = 28.sp
-private val CategorySp = 22.sp
-private val BodySp = 20.sp
-private val ChipSp = 18.sp
-private val HintSp = 15.sp
-private val RowMin = 56.dp
-private val ChipMinH = 48.dp
-private val FieldH = 52.dp
+private val TitleSp: TextUnit
+    @Composable get() {
+        val m = LocalHomeMetrics.current
+        return if (m.isTablet) 28.sp else 18.sp
+    }
+private val CategorySp: TextUnit
+    @Composable get() {
+        val m = LocalHomeMetrics.current
+        return if (m.isTablet) 22.sp else 14.sp
+    }
+private val BodySp: TextUnit
+    @Composable get() {
+        val m = LocalHomeMetrics.current
+        return if (m.isTablet) 20.sp else 14.sp
+    }
+private val ChipSp: TextUnit
+    @Composable get() {
+        val m = LocalHomeMetrics.current
+        return if (m.isTablet) 18.sp else 12.sp
+    }
+private val HintSp: TextUnit
+    @Composable get() {
+        val m = LocalHomeMetrics.current
+        return if (m.isTablet) 15.sp else 12.sp
+    }
+private val RowMin: Dp
+    @Composable get() {
+        val m = LocalHomeMetrics.current
+        return if (m.isTablet) 56.dp else 36.dp
+    }
+private val ChipMinH: Dp
+    @Composable get() {
+        val m = LocalHomeMetrics.current
+        return if (m.isTablet) 48.dp else 30.dp
+    }
+private val FieldH: Dp
+    @Composable get() {
+        val m = LocalHomeMetrics.current
+        return if (m.isTablet) 52.dp else 36.dp
+    }
+private val CatPadV: Dp
+    @Composable get() {
+        val m = LocalHomeMetrics.current
+        return if (m.isTablet) 16.dp else 8.dp
+    }
+private val FieldPadH: Dp
+    @Composable get() {
+        val m = LocalHomeMetrics.current
+        return if (m.isTablet) 14.dp else 10.dp
+    }
+private val FieldPadV: Dp
+    @Composable get() {
+        val m = LocalHomeMetrics.current
+        return if (m.isTablet) 12.dp else 6.dp
+    }
+private val IconBtn: Dp
+    @Composable get() {
+        val m = LocalHomeMetrics.current
+        return if (m.isTablet) 52.dp else 36.dp
+    }
+private val IconSz: Dp
+    @Composable get() {
+        val m = LocalHomeMetrics.current
+        return if (m.isTablet) 28.dp else 20.dp
+    }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -90,28 +153,50 @@ fun FilterSheet(
     var query by remember { mutableStateOf("") }
     val yoho = YohoThemeExtras.colors
     val metrics = LocalHomeMetrics.current
-    val sheetMax = if (metrics.isTablet) 860.dp else 740.dp
-    val hPad = if (metrics.isTablet) 28.dp else 20.dp
+    val config = LocalConfiguration.current
+    val screenH = config.screenHeightDp.dp
+    val screenW = config.screenWidthDp.dp
+    // Medium/Expanded — почти на весь экран, чтобы сразу видеть больше значений.
+    val sheetModifier = if (metrics.isTablet) {
+        Modifier
+            .fillMaxHeight(0.94f)
+            .heightIn(min = screenH * 0.88f, max = screenH * 0.96f)
+    } else {
+        Modifier.heightIn(max = 640.dp)
+    }
+    // По умолчанию M3 режет sheet до 640dp — на планшете разворачиваем по ширине.
+    val sheetMaxWidth = if (metrics.isTablet) {
+        screenW * 0.96f
+    } else {
+        BottomSheetDefaults.SheetMaxWidth
+    }
+    val hPad = if (metrics.isTablet) 28.dp else 12.dp
+    val listGap = if (metrics.isTablet) 8.dp else 2.dp
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
+        sheetMaxWidth = sheetMaxWidth,
         containerColor = MaterialTheme.colorScheme.surface,
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .heightIn(max = sheetMax)
+                .then(sheetModifier)
                 .padding(horizontal = hPad)
-                .padding(bottom = 28.dp),
+                .padding(bottom = if (metrics.isTablet) metrics.sectionGap else 6.dp),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 if (nav != null) {
                     IconButton(
                         onClick = { nav = null; query = "" },
-                        modifier = Modifier.size(52.dp),
+                        modifier = Modifier.size(IconBtn),
                     ) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, null, Modifier.size(28.dp))
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowBack,
+                            null,
+                            Modifier.size(IconSz),
+                        )
                     }
                 }
                 Text(
@@ -132,43 +217,95 @@ fun FilterSheet(
                         Text("Сбросить", fontSize = BodySp)
                     }
                 }
-                IconButton(onClick = onDismiss, modifier = Modifier.size(52.dp)) {
-                    Icon(Icons.Filled.Close, null, Modifier.size(28.dp))
+                IconButton(onClick = onDismiss, modifier = Modifier.size(IconBtn)) {
+                    Icon(Icons.Filled.Close, null, Modifier.size(IconSz))
                 }
             }
 
-            SearchField(
-                value = query,
-                onValueChange = { query = it },
-                placeholder = if (nav == null) "Найти фильтр или значение…" else "Поиск…",
-            )
-            HorizontalDivider(color = MaterialTheme.colorScheme.outline)
-            Spacer(Modifier.height(8.dp))
+            // У актёров / съёмки / «без участия» свой поиск по API — верхний фильтр значений не нужен.
+            val hideValueSearch = nav == FilterCategory.Actors ||
+                nav == FilterCategory.Crew ||
+                nav == FilterCategory.ExcludePeople
+            if (!hideValueSearch) {
+                SearchField(
+                    value = query,
+                    onValueChange = { query = it },
+                    placeholder = if (nav == null) "Найти фильтр или значение…" else "Поиск…",
+                )
+                HorizontalDivider(color = MaterialTheme.colorScheme.outline)
+                Spacer(Modifier.height(if (metrics.isTablet) 8.dp else 4.dp))
+            } else {
+                HorizontalDivider(color = MaterialTheme.colorScheme.outline)
+                Spacer(Modifier.height(if (metrics.isTablet) 8.dp else 4.dp))
+            }
 
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .weight(1f, fill = metrics.isTablet)
                     .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(listGap),
             ) {
                 when (val category = nav) {
                     null -> {
-                        FilterCategory.entries
+                        val matched = FilterCategory.entries
                             .filter { query.isBlank() || it.title.contains(query, true) }
-                            .forEach { cat ->
-                                Text(
-                                    text = cat.title,
-                                    fontSize = CategorySp,
-                                    fontWeight = FontWeight.Medium,
-                                    color = MaterialTheme.colorScheme.onBackground,
+                        FilterGroup.entries.forEach { group ->
+                            val items = matched.filter { it.group == group }
+                            if (items.isEmpty()) return@forEach
+                            Text(
+                                text = group.title.uppercase(),
+                                fontSize = HintSp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
+                                letterSpacing = 0.6.sp,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(
+                                        top = if (metrics.isTablet) 14.dp else 10.dp,
+                                        bottom = if (metrics.isTablet) 4.dp else 2.dp,
+                                        start = if (metrics.isTablet) 6.dp else 2.dp,
+                                    ),
+                            )
+                            items.forEach { cat ->
+                                val selectedCount = filters.selectionCount(cat)
+                                Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .defaultMinSize(minHeight = RowMin)
                                         .clickable { nav = cat; query = "" }
-                                        .padding(vertical = 16.dp, horizontal = 6.dp),
-                                )
+                                        .padding(
+                                            vertical = CatPadV,
+                                            horizontal = if (metrics.isTablet) 6.dp else 2.dp,
+                                        ),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Text(
+                                        text = cat.title,
+                                        fontSize = CategorySp,
+                                        fontWeight = FontWeight.Medium,
+                                        color = MaterialTheme.colorScheme.onBackground,
+                                        modifier = Modifier.weight(1f),
+                                    )
+                                    if (selectedCount > 0) {
+                                        Text(
+                                            text = selectedCount.toString(),
+                                            fontSize = HintSp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.onPrimary,
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(percent = 50))
+                                                .background(MaterialTheme.colorScheme.primary)
+                                                .padding(
+                                                    horizontal = if (metrics.isTablet) 10.dp else 8.dp,
+                                                    vertical = if (metrics.isTablet) 4.dp else 2.dp,
+                                                ),
+                                        )
+                                    }
+                                }
                             }
-                        Spacer(Modifier.height(8.dp))
+                        }
+                        Spacer(Modifier.height(if (metrics.isTablet) 8.dp else 4.dp))
                         ToggleRow("Только с плеером", filters.onlyWithPlayer) {
                             onUpdate(filters.copy(onlyWithPlayer = it))
                         }
@@ -223,10 +360,15 @@ fun FilterSheet(
                     }
 
                     FilterCategory.Actors -> PersonEditor(
-                        hint = "Имя актёра…",
+                        hint = "Поиск актёра…",
                         selected = filters.actors,
-                        onAdd = { onUpdate(filters.copy(actors = filters.actors + it)) },
-                        onRemove = { onUpdate(filters.copy(actors = filters.actors - it)) },
+                        onAdd = { person ->
+                            if (filters.actors.any { it.kpId == person.kpId }) return@PersonEditor
+                            onUpdate(filters.copy(actors = filters.actors + person))
+                        },
+                        onRemove = { kpId ->
+                            onUpdate(filters.copy(actors = filters.actors.filterNot { it.kpId == kpId }))
+                        },
                         colors = yoho,
                     )
 
@@ -242,19 +384,33 @@ fun FilterSheet(
                             colors = yoho,
                         )
                         PersonEditor(
-                            hint = "Имя человека…",
+                            hint = "Поиск в съёмочной группе…",
                             selected = filters.crew,
-                            onAdd = { onUpdate(filters.copy(crew = filters.crew + it)) },
-                            onRemove = { onUpdate(filters.copy(crew = filters.crew - it)) },
+                            // Сайт — один человек в crew.
+                            onAdd = { person ->
+                                onUpdate(filters.copy(crew = listOf(person)))
+                            },
+                            onRemove = { kpId ->
+                                onUpdate(filters.copy(crew = filters.crew.filterNot { it.kpId == kpId }))
+                            },
                             colors = yoho,
                         )
                     }
 
                     FilterCategory.ExcludePeople -> PersonEditor(
-                        hint = "Имя человека…",
+                        hint = "Поиск человека без участия…",
                         selected = filters.excludePeople,
-                        onAdd = { onUpdate(filters.copy(excludePeople = filters.excludePeople + it)) },
-                        onRemove = { onUpdate(filters.copy(excludePeople = filters.excludePeople - it)) },
+                        onAdd = { person ->
+                            if (filters.excludePeople.any { it.kpId == person.kpId }) return@PersonEditor
+                            onUpdate(filters.copy(excludePeople = filters.excludePeople + person))
+                        },
+                        onRemove = { kpId ->
+                            onUpdate(
+                                filters.copy(
+                                    excludePeople = filters.excludePeople.filterNot { it.kpId == kpId },
+                                ),
+                            )
+                        },
                         colors = yoho,
                     )
 
@@ -368,9 +524,14 @@ fun FilterSheet(
                     FilterCategory.ReleaseDates -> {
                         ValueChips(
                             items = ReleaseStatusOptions,
-                            selected = setOf(filters.releaseStatus ?: "all"),
+                            selected = setOf(filters.releaseStatus ?: "released"),
                             onToggle = {
-                                onUpdate(filters.copy(releaseStatus = if (it == "all") null else it))
+                                // Как на сайте: default released — в URL не уходит.
+                                onUpdate(
+                                    filters.copy(
+                                        releaseStatus = if (it == "released") null else it,
+                                    ),
+                                )
                             },
                             colors = yoho,
                         )
@@ -454,13 +615,13 @@ private fun TitleSuggestField(
         }
         delay(280)
         suggestions = runCatching {
-            NetworkModule.api.suggest(value.trim(), limit = 8)
+            NetworkModule.api.suggest(value.trim(), limit = 8).results
         }.getOrDefault(emptyList())
     }
 
-    Column(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
+    Column(Modifier.fillMaxWidth().padding(vertical = if (LocalHomeMetrics.current.isTablet) 6.dp else 4.dp)) {
         Text("Название", fontSize = BodySp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(if (LocalHomeMetrics.current.isTablet) 8.dp else 4.dp))
         BasicTextField(
             value = value,
             onValueChange = onValueChange,
@@ -470,9 +631,9 @@ private fun TitleSuggestField(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(FieldH)
-                .clip(RoundedCornerShape(12.dp))
+                .clip(RoundedCornerShape(10.dp))
                 .background(MaterialTheme.colorScheme.surfaceVariant)
-                .padding(horizontal = 14.dp, vertical = 12.dp),
+                .padding(horizontal = FieldPadH, vertical = FieldPadV),
             decorationBox = { inner ->
                 if (value.isEmpty()) {
                     Text(
@@ -508,7 +669,7 @@ private fun TitleSuggestField(
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         AsyncImage(
-                            model = item.poster.absMediaUrl(),
+                            model = item.displayPoster.absMediaUrl(),
                             contentDescription = null,
                             contentScale = ContentScale.Crop,
                             modifier = Modifier
@@ -526,7 +687,7 @@ private fun TitleSuggestField(
                                 fontWeight = FontWeight.Medium,
                             )
                             Text(
-                                text = listOfNotNull(item.type, item.year?.toString())
+                                text = listOfNotNull(item.displayType, item.year)
                                     .joinToString(" · "),
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 fontSize = HintSp,
@@ -545,10 +706,13 @@ private fun IntRangeRow(
     range: IntRangeFilter,
     onChange: (IntRangeFilter) -> Unit,
 ) {
-    Column(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
+    val rowPad = if (LocalHomeMetrics.current.isTablet) 6.dp else 4.dp
+    val rowGap = if (LocalHomeMetrics.current.isTablet) 8.dp else 4.dp
+    val fieldGap = if (LocalHomeMetrics.current.isTablet) 12.dp else 8.dp
+    Column(Modifier.fillMaxWidth().padding(vertical = rowPad)) {
         Text(label, fontSize = BodySp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Spacer(Modifier.height(8.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Spacer(Modifier.height(rowGap))
+        Row(horizontalArrangement = Arrangement.spacedBy(fieldGap)) {
             NumberField(
                 value = range.from?.toString().orEmpty(),
                 placeholder = "от",
@@ -571,10 +735,13 @@ private fun DoubleRangeRow(
     range: DoubleRangeFilter,
     onChange: (DoubleRangeFilter) -> Unit,
 ) {
-    Column(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
+    val rowPad = if (LocalHomeMetrics.current.isTablet) 6.dp else 4.dp
+    val rowGap = if (LocalHomeMetrics.current.isTablet) 8.dp else 4.dp
+    val fieldGap = if (LocalHomeMetrics.current.isTablet) 12.dp else 8.dp
+    Column(Modifier.fillMaxWidth().padding(vertical = rowPad)) {
         Text(label, fontSize = BodySp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Spacer(Modifier.height(8.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Spacer(Modifier.height(rowGap))
+        Row(horizontalArrangement = Arrangement.spacedBy(fieldGap)) {
             NumberField(
                 value = range.from?.toString().orEmpty(),
                 placeholder = "от",
@@ -599,10 +766,13 @@ private fun LongRangeRow(
     range: LongRangeFilter,
     onChange: (LongRangeFilter) -> Unit,
 ) {
-    Column(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
+    val rowPad = if (LocalHomeMetrics.current.isTablet) 6.dp else 4.dp
+    val rowGap = if (LocalHomeMetrics.current.isTablet) 8.dp else 4.dp
+    val fieldGap = if (LocalHomeMetrics.current.isTablet) 12.dp else 8.dp
+    Column(Modifier.fillMaxWidth().padding(vertical = rowPad)) {
         Text(label, fontSize = BodySp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Spacer(Modifier.height(8.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Spacer(Modifier.height(rowGap))
+        Row(horizontalArrangement = Arrangement.spacedBy(fieldGap)) {
             NumberField(
                 value = range.from?.toString().orEmpty(),
                 placeholder = "от",
@@ -626,10 +796,13 @@ private fun DateRangeRow(
     to: String?,
     onChange: (String?, String?) -> Unit,
 ) {
-    Column(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
+    val rowPad = if (LocalHomeMetrics.current.isTablet) 6.dp else 4.dp
+    val rowGap = if (LocalHomeMetrics.current.isTablet) 8.dp else 4.dp
+    val fieldGap = if (LocalHomeMetrics.current.isTablet) 12.dp else 8.dp
+    Column(Modifier.fillMaxWidth().padding(vertical = rowPad)) {
         Text(label, fontSize = BodySp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Spacer(Modifier.height(8.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Spacer(Modifier.height(rowGap))
+        Row(horizontalArrangement = Arrangement.spacedBy(fieldGap)) {
             NumberField(
                 value = from.orEmpty(),
                 placeholder = "с (ГГГГ-ММ-ДД)",
@@ -670,9 +843,9 @@ private fun NumberField(
         cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
         modifier = modifier
             .height(FieldH)
-            .clip(RoundedCornerShape(12.dp))
+            .clip(RoundedCornerShape(10.dp))
             .background(MaterialTheme.colorScheme.surfaceVariant)
-            .padding(horizontal = 14.dp, vertical = 12.dp),
+            .padding(horizontal = FieldPadH, vertical = FieldPadV),
         decorationBox = { inner ->
             if (value.isEmpty()) {
                 Text(placeholder, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = BodySp)
@@ -689,9 +862,13 @@ private fun LabeledTextField(
     placeholder: String,
     onValueChange: (String) -> Unit,
 ) {
-    Column(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .padding(vertical = if (LocalHomeMetrics.current.isTablet) 6.dp else 4.dp),
+    ) {
         Text(label, fontSize = BodySp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(if (LocalHomeMetrics.current.isTablet) 8.dp else 4.dp))
         BasicTextField(
             value = value,
             onValueChange = onValueChange,
@@ -701,9 +878,9 @@ private fun LabeledTextField(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(FieldH)
-                .clip(RoundedCornerShape(12.dp))
+                .clip(RoundedCornerShape(10.dp))
                 .background(MaterialTheme.colorScheme.surfaceVariant)
-                .padding(horizontal = 14.dp, vertical = 12.dp),
+                .padding(horizontal = FieldPadH, vertical = FieldPadV),
             decorationBox = { inner ->
                 if (value.isEmpty()) {
                     Text(placeholder, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = BodySp)
@@ -720,6 +897,7 @@ private fun SearchField(
     onValueChange: (String) -> Unit,
     placeholder: String,
 ) {
+    val padV = if (LocalHomeMetrics.current.isTablet) 10.dp else 4.dp
     BasicTextField(
         value = value,
         onValueChange = onValueChange,
@@ -728,7 +906,7 @@ private fun SearchField(
         cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 10.dp),
+            .padding(vertical = padV),
         decorationBox = { inner ->
             Row(
                 Modifier.fillMaxWidth().height(RowMin),
@@ -745,11 +923,12 @@ private fun SearchField(
 
 @Composable
 private fun ToggleRow(title: String, checked: Boolean, onChecked: (Boolean) -> Unit) {
+    val padV = if (LocalHomeMetrics.current.isTablet) 8.dp else 2.dp
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .defaultMinSize(minHeight = RowMin)
-            .padding(vertical = 8.dp, horizontal = 4.dp),
+            .padding(vertical = padV, horizontal = if (LocalHomeMetrics.current.isTablet) 4.dp else 0.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(title, Modifier.weight(1f), color = MaterialTheme.colorScheme.onBackground, fontSize = CategorySp)
@@ -761,35 +940,57 @@ private fun ToggleRow(title: String, checked: Boolean, onChecked: (Boolean) -> U
 @Composable
 private fun PersonEditor(
     hint: String,
-    selected: Set<String>,
-    onAdd: (String) -> Unit,
-    onRemove: (String) -> Unit,
+    selected: List<PersonFilterRef>,
+    onAdd: (PersonFilterRef) -> Unit,
+    onRemove: (Int) -> Unit,
     colors: YohoColors,
 ) {
     var draft by remember { mutableStateOf("") }
+    var suggestions by remember { mutableStateOf<List<SearchPersonDto>>(emptyList()) }
+    val minQueryLen = 2
+
+    LaunchedEffect(draft) {
+        val q = draft.trim()
+        if (q.length < minQueryLen) {
+            suggestions = emptyList()
+            return@LaunchedEffect
+        }
+        delay(280)
+        val qNow = draft.trim()
+        if (qNow.length < minQueryLen) {
+            suggestions = emptyList()
+            return@LaunchedEffect
+        }
+        suggestions = runCatching {
+            NetworkModule.api.searchPersons(qNow, source = "kinodata").persons
+        }.getOrDefault(emptyList())
+    }
+
+    fun pick(person: SearchPersonDto) {
+        val name = person.name?.trim()?.takeIf { it.isNotEmpty() } ?: return
+        val kpId = person.id ?: return
+        onAdd(PersonFilterRef(name = name, kpId = kpId))
+        draft = ""
+        suggestions = emptyList()
+    }
+
     BasicTextField(
         value = draft,
         onValueChange = { draft = it },
         singleLine = true,
         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
         keyboardActions = KeyboardActions(
-            onDone = {
-                val name = draft.trim()
-                if (name.isNotEmpty()) {
-                    onAdd(name)
-                    draft = ""
-                }
-            },
+            onDone = { suggestions.firstOrNull()?.let(::pick) },
         ),
         textStyle = TextStyle(color = MaterialTheme.colorScheme.onBackground, fontSize = BodySp),
         cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 10.dp)
+            .padding(vertical = if (LocalHomeMetrics.current.isTablet) 10.dp else 4.dp)
             .height(FieldH)
-            .clip(RoundedCornerShape(12.dp))
+            .clip(RoundedCornerShape(10.dp))
             .background(MaterialTheme.colorScheme.surfaceVariant)
-            .padding(horizontal = 14.dp, vertical = 12.dp),
+            .padding(horizontal = FieldPadH, vertical = FieldPadV),
         decorationBox = { inner ->
             if (draft.isEmpty()) {
                 Text(hint, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = BodySp)
@@ -797,14 +998,72 @@ private fun PersonEditor(
             inner()
         },
     )
-    Text("Enter — добавить", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = HintSp)
-    Spacer(Modifier.height(12.dp))
-    ValueChips(
-        items = selected.map { FacetItemDto(it, it) },
-        selected = selected,
-        onToggle = onRemove,
-        colors = colors,
+    Text(
+        "Минимум $minQueryLen символа — выберите из списка",
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        fontSize = HintSp,
     )
+    if (suggestions.isNotEmpty()) {
+        Spacer(Modifier.height(if (LocalHomeMetrics.current.isTablet) 8.dp else 4.dp))
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(12.dp))
+                .background(MaterialTheme.colorScheme.surfaceVariant)
+                .padding(vertical = 4.dp),
+        ) {
+            suggestions.forEach { person ->
+                val name = person.name?.takeIf { it.isNotBlank() } ?: return@forEach
+                if (person.id == null) return@forEach
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { pick(person) }
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    AsyncImage(
+                        model = person.photoUrl.absMediaUrl(),
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier
+                            .size(40.dp, 56.dp)
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(MaterialTheme.colorScheme.outline.copy(alpha = 0.25f)),
+                    )
+                    Spacer(Modifier.width(12.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            text = name,
+                            color = MaterialTheme.colorScheme.onBackground,
+                            fontSize = BodySp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            fontWeight = FontWeight.Medium,
+                        )
+                        person.originalName?.takeIf { it.isNotBlank() && it != name }?.let { orig ->
+                            Text(
+                                text = orig,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                fontSize = HintSp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+    Spacer(Modifier.height(if (LocalHomeMetrics.current.isTablet) 12.dp else 6.dp))
+    if (selected.isNotEmpty()) {
+        ValueChips(
+            items = selected.map { FacetItemDto(value = it.kpId.toString(), label = it.name) },
+            selected = selected.map { it.kpId.toString() }.toSet(),
+            onToggle = { key -> key.toIntOrNull()?.let(onRemove) },
+            colors = colors,
+        )
+    }
 }
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -815,19 +1074,23 @@ private fun ValueChips(
     onToggle: (String) -> Unit,
     colors: YohoColors,
 ) {
+    val metrics = LocalHomeMetrics.current
+    val chipGap = if (metrics.isTablet) metrics.blockGap else 4.dp
     if (items.isEmpty()) {
         Text(
             "Ничего не найдено",
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             fontSize = BodySp,
-            modifier = Modifier.padding(16.dp),
+            modifier = Modifier.padding(if (metrics.isTablet) 16.dp else 8.dp),
         )
         return
     }
     FlowRow(
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-        modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
+        horizontalArrangement = Arrangement.spacedBy(chipGap),
+        verticalArrangement = Arrangement.spacedBy(chipGap),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = chipGap),
     ) {
         items.forEach { item ->
             val value = item.value ?: return@forEach
@@ -839,10 +1102,13 @@ private fun ValueChips(
                     Text(
                         item.label ?: value,
                         fontSize = ChipSp,
-                        modifier = Modifier.padding(vertical = 4.dp, horizontal = 2.dp),
+                        modifier = Modifier.padding(
+                            vertical = if (metrics.isTablet) 4.dp else 0.dp,
+                            horizontal = if (metrics.isTablet) 2.dp else 0.dp,
+                        ),
                     )
                 },
-                shape = RoundedCornerShape(14.dp),
+                shape = RoundedCornerShape(if (metrics.isTablet) 14.dp else 10.dp),
                 modifier = Modifier.defaultMinSize(minHeight = ChipMinH),
                 colors = FilterChipDefaults.filterChipColors(
                     selectedContainerColor = colors.chipSelected,

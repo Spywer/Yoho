@@ -17,9 +17,11 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PlayArrow
@@ -29,8 +31,11 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -46,7 +51,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.spywer.yoho.R
@@ -56,6 +60,7 @@ import com.spywer.yoho.data.remote.TvLastAirDto
 import com.spywer.yoho.data.remote.TvScheduleDto
 import com.spywer.yoho.ui.layout.LocalHomeMetrics
 import com.spywer.yoho.ui.layout.rememberHomeMetrics
+import com.spywer.yoho.ui.trailer.openTrailerPlayer
 
 @Composable
 fun TitleDetailScreen(
@@ -68,11 +73,21 @@ fun TitleDetailScreen(
     val metrics = rememberHomeMetrics()
     var selectedPersonId by remember { mutableStateOf<Int?>(null) }
 
+    BackHandler {
+        if (selectedPersonId != null) {
+            selectedPersonId = null
+        } else {
+            onBack()
+        }
+    }
+
+    val inPip = LocalDetailPip.current?.inPipState?.value == true
+
     CompositionLocalProvider(LocalHomeMetrics provides metrics) {
         Box(
             Modifier
                 .fillMaxSize()
-                .background(MaterialTheme.colorScheme.background),
+                .background(if (inPip) Color.Black else MaterialTheme.colorScheme.background),
         ) {
             when {
                 state.loading && state.detail == null -> {
@@ -122,11 +137,15 @@ fun TitleDetailScreen(
                             diaryBusy = state.diaryBusy,
                             diaryError = state.diaryError,
                             diaryNotify = state.diaryNotify,
-                            onBack = onBack,
+                            playerReaction = state.playerReaction,
+                            reactionBusy = state.reactionBusy,
+                            // В PiP — без hero/scroll; видео уже на decor overlay.
+                            pipMode = inPip,
                             onToggleFavorite = viewModel::toggleFavorite,
                             onSetDiaryStatus = viewModel::setDiaryStatus,
                             onRemoveFromDiary = viewModel::removeFromDiary,
                             onConsumeDiaryNotify = viewModel::consumeDiaryNotify,
+                            onPlayerReaction = viewModel::setPlayerReaction,
                             onSelectSeason = viewModel::selectSeason,
                             onSelectPlayerSource = viewModel::selectPlayerSource,
                             onOpenTitle = onOpenTitle,
@@ -137,11 +156,13 @@ fun TitleDetailScreen(
                 }
             }
 
-            selectedPersonId?.let { personId ->
-                PersonSheet(
-                    personId = personId,
-                    onDismiss = { selectedPersonId = null },
-                )
+            if (!inPip) {
+                selectedPersonId?.let { personId ->
+                    PersonSheet(
+                        personId = personId,
+                        onDismiss = { selectedPersonId = null },
+                    )
+                }
             }
         }
     }
@@ -167,11 +188,14 @@ private fun DetailContent(
     diaryBusy: Boolean,
     diaryError: String?,
     diaryNotify: String?,
-    onBack: () -> Unit,
+    playerReaction: String?,
+    reactionBusy: Boolean,
+    pipMode: Boolean = false,
     onToggleFavorite: () -> Unit,
     onSetDiaryStatus: (String) -> Unit,
     onRemoveFromDiary: () -> Unit,
     onConsumeDiaryNotify: () -> Unit,
+    onPlayerReaction: (String) -> Unit,
     onSelectSeason: (Int) -> Unit,
     onSelectPlayerSource: (String) -> Unit,
     onOpenTitle: (Int?, Int?, String?) -> Unit,
@@ -189,8 +213,16 @@ private fun DetailContent(
     val castTitle = stringResource(R.string.detail_cast)
     val castFullCount = detail.castTotal?.takeIf { it > 0 } ?: detail.cast.size
     val castFullTitle = stringResource(R.string.detail_cast_full, castFullCount)
-    val aboutTitle = stringResource(R.string.detail_about)
+    val aboutTitle = stringResource(
+        when (detail.mediaType?.lowercase()) {
+            "tv" -> R.string.detail_about_tv
+            "animation" -> R.string.detail_about_animation
+            "anime" -> R.string.detail_about_anime
+            else -> R.string.detail_about
+        },
+    )
     val trailerFallback = stringResource(R.string.detail_trailer)
+    val trailerClips = remember(detail.trailer) { detail.trailer?.playableClips().orEmpty() }
     val showFullCastLink = !detail.castPageHref.isNullOrBlank() && castFullCount > 0
     val selectedSeasonEpisodes = remember(schedule, selectedSeason) {
         schedule?.seasons
@@ -199,11 +231,37 @@ private fun DetailContent(
             ?.sortedBy { it.episodeNumber ?: 0 }
             .orEmpty()
     }
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(bottom = 32.dp),
+    val playerHolder = remember(detail.idKp, detail.idTmdb) { PlayerWebViewHolder() }
+    val pipController = LocalDetailPip.current
+    val pipActivity = context.findActivity()
+    DisposableEffect(playerHolder) {
+        onDispose {
+            pipController?.clearPlayer(pipActivity)
+            playerHolder.destroy()
+        }
+    }
+    if (pipMode) {
+        DetailPipEligibilityEffect(eligible = true)
+        DetailPipWebViewBindEffect(webView = playerHolder.webView)
+        DisposableEffect(playerHolder) {
+            playerHolder.onCinemaExit = {
+                playerHolder.detachCinemaFullscreen()
+                if (playerHolder.isHtmlFullscreen) {
+                    playerHolder.requestExitHtmlFullscreen()
+                }
+            }
+            onDispose { playerHolder.onCinemaExit = null }
+        }
+        PlayerPipSurface(holder = playerHolder, modifier = Modifier.fillMaxSize())
+        return
+    }
+    // verticalScroll: плеер не dispose при повороте (в отличие от LazyColumn).
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(bottom = if (metrics.isTablet) 32.dp else 20.dp),
     ) {
-        item {
             DetailHero(
                 detail = detail,
                 titleRu = titleRu,
@@ -213,13 +271,10 @@ private fun DetailContent(
                 favoriteBusy = favoriteBusy,
                 favoriteError = favoriteError,
                 metrics = metrics,
-                onBack = onBack,
                 onToggleFavorite = onToggleFavorite,
                 onOpenGenre = onOpenGenre,
             )
-        }
 
-        item {
             Column(
                 Modifier
                     .fillMaxWidth()
@@ -272,31 +327,36 @@ private fun DetailContent(
                     MetaRow("Бюджет", detail.production?.budget)
                 }
 
-                detail.trailer?.url?.let { url ->
-                    Spacer(Modifier.height(16.dp))
+                if (trailerClips.isNotEmpty()) {
+                    Spacer(Modifier.height(metrics.sectionGap))
+                    val trailer = detail.trailer
+                    val trailerMod = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                        .clickable {
+                            context.openTrailerPlayer(
+                                clips = trailerClips,
+                                title = detail.trailer?.title ?: trailerFallback,
+                            )
+                        }
+                        .padding(if (metrics.isTablet) 12.dp else 10.dp)
+                    val thumbW = if (metrics.isTablet) 296.dp else 112.dp
+                    val playIcon = if (metrics.isTablet) 48.dp else 28.dp
                     Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(MaterialTheme.colorScheme.surfaceVariant)
-                            .clickable {
-                                context.startActivity(
-                                    Intent(Intent.ACTION_VIEW, Uri.parse(url)),
-                                )
-                            }
-                            .padding(12.dp),
+                        modifier = trailerMod,
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Box(
                             Modifier
-                                .width(296.dp)
+                                .width(thumbW)
                                 .aspectRatio(16f / 9f)
-                                .clip(RoundedCornerShape(10.dp))
+                                .clip(RoundedCornerShape(if (metrics.isTablet) 10.dp else 8.dp))
                                 .background(Color.Black),
                             contentAlignment = Alignment.Center,
                         ) {
                             AsyncImage(
-                                model = detail.trailer.thumbnail ?: detail.backdrop,
+                                model = trailer?.thumbnail ?: detail.backdrop,
                                 contentDescription = null,
                                 contentScale = ContentScale.Crop,
                                 modifier = Modifier.fillMaxSize(),
@@ -306,67 +366,86 @@ private fun DetailContent(
                                 contentDescription = null,
                                 tint = Color.White,
                                 modifier = Modifier
-                                    .size(48.dp)
-                                    .clip(RoundedCornerShape(24.dp))
+                                    .size(playIcon)
+                                    .clip(CircleShape)
                                     .background(Color.Black.copy(alpha = 0.5f))
-                                    .padding(8.dp),
+                                    .padding(if (metrics.isTablet) 8.dp else 4.dp),
                             )
                         }
-                        Spacer(Modifier.width(14.dp))
+                        Spacer(Modifier.width(if (metrics.isTablet) 14.dp else 10.dp))
                         Column(Modifier.weight(1f)) {
                             Text(
-                                text = detail.trailer.title ?: trailerFallback,
+                                text = trailer?.title ?: trailerFallback,
                                 color = MaterialTheme.colorScheme.onBackground,
-                                fontSize = metrics.searchTextSize,
+                                fontSize = if (metrics.isTablet) {
+                                    metrics.searchTextSize
+                                } else {
+                                    metrics.cardMetaSize
+                                },
+                                lineHeight = metrics.lineOf(
+                                    if (metrics.isTablet) {
+                                        metrics.searchTextSize
+                                    } else {
+                                        metrics.cardMetaSize
+                                    },
+                                ),
                                 fontWeight = FontWeight.SemiBold,
                                 maxLines = 2,
                                 overflow = TextOverflow.Ellipsis,
                             )
-                            detail.trailer.date?.let {
+                            val metaParts = buildList {
+                                trailer?.date?.let { raw ->
+                                    formatLongDateRu(raw)?.let(::add)
+                                }
+                                if (trailerClips.size > 1) {
+                                    add(
+                                        stringResource(
+                                            R.string.detail_trailer_clips_count,
+                                            trailerClips.size,
+                                        ),
+                                    )
+                                }
+                            }
+                            if (metaParts.isNotEmpty()) {
                                 Text(
-                                    text = it,
+                                    text = metaParts.joinToString(" · "),
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     fontSize = metrics.cardMetaSize,
-                                    modifier = Modifier.padding(top = 4.dp),
+                                    lineHeight = metrics.lineOf(metrics.cardMetaSize),
+                                    modifier = Modifier.padding(top = metrics.blockGap),
                                 )
                             }
                         }
                     }
                 }
             }
-        }
 
-        if (
-            playerLoading ||
-            playerChoices.isNotEmpty() ||
-            !playerIframeUrl.isNullOrBlank() ||
-            !playerEmbedHtml.isNullOrBlank() ||
-            playerNeedsLogin
-        ) {
-            item {
-                PlayerBlock(
-                    choices = playerChoices,
-                    selectedSource = selectedPlayerSource,
-                    iframeUrl = playerIframeUrl,
-                    embedHtml = playerEmbedHtml,
-                    loading = playerLoading,
-                    needsLogin = playerNeedsLogin,
-                    diaryStatusLabel = diaryStatusLabel,
-                    diaryBusy = diaryBusy,
-                    diaryError = diaryError,
-                    diaryNotify = diaryNotify,
-                    onSelectSource = onSelectPlayerSource,
-                    onSetDiaryStatus = onSetDiaryStatus,
-                    onRemoveFromDiary = onRemoveFromDiary,
-                    onConsumeDiaryNotify = onConsumeDiaryNotify,
-                    padding = metrics.screenPadding,
-                    metaSize = metrics.cardMetaSize,
-                    modifier = Modifier.padding(top = 20.dp),
-                )
-            }
-        }
+            PlayerBlock(
+                choices = playerChoices,
+                selectedSource = selectedPlayerSource,
+                iframeUrl = playerIframeUrl,
+                embedHtml = playerEmbedHtml,
+                loading = playerLoading,
+                needsLogin = playerNeedsLogin,
+                mediaType = detail.mediaType,
+                diaryStatusLabel = diaryStatusLabel,
+                diaryBusy = diaryBusy,
+                diaryError = diaryError,
+                diaryNotify = diaryNotify,
+                playerReaction = playerReaction,
+                reactionBusy = reactionBusy,
+                onSelectSource = onSelectPlayerSource,
+                onSetDiaryStatus = onSetDiaryStatus,
+                onRemoveFromDiary = onRemoveFromDiary,
+                onConsumeDiaryNotify = onConsumeDiaryNotify,
+                onPlayerReaction = onPlayerReaction,
+                padding = metrics.screenPadding,
+                metaSize = metrics.cardMetaSize,
+                webHolder = playerHolder,
+                modifier = Modifier.padding(top = metrics.sectionGap),
+            )
 
-        titleDetailScheduleSection(
+        TitleDetailScheduleSection(
             schedule = schedule,
             scheduleLoading = scheduleLoading,
             selectedSeason = selectedSeason,
@@ -377,17 +456,18 @@ private fun DetailContent(
         )
 
         if (detail.cast.isNotEmpty()) {
-            item {
                 SectionHeader(
                     castTitle,
                     metrics.sectionTitleSize,
                     metrics.screenPadding,
                 )
-            }
-            item {
+                val castCardW = if (metrics.isTablet) 112.dp else 88.dp
+                val castCardH = if (metrics.isTablet) 148.dp else 116.dp
                 LazyRow(
                     contentPadding = PaddingValues(horizontal = metrics.screenPadding),
-                    horizontalArrangement = Arrangement.spacedBy(18.dp),
+                    horizontalArrangement = Arrangement.spacedBy(
+                        if (metrics.isTablet) 18.dp else 12.dp,
+                    ),
                 ) {
                     items(
                         items = detail.cast,
@@ -395,14 +475,14 @@ private fun DetailContent(
                     ) { actor ->
                         Column(
                             Modifier
-                                .width(112.dp)
+                                .width(castCardW)
                                 .clickable(enabled = actor.id != null && actor.id > 0) {
                                     actor.id?.let(onOpenPerson)
                                 },
                         ) {
                             Box(
                                 Modifier
-                                    .size(112.dp, 148.dp)
+                                    .size(castCardW, castCardH)
                                     .clip(RoundedCornerShape(10.dp))
                                     .background(MaterialTheme.colorScheme.surfaceVariant),
                             ) {
@@ -418,20 +498,22 @@ private fun DetailContent(
                             Text(
                                 text = actor.name.orEmpty(),
                                 color = MaterialTheme.colorScheme.onBackground,
-                                fontSize = 20.sp,
+                                fontSize = metrics.castNameSize,
+                                lineHeight = metrics.lineOf(metrics.castNameSize),
                                 fontWeight = FontWeight.Medium,
                                 textAlign = TextAlign.Center,
                                 maxLines = 2,
                                 overflow = TextOverflow.Ellipsis,
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(top = 6.dp),
+                                    .padding(top = metrics.blockGap),
                             )
                             actor.role?.let {
                                 Text(
                                     text = it,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    fontSize = 13.sp,
+                                    fontSize = metrics.castRoleSize,
+                                    lineHeight = metrics.lineOf(metrics.castRoleSize),
                                     textAlign = TextAlign.Center,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis,
@@ -441,14 +523,15 @@ private fun DetailContent(
                         }
                     }
                 }
-            }
             if (showFullCastLink) {
-                item {
                     Box(
                         Modifier
                             .fillMaxWidth()
                             .padding(horizontal = metrics.screenPadding)
-                            .padding(top = 28.dp, bottom = 4.dp),
+                            .padding(
+                                top = if (metrics.isTablet) 28.dp else 16.dp,
+                                bottom = 4.dp,
+                            ),
                         contentAlignment = Alignment.Center,
                     ) {
                         OutlinedButton(
@@ -460,16 +543,15 @@ private fun DetailContent(
                         ) {
                             Text(
                                 text = castFullTitle,
-                                fontSize = 18.sp,
+                                fontSize = metrics.detailFavTextSize,
                                 fontWeight = FontWeight.SemiBold,
                             )
                         }
                     }
-                }
             }
         }
 
-        relatedSection(
+        RelatedSection(
             title = prequelsTitle,
             items = detail.prequels,
             onOpenTitle = onOpenTitle,
@@ -478,7 +560,7 @@ private fun DetailContent(
             cardWidth = metrics.posterLarge,
             gap = metrics.cardGap,
         )
-        relatedSection(
+        RelatedSection(
             title = sequelsTitle,
             items = detail.sequels,
             onOpenTitle = onOpenTitle,
@@ -487,7 +569,7 @@ private fun DetailContent(
             cardWidth = metrics.posterLarge,
             gap = metrics.cardGap,
         )
-        relatedSection(
+        RelatedSection(
             title = similarTitle,
             items = detail.similar,
             onOpenTitle = onOpenTitle,

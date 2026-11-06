@@ -1,13 +1,13 @@
 # YoHo API Specification
 
-**Версия:** 0.1.41
-**Дата публикации:** 4 ноября 2026
+**Версия:** 0.1.42
+**Дата публикации:** 5 ноября 2026
 **Базовый URL:** `https://reyoho.com` | `https://reyoho.ru`
 **Протокол:** HTTPS (HTTP/2)
 **Формат обмена:** JSON (UTF-8)
 **Контакты:** reyoho@proton.me
 
-> Актуализация 0.1.41: дневник, избранное и sync приведены к реальным контрактам сайта (HAR / Android-клиент YoHo).
+> Актуализация 0.1.42: страница `/anime` (`GET /api/anime`), фильтры discover (preset/collection/age/sort), Android home-layout для аниме.
 
 ---
 
@@ -530,9 +530,17 @@ GET /api/search/filters
 GET /api/search/discover?source=catalog&type=movie,series,mini_series,cartoon,anime,tv_show,short
 ```
 
-**Параметры:**
-- `source`: `catalog`, `trending`, `popular`
-- `type`: CSV-список из 7 типов контента (из `kinds`)
+**Параметры (как в URL `reyoho.com/search`):**
+- `source`: обычно `catalog` (подборки задаются `preset` / `collection`, а не сменой source)
+- `type`: CSV из kinds (`movie`, `series`, `mini_series`, `cartoon`, `anime`, `tv_show`, `short`)
+- диапазоны: `{key}_from` / `{key}_to` (`rating_kp`, `runtime`, `votes_imdb`, `budget`, …)
+- люди: `actor` + `actor_kp`, `crew` + `crew_kp` (+ `crew_role`), `not_person` + `not_person_kp`
+- `age`: `6` \| `12` \| `16` \| `18`
+- `preset`: `top`, `hidden_gems`, `trending`, `new`, `classics`
+- `collection`: `films-best500`, `series-best250`, `all-popular1000`, `all-week250`, `all-day250`
+- `sort`: `-popularity`, `-rating_kp`, …, `-box_office`, `-oscars_won`, `-awards_won`, …
+- `released`: только если не дефолт — `upcoming` или `any`
+- `region`: `cis`, `europe`, `asia`, `america`
 
 ### 4.9. Ответ поиска
 
@@ -563,17 +571,19 @@ GET /api/search/discover?source=catalog&type=movie,series,mini_series,cartoon,an
 
 ### 5.1. Эндпоинт `/api/trending`
 
-Возвращает список трендовых и популярных тайтлов. Различает 7 вариантов фильтрации:
+Возвращает список трендовых и популярных тайтлов для **общей** главной (`/`, `/film`, `/series`, `/animation`).
 
 | Фильтр | Назначение |
 |--------|-----------|
-| *(без параметра)* | Общий тренд (movie + tv) |
-| `movie` | Трендовые фильмы (свежие) |
-| `popular_movie` | Популярные фильмы (по рейтингу/голосам) |
+| `all` / *(без параметра)* | Общий тренд |
+| `movie` | Трендовые фильмы |
+| `popular_movie` | Популярные фильмы |
 | `tv` | Трендовые сериалы |
 | `popular_tv` | Популярные сериалы |
-| `animation` | Трендовая анимация (movie + tv) |
+| `animation` | Трендовая анимация |
 | `popular_animation` | Популярная анимация |
+| `anime` | Трендовое аниме (legacy; страница `/anime` использует §5.2) |
+| `popular_anime` | Популярное аниме (legacy) |
 
 ```http
 GET /api/trending?filter=popular_movie
@@ -606,6 +616,37 @@ GET /api/trending?filter=popular_movie
 ```
 
 **Ключ рейтинга:** `{mediaType}:{tmdbId}` — для оптимизации размера ответа.
+
+### 5.2. Страница аниме `/api/anime`
+
+Отдельный feed для [reyoho.com/anime](https://reyoho.com/anime) (не общий `/api/trending`).
+
+```http
+GET /api/anime
+GET /api/anime/list?sort=trending|season|popular&page=2
+```
+
+**Ответ `/api/anime`:**
+```json
+{
+  "trending": { "items": [ /* AnimeItem */ ], "nextPage": 2 },
+  "season": { "items": [ /* … */ ], "nextPage": 2 },
+  "popular": { "items": [ /* … */ ], "nextPage": 2 },
+  "top": [ /* до ~100 */ ],
+  "seasonTop": [ /* … */ ],
+  "seasonLabel": { "season": "FALL", "year": 2026 }
+}
+```
+
+**UI-блоки сайта:**
+1. Сейчас популярно ← `trending` (`sort=trending`)
+2. Популярно в этом сезоне · {зима\|весна\|лето\|осень} {year} ← `season`
+3. Популярное за всё время ← `popular`
+4. Сайдбар «Топ 100 аниме» / «Топ сезона» ← `top` / `seasonTop`
+
+**AnimeItem (фрагмент):** `anilistId`, `idMal`, `title`/`romaji`/`russian`/`ruTitle`, `year`, `score`, `coverImage`/`ruPosterUrl`, `mediaType`, `tmdbId`, `kpId`, `kpRating`, `imdbRating`.
+
+`seasonLabel.season`: `WINTER` \| `SPRING` \| `SUMMER` \| `FALL`.
 
 ---
 
@@ -1130,12 +1171,13 @@ GET /api/player-config?kinopoiskId=12686425&mediaType=movie
 }
 ```
 
-**Ответ для заблокированного тайтла (451 Unavailable For Legal Reasons):**
+**Ответ для заблокированного / недоступного конфига (451 Unavailable For Legal Reasons):**
 ```json
 { "error": "taken_down" }
 ```
 
-HTTP 451 используется для тайтлов, удалённых по DMCA-жалобам.
+HTTP 451: DMCA / нет источников; **без cookie сессии** тот же код часто означает login-wall (SSR: `takenDownReason=login`).  
+В Android-клиенте: **с сессией** пустой/`451` config → UI «Нет доступных источников…»; **без сессии** — сначала HTML SSR, иначе текст про вход. `player-choice` на эту заглушку не влияет.
 
 ### 16.6. Статистика выбора плееров
 
@@ -1458,7 +1500,9 @@ Content-Type: application/json
 |-----|-----------|
 | `/movie` | Все фильмы |
 | `/tv` | Все сериалы |
-| `/anime` | Аниме |
+| `/anime` | Аниме (отдельные блоки, см. §5.2 `/api/anime`) |
+| `/anime/top` | Топ-100 аниме |
+| `/film`, `/series`, `/animation` | Разделы главной (общий layout + `/api/trending`) |
 | `/movie/best`, `/tv/best` | Лучшие тайтлы |
 | `/movie/genre/{slug}`, `/tv/genre/{slug}` | По жанру |
 | `/movie/country/{slug}`, `/tv/country/{slug}` | По стране |
@@ -1473,7 +1517,7 @@ Content-Type: application/json
 | **Контент** | `/api/film-info`, `/api/person/{id}`, `/api/films`, `/api/films/{id}`, `/api/film/watchers`, `/api/series`, `/api/series/{id}/…` |
 | **Сериалы** | `/api/tv-last-air`, `/api/tv-schedule`, `/api/tv-last-air/batch` |
 | **Поиск** | `/api/search/suggest`, `/api/search/facets`, `/api/search/regions`, `/api/search/filters`, `/api/search/recent`, `/api/search/discover` |
-| **Тренды** | `/api/trending`, `/api/latest-trailers`, `/api/recommendations/latest`, `/api/getlucky` |
+| **Тренды** | `/api/trending`, `/api/anime`, `/api/anime/list`, `/api/latest-trailers`, `/api/recommendations/latest`, `/api/getlucky` |
 | **Коллекции** | `/api/collections/{counters\|movies\|tv\|franchises\|marvel\|anime-top}` |
 | **Социальные** | `/api/{type}/{id}/comments`, `/api/comments/{id}/react`, `/api/{type}/{id}/rate`, `/api/ratings` |
 | **Дневник** | `/api/diary`, `/api/diary/contains` |
@@ -1571,13 +1615,16 @@ Content-Type: application/json
 | Группа | Методы |
 |--------|--------|
 | Auth | `sign-in/email`, `sign-up/email`, `sign-out`, `get-session` |
-| Home | `trending`, `latest-trailers`, `recommendations/latest` |
-| Search | `search/discover`, `facets`, `filters`, `regions`, `recent`, `suggest` |
+| Home (общий) | `trending`, `latest-trailers`, `search/recent`, `recommendations/latest` |
+| Home (аниме) | `anime`, `anime/list`, `recommendations/latest` |
+| Search | `search/discover`, `facets`, `filters`, `regions`, `recent`, `suggest`, `persons` |
 | Title | `film-info`, `person/{id}`, `tv-last-air`, `tv-schedule` |
 | Player | `player-config`, `player-choice`, `player/{type}/{id}` |
 | Shelves | `me/activity`, `sync` |
 | Diary | `POST diary`, `GET diary/contains`, `DELETE diary?itemId=` |
 
+Подробности Android-layout и маппинг фильтров — [ANDROID.md](./ANDROID.md).
+
 ---
 
-*Документ актуален для версии 0.1.41. По вопросам использования API обращайтесь на reyoho@proton.me.*
+*Документ актуален для версии 0.1.42. По вопросам использования API обращайтесь на reyoho@proton.me.*

@@ -36,12 +36,12 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.spywer.yoho.R
 import com.spywer.yoho.data.remote.TitleDetailDto
-import com.spywer.yoho.ui.components.YohoBackButton
 import com.spywer.yoho.ui.layout.HomeMetrics
+import com.spywer.yoho.ui.layout.LocalHomeMetrics
+import com.spywer.yoho.ui.layout.WidthClass
 import com.spywer.yoho.ui.theme.YohoThemeExtras
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -55,233 +55,514 @@ internal fun DetailHero(
     favoriteBusy: Boolean,
     favoriteError: String?,
     metrics: HomeMetrics,
-    onBack: () -> Unit,
     onToggleFavorite: () -> Unit,
     onOpenGenre: (String, String?) -> Unit,
 ) {
     val colors = YohoThemeExtras.colors
-Box(Modifier.fillMaxWidth()) {
-    AsyncImage(
-        model = detail.backdrop ?: detail.poster,
-        contentDescription = null,
-        contentScale = ContentScale.Crop,
-        modifier = Modifier.matchParentSize(),
-    )
-    Box(
-        Modifier
-            .matchParentSize()
-            .background(
-                Brush.verticalGradient(
-                    0f to Color.Black.copy(alpha = 0.58f),
-                    0.4f to Color.Black.copy(alpha = 0.68f),
-                    0.75f to Color.Black.copy(alpha = 0.82f),
-                    1f to MaterialTheme.colorScheme.background,
-                ),
-            ),
-    )
-    Column(
-        Modifier
-            .fillMaxWidth()
-            .statusBarsPadding()
-            .padding(top = 8.dp, bottom = 8.dp),
-    ) {
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .padding(horizontal = metrics.screenPadding)
-                .padding(top = 4.dp),
-            horizontalArrangement = Arrangement.spacedBy(16.dp),
-        ) {
+    val hasRatings = detail.ratings?.kinopoisk?.score != null ||
+        detail.ratings?.imdb?.score != null ||
+        detail.rtScore != null
+    val showFavorite = detail.idKp != null && detail.idKp > 0
+    val hasGenres = detail.genres.isNotEmpty()
+    val description = detail.description?.takeIf { it.isNotBlank() }
+
+    if (metrics.isTablet) {
+        Box(Modifier.fillMaxWidth()) {
+            AsyncImage(
+                model = detail.backdrop ?: detail.poster,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.matchParentSize(),
+            )
+            Box(
+                Modifier
+                    .matchParentSize()
+                    .background(
+                        Brush.verticalGradient(
+                            0f to Color.Black.copy(alpha = 0.58f),
+                            0.4f to Color.Black.copy(alpha = 0.68f),
+                            0.75f to Color.Black.copy(alpha = 0.82f),
+                            1f to MaterialTheme.colorScheme.background,
+                        ),
+                    ),
+            )
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .statusBarsPadding()
+                    .padding(top = 8.dp, bottom = 8.dp),
+            ) {
+                DetailHeroTablet(
+                    detail = detail,
+                    titleRu = titleRu,
+                    titleOriginal = titleOriginal,
+                    year = year,
+                    isFavorite = isFavorite,
+                    favoriteBusy = favoriteBusy,
+                    favoriteError = favoriteError,
+                    metrics = metrics,
+                    showFavorite = showFavorite,
+                    hasGenres = hasGenres,
+                    hasRatings = hasRatings,
+                    description = description,
+                    ratingKp = colors.ratingKp,
+                    ratingImdb = colors.ratingImdb,
+                    onToggleFavorite = onToggleFavorite,
+                    onOpenGenre = onOpenGenre,
+                )
+                Spacer(Modifier.height(12.dp))
+            }
+        }
+    } else {
+        DetailHeroPhone(
+            detail = detail,
+            titleRu = titleRu,
+            titleOriginal = titleOriginal,
+            year = year,
+            isFavorite = isFavorite,
+            favoriteBusy = favoriteBusy,
+            favoriteError = favoriteError,
+            metrics = metrics,
+            showFavorite = showFavorite,
+            hasGenres = hasGenres,
+            hasRatings = hasRatings,
+            description = description,
+            ratingKp = colors.ratingKp,
+            ratingImdb = colors.ratingImdb,
+            onToggleFavorite = onToggleFavorite,
+            onOpenGenre = onOpenGenre,
+        )
+    }
+}
+
+@Composable
+private fun DetailHeroPhone(
+    detail: TitleDetailDto,
+    titleRu: String,
+    titleOriginal: String?,
+    year: Int?,
+    isFavorite: Boolean,
+    favoriteBusy: Boolean,
+    favoriteError: String?,
+    metrics: HomeMetrics,
+    showFavorite: Boolean,
+    hasGenres: Boolean,
+    hasRatings: Boolean,
+    description: String?,
+    ratingKp: Color,
+    ratingImdb: Color,
+    onToggleFavorite: () -> Unit,
+    onOpenGenre: (String, String?) -> Unit,
+) {
+    val onBg = MaterialTheme.colorScheme.onBackground
+    Column(Modifier.fillMaxWidth()) {
+        Box(Modifier.fillMaxWidth()) {
             AsyncImage(
                 model = detail.poster,
                 contentDescription = titleRu,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier
-                    .width(if (metrics.isTablet) 300.dp else 228.dp)
+                    .fillMaxWidth()
                     .aspectRatio(2f / 3f)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(Color.White.copy(alpha = 0.12f)),
+                    .background(MaterialTheme.colorScheme.surfaceVariant),
             )
-            Column(Modifier.weight(1f)) {
-                Text(
-                    text = if (year != null) "$titleRu ($year)" else titleRu,
-                    color = Color.White,
-                    fontSize = if (metrics.isTablet) 32.sp else 26.sp,
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
+            if (hasRatings) {
+                HeroRatingsRow(
+                    detail = detail,
+                    ratingKp = ratingKp,
+                    ratingImdb = ratingImdb,
+                    wrap = true,
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .statusBarsPadding()
+                        .padding(end = 14.dp, top = 14.dp),
                 )
-                if (titleOriginal != null || !detail.ageRating.isNullOrBlank()) {
-                    Row(
-                        Modifier
-                            .fillMaxWidth()
-                            .padding(top = 10.dp, bottom = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        titleOriginal?.let {
-                            Text(
-                                text = it,
-                                color = Color.White.copy(alpha = 0.75f),
-                                fontSize = 26.sp,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier.weight(1f, fill = false),
-                            )
-                        }
-                        detail.ageRating?.takeIf { it.isNotBlank() }?.let { age ->
-                            AgeRatingBadge(age = age)
-                        }
-                    }
-                }
-                val hasRatings = detail.ratings?.kinopoisk?.score != null ||
-                    detail.ratings?.imdb?.score != null ||
-                    detail.rtScore != null
-                val showFavorite = detail.idKp != null && detail.idKp > 0
-                val hasGenres = detail.genres.isNotEmpty()
-                if (showFavorite || hasGenres || hasRatings) {
-                    Row(
-                        Modifier
-                            .fillMaxWidth()
-                            .padding(top = 12.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.Top,
-                    ) {
-                        Column(
-                            Modifier
-                                .weight(1f)
-                                .padding(end = 8.dp, top = 6.dp),
-                            verticalArrangement = Arrangement.spacedBy(12.dp),
-                        ) {
-                            if (showFavorite) {
-                                OutlinedButton(
-                                    onClick = onToggleFavorite,
-                                    enabled = !favoriteBusy,
-                                    contentPadding = PaddingValues(
-                                        horizontal = 12.dp,
-                                        vertical = 6.dp,
-                                    ),
-                                ) {
-                                    Icon(
-                                        imageVector = if (isFavorite) {
-                                            Icons.Filled.Favorite
-                                        } else {
-                                            Icons.Filled.FavoriteBorder
-                                        },
-                                        contentDescription = null,
-                                        tint = if (isFavorite) {
-                                            Color(0xFFE53935)
-                                        } else {
-                                            Color.White
-                                        },
-                                        modifier = Modifier.size(26.dp),
-                                    )
-                                    Spacer(Modifier.width(8.dp))
-                                    Text(
-                                        text = stringResource(
-                                            if (isFavorite) {
-                                                R.string.detail_favorite_remove
-                                            } else {
-                                                R.string.detail_favorite_add
-                                            },
-                                        ),
-                                        color = Color.White,
-                                        fontSize = 24.sp,
-                                    )
-                                }
-                                favoriteError?.let { err ->
-                                    Text(
-                                        text = err,
-                                        color = MaterialTheme.colorScheme.error,
-                                        fontSize = metrics.cardMetaSize,
-                                    )
-                                }
-                            }
-                            if (hasGenres) {
-                                FlowRow(
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                                ) {
-                                    detail.genres.forEach { g ->
-                                        val genreType = when (detail.mediaType) {
-                                            "tv", "anime", "animation" -> detail.mediaType
-                                            else -> "movie"
-                                        }
-                                        Text(
-                                            text = g,
-                                            color = Color.White,
-                                            fontSize = 22.sp,
-                                            fontWeight = FontWeight.Medium,
-                                            modifier = Modifier
-                                                .clip(RoundedCornerShape(22.dp))
-                                                .background(Color.White.copy(alpha = 0.18f))
-                                                .clickable {
-                                                    onOpenGenre(g, genreType)
-                                                }
-                                                .padding(
-                                                    horizontal = 16.dp,
-                                                    vertical = 9.dp,
-                                                ),
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                        if (hasRatings) {
-                            Row(
-                                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                            ) {
-                                detail.ratings?.kinopoisk?.score?.let { score ->
-                                    RatingBadge(
-                                        label = "КП",
-                                        value = score,
-                                        votes = detail.ratings.kinopoisk.votes,
-                                        color = colors.ratingKp,
-                                    )
-                                }
-                                detail.ratings?.imdb?.score?.let { score ->
-                                    RatingBadge(
-                                        label = "IMDb",
-                                        value = score,
-                                        votes = detail.ratings.imdb.votes,
-                                        color = colors.ratingImdb,
-                                    )
-                                }
-                                detail.rtScore?.let { score ->
-                                    RatingBadge(
-                                        label = "RT",
-                                        value = score.toDouble(),
-                                        votes = null,
-                                        color = Color(0xFFFA320A),
-                                        suffix = "%",
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-                detail.description?.takeIf { it.isNotBlank() }?.let { desc ->
-                    Text(
-                        text = desc,
-                        color = Color.White.copy(alpha = 0.92f),
-                        fontSize = 22.sp,
-                        lineHeight = 32.sp,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = 35.dp),
-                    )
-                }
             }
         }
-        Spacer(Modifier.height(12.dp))
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = metrics.screenPadding)
+                .padding(top = metrics.sectionGap, bottom = metrics.blockGap),
+            verticalArrangement = Arrangement.spacedBy(metrics.sectionGap),
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(metrics.blockGap)) {
+                Text(
+                    text = if (year != null) "$titleRu ($year)" else titleRu,
+                    color = onBg,
+                    fontSize = metrics.detailTitleSize,
+                    lineHeight = metrics.lineOf(metrics.detailTitleSize),
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 3,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                HeroOriginalAgeRow(
+                    titleOriginal = titleOriginal,
+                    ageRating = detail.ageRating,
+                    metrics = metrics,
+                    compact = true,
+                    onSurface = true,
+                )
+            }
+            if (showFavorite) {
+                HeroFavoriteButton(
+                    isFavorite = isFavorite,
+                    favoriteBusy = favoriteBusy,
+                    favoriteError = favoriteError,
+                    metrics = metrics,
+                    onToggleFavorite = onToggleFavorite,
+                    onSurface = true,
+                    modifier = Modifier.padding(top = 4.dp),
+                )
+            }
+            if (hasGenres) {
+                HeroGenresRow(
+                    genres = detail.genres,
+                    mediaType = detail.mediaType,
+                    metrics = metrics,
+                    onOpenGenre = onOpenGenre,
+                    onSurface = true,
+                )
+            }
+            description?.let { desc ->
+                Text(
+                    text = desc,
+                    color = onBg.copy(alpha = 0.92f),
+                    fontSize = metrics.detailBodySize,
+                    lineHeight = metrics.detailBodyLine,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 4.dp),
+                )
+            }
+        }
     }
-    YohoBackButton(
-        onClick = onBack,
-        withStatusBarsPadding = true,
-        modifier = Modifier
-            .align(Alignment.TopEnd)
-            .padding(end = 12.dp, top = 8.dp),
-    )
-}
 }
 
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun DetailHeroTablet(
+    detail: TitleDetailDto,
+    titleRu: String,
+    titleOriginal: String?,
+    year: Int?,
+    isFavorite: Boolean,
+    favoriteBusy: Boolean,
+    favoriteError: String?,
+    metrics: HomeMetrics,
+    showFavorite: Boolean,
+    hasGenres: Boolean,
+    hasRatings: Boolean,
+    description: String?,
+    ratingKp: Color,
+    ratingImdb: Color,
+    onToggleFavorite: () -> Unit,
+    onOpenGenre: (String, String?) -> Unit,
+) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .padding(horizontal = metrics.screenPadding)
+            .padding(top = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(16.dp),
+    ) {
+        AsyncImage(
+            model = detail.poster,
+            contentDescription = titleRu,
+            contentScale = ContentScale.Crop,
+            modifier = Modifier
+                .width(
+                    when (metrics.widthClass) {
+                        WidthClass.Expanded -> 360.dp
+                        WidthClass.Medium -> 300.dp
+                        WidthClass.Compact -> 280.dp
+                    },
+                )
+                .aspectRatio(2f / 3f)
+                .clip(RoundedCornerShape(12.dp))
+                .background(Color.White.copy(alpha = 0.12f)),
+        )
+        Column(Modifier.weight(1f)) {
+            Text(
+                text = if (year != null) "$titleRu ($year)" else titleRu,
+                color = Color.White,
+                fontSize = metrics.detailTitleSize,
+                lineHeight = metrics.lineOf(metrics.detailTitleSize),
+                fontWeight = FontWeight.Bold,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+            HeroOriginalAgeRow(
+                titleOriginal = titleOriginal,
+                ageRating = detail.ageRating,
+                metrics = metrics,
+                compact = false,
+            )
+            if (showFavorite || hasGenres || hasRatings) {
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(top = 12.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.Top,
+                ) {
+                    Column(
+                        Modifier
+                            .weight(1f)
+                            .padding(end = 8.dp, top = 6.dp),
+                        verticalArrangement = Arrangement.spacedBy(
+                            if (metrics.widthClass == WidthClass.Expanded) 24.dp else 12.dp,
+                        ),
+                    ) {
+                        if (showFavorite) {
+                            HeroFavoriteButton(
+                                isFavorite = isFavorite,
+                                favoriteBusy = favoriteBusy,
+                                favoriteError = favoriteError,
+                                metrics = metrics,
+                                onToggleFavorite = onToggleFavorite,
+                            )
+                        }
+                        if (hasGenres) {
+                            HeroGenresRow(
+                                genres = detail.genres,
+                                mediaType = detail.mediaType,
+                                metrics = metrics,
+                                onOpenGenre = onOpenGenre,
+                            )
+                        }
+                    }
+                    if (hasRatings) {
+                        HeroRatingsRow(
+                            detail = detail,
+                            ratingKp = ratingKp,
+                            ratingImdb = ratingImdb,
+                            wrap = false,
+                        )
+                    }
+                }
+            }
+            description?.let { desc ->
+                Text(
+                    text = desc,
+                    color = Color.White.copy(alpha = 0.92f),
+                    fontSize = metrics.detailBodySize,
+                    lineHeight = metrics.detailBodyLine,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 28.dp),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun HeroOriginalAgeRow(
+    titleOriginal: String?,
+    ageRating: String?,
+    metrics: HomeMetrics,
+    compact: Boolean,
+    onSurface: Boolean = false,
+) {
+    if (titleOriginal == null && ageRating.isNullOrBlank()) return
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .padding(
+                top = if (compact) 2.dp else 8.dp,
+                bottom = if (compact) 0.dp else 4.dp,
+            ),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        titleOriginal?.let {
+            Text(
+                text = it,
+                color = if (onSurface) {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                } else {
+                    Color.White.copy(alpha = 0.75f)
+                },
+                fontSize = metrics.detailSubtitleSize,
+                lineHeight = metrics.lineOf(metrics.detailSubtitleSize),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f, fill = false),
+            )
+        }
+        ageRating?.takeIf { it.isNotBlank() }?.let { age ->
+            AgeRatingBadge(age = age)
+        }
+    }
+}
+
+@Composable
+private fun HeroFavoriteButton(
+    isFavorite: Boolean,
+    favoriteBusy: Boolean,
+    favoriteError: String?,
+    metrics: HomeMetrics,
+    onToggleFavorite: () -> Unit,
+    onSurface: Boolean = false,
+    modifier: Modifier = Modifier,
+) {
+    val content = if (onSurface) {
+        MaterialTheme.colorScheme.onBackground
+    } else {
+        Color.White
+    }
+    Column(modifier) {
+    OutlinedButton(
+        onClick = onToggleFavorite,
+        enabled = !favoriteBusy,
+        contentPadding = PaddingValues(
+            horizontal = metrics.detailFavPadH,
+            vertical = metrics.detailFavPadV,
+        ),
+    ) {
+        Icon(
+            imageVector = if (isFavorite) {
+                Icons.Filled.Favorite
+            } else {
+                Icons.Filled.FavoriteBorder
+            },
+            contentDescription = null,
+            tint = if (isFavorite) {
+                Color(0xFFE53935)
+            } else {
+                content
+            },
+            modifier = Modifier.size(metrics.detailFavIconSize),
+        )
+        Spacer(Modifier.width(if (metrics.widthClass == WidthClass.Expanded) 10.dp else 6.dp))
+        Text(
+            text = stringResource(
+                if (isFavorite) {
+                    R.string.detail_favorite_remove
+                } else {
+                    R.string.detail_favorite_add
+                },
+            ),
+            color = content,
+            fontSize = metrics.detailFavTextSize,
+        )
+    }
+    favoriteError?.let { err ->
+        Text(
+            text = err,
+            color = MaterialTheme.colorScheme.error,
+            fontSize = metrics.cardMetaSize,
+        )
+    }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun HeroGenresRow(
+    genres: List<String>,
+    mediaType: String?,
+    metrics: HomeMetrics,
+    onOpenGenre: (String, String?) -> Unit,
+    onSurface: Boolean = false,
+) {
+    FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(metrics.blockGap),
+        verticalArrangement = Arrangement.spacedBy(metrics.blockGap),
+    ) {
+        genres.forEach { g ->
+            val genreType = when (mediaType) {
+                "tv", "anime", "animation" -> mediaType
+                else -> "movie"
+            }
+            Text(
+                text = g,
+                color = if (onSurface) {
+                    MaterialTheme.colorScheme.onBackground
+                } else {
+                    Color.White
+                },
+                fontSize = metrics.detailTagSize,
+                fontWeight = FontWeight.Medium,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(
+                        if (onSurface) {
+                            MaterialTheme.colorScheme.surfaceVariant
+                        } else {
+                            Color.White.copy(alpha = 0.18f)
+                        },
+                    )
+                    .clickable { onOpenGenre(g, genreType) }
+                    .padding(
+                        horizontal = if (metrics.isTablet) 14.dp else 10.dp,
+                        vertical = if (metrics.isTablet) 8.dp else 5.dp,
+                    ),
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun HeroRatingsRow(
+    detail: TitleDetailDto,
+    ratingKp: Color,
+    ratingImdb: Color,
+    wrap: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    if (wrap) {
+        val metrics = LocalHomeMetrics.current
+        val gap = if (metrics.isTablet) metrics.blockGap else 8.dp
+        FlowRow(
+            modifier = modifier,
+            horizontalArrangement = Arrangement.spacedBy(gap, alignment = Alignment.End),
+            verticalArrangement = Arrangement.spacedBy(gap),
+        ) {
+            HeroRatingBadges(detail, ratingKp, ratingImdb)
+        }
+    } else {
+        Row(
+            modifier = modifier,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            HeroRatingBadges(detail, ratingKp, ratingImdb)
+        }
+    }
+}
+
+@Composable
+private fun HeroRatingBadges(
+    detail: TitleDetailDto,
+    ratingKp: Color,
+    ratingImdb: Color,
+) {
+    detail.ratings?.kinopoisk?.score?.let { score ->
+        RatingBadge(
+            label = "КП",
+            value = score,
+            votes = detail.ratings.kinopoisk.votes,
+            color = ratingKp,
+        )
+    }
+    detail.ratings?.imdb?.score?.let { score ->
+        RatingBadge(
+            label = "IMDb",
+            value = score,
+            votes = detail.ratings.imdb.votes,
+            color = ratingImdb,
+        )
+    }
+    detail.rtScore?.let { score ->
+        RatingBadge(
+            label = "RT",
+            value = score.toDouble(),
+            votes = null,
+            color = Color(0xFFFA320A),
+            suffix = "%",
+        )
+    }
+}

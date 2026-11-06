@@ -2,49 +2,71 @@ package com.spywer.yoho.ui.detail
 
 import android.content.Context
 import android.content.Intent
+import android.content.res.Configuration
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import com.spywer.yoho.ui.search.SearchActivity
 import com.spywer.yoho.ui.search.genreSlugOf
 import com.spywer.yoho.ui.theme.YohoTheme
 
+/** Отдельная деталка (поиск и т.п.); PiP как у MainActivity. */
 class TitleDetailActivity : ComponentActivity() {
     private val viewModel: TitleDetailViewModel by viewModels()
+    val pipController = DetailPipController()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        if (supportsPip()) {
+            setPictureInPictureParams(buildDetailPipParams(autoEnter = false))
+        }
         val idKp = intent.getIntExtra(EXTRA_ID_KP, -1).takeIf { it > 0 }
         val idTmdb = intent.getIntExtra(EXTRA_ID_TMDB, -1).takeIf { it > 0 }
         val mediaType = intent.getStringExtra(EXTRA_MEDIA_TYPE)
         setContent {
-            YohoTheme(darkTheme = true) {
-                LaunchedEffect(idKp, idTmdb, mediaType) {
-                    viewModel.load(idKp, idTmdb, mediaType)
+            CompositionLocalProvider(LocalDetailPip provides pipController) {
+                YohoTheme(darkTheme = true) {
+                    LaunchedEffect(idKp, idTmdb, mediaType) {
+                        viewModel.load(idKp, idTmdb, mediaType)
+                    }
+                    TitleDetailScreen(
+                        viewModel = viewModel,
+                        onBack = { finish() },
+                        onOpenTitle = { kp, tmdb, type ->
+                            startActivity(intent(this@TitleDetailActivity, kp, tmdb, type))
+                        },
+                        onOpenGenre = { genreLabel, type ->
+                            val slug = genreSlugOf(genreLabel) ?: return@TitleDetailScreen
+                            startActivity(
+                                SearchActivity.intent(
+                                    this@TitleDetailActivity,
+                                    genre = slug,
+                                    type = type,
+                                ),
+                            )
+                        },
+                    )
                 }
-                TitleDetailScreen(
-                    viewModel = viewModel,
-                    onBack = { finish() },
-                    onOpenTitle = { kp, tmdb, type ->
-                        startActivity(intent(this@TitleDetailActivity, kp, tmdb, type))
-                    },
-                    onOpenGenre = { genreLabel, type ->
-                        val slug = genreSlugOf(genreLabel) ?: return@TitleDetailScreen
-                        startActivity(
-                            SearchActivity.intent(
-                                this@TitleDetailActivity,
-                                genre = slug,
-                                type = type,
-                            ),
-                        )
-                    },
-                )
             }
         }
+    }
+
+    override fun onUserLeaveHint() {
+        super.onUserLeaveHint()
+        onDetailPipUserLeave(pipController)
+    }
+
+    override fun onPictureInPictureModeChanged(
+        isInPictureInPictureMode: Boolean,
+        newConfig: Configuration,
+    ) {
+        super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
+        onDetailPipModeChanged(pipController, isInPictureInPictureMode)
     }
 
     companion object {

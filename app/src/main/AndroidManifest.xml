@@ -23,12 +23,30 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.Yoho"
         android:usesCleartextTraffic="true"
-        tools:targetApi="28">
+        tools:targetApi="29">
+
+        <meta-data
+            android:name="developer.name"
+            android:value="Баландин Михаил" />
+        <meta-data
+            android:name="developer.email"
+            android:value="spywer@mail.ru" />
+        <meta-data
+            android:name="developer.website"
+            android:value="https://x-iweb.ru" />
+        <meta-data
+            android:name="developer.telegram"
+            android:value="Spywer" />
+        <meta-data
+            android:name="developer.vk"
+            android:value="https://vk.ru/spywer" />
+
         <activity
             android:name=".MainActivity"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden"
             android:exported="true"
-            android:label="@string/app_name"
             android:resizeableActivity="true"
+            android:supportsPictureInPicture="true"
             android:theme="@style/Theme.Yoho"
             android:windowSoftInputMode="adjustResize">
             <intent-filter>
@@ -46,12 +64,20 @@
             android:windowSoftInputMode="adjustResize" />
         <activity
             android:name=".ui.detail.TitleDetailActivity"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden"
             android:exported="false"
-            android:label="@string/app_name"
             android:parentActivityName=".MainActivity"
             android:resizeableActivity="true"
+            android:supportsPictureInPicture="true"
             android:theme="@style/Theme.Yoho"
             android:windowSoftInputMode="adjustResize" />
+        <activity
+            android:name=".ui.trailer.TrailerPlayerActivity"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden"
+            android:exported="false"
+            android:parentActivityName=".MainActivity"
+            android:resizeableActivity="true"
+            android:theme="@style/Theme.Yoho" />
     </application>
 
 </manifest>

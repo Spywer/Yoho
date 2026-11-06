@@ -79,14 +79,6 @@ fun FavoritesScreen(
                 .fillMaxSize()
                 .statusBarsPadding(),
         ) {
-            Text(
-                text = stringResource(R.string.nav_favorites),
-                color = MaterialTheme.colorScheme.onBackground,
-                fontSize = metrics.sectionTitleSize,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(horizontal = metrics.screenPadding, vertical = 16.dp),
-            )
-
             when {
                 state.loading -> {
                     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -149,7 +141,7 @@ fun FavoritesScreen(
                                 columns = GridCells.Adaptive(minSize = metrics.poster),
                                 contentPadding = PaddingValues(
                                     horizontal = metrics.screenPadding,
-                                    vertical = 8.dp,
+                                    vertical = metrics.blockGap,
                                 ),
                                 horizontalArrangement = Arrangement.spacedBy(metrics.cardGap),
                                 verticalArrangement = Arrangement.spacedBy(metrics.cardGap),
@@ -178,7 +170,7 @@ fun FavoritesScreen(
                                 item(span = { GridItemSpan(maxLineSpan) }) {
                                     SectionHeader(
                                         stringResource(R.string.history_section),
-                                        modifier = Modifier.padding(top = 12.dp),
+                                        modifier = Modifier.padding(top = metrics.sectionGap),
                                     )
                                 }
                                 if (state.history.isEmpty()) {
@@ -208,21 +200,25 @@ fun FavoritesScreen(
 
 @Composable
 private fun SectionHeader(text: String, modifier: Modifier = Modifier) {
+    val metrics = LocalHomeMetrics.current
     Text(
         text = text,
         color = MaterialTheme.colorScheme.onBackground,
-        style = MaterialTheme.typography.titleMedium,
+        fontSize = metrics.sectionTitleSize,
+        lineHeight = metrics.lineOf(metrics.sectionTitleSize),
         fontWeight = FontWeight.SemiBold,
-        modifier = modifier.padding(bottom = 4.dp),
+        modifier = modifier.padding(bottom = metrics.blockGap),
     )
 }
 
 @Composable
 private fun EmptyHint(text: String) {
+    val metrics = LocalHomeMetrics.current
     Text(
         text = text,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
-        style = MaterialTheme.typography.bodyMedium,
-        modifier = Modifier.padding(bottom = 8.dp),
+        fontSize = metrics.cardMetaSize,
+        lineHeight = metrics.lineOf(metrics.cardMetaSize),
+        modifier = Modifier.padding(bottom = metrics.blockGap),
     )
 }

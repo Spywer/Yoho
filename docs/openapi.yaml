@@ -4,7 +4,7 @@ info:
   description: |
     Программный интерфейс каталога аудиовизуального контента YoHo.
     База: более 1 677 921 единицы контента с метаданными из Kinopoisk, TMDB, IMDb, Rotten Tomatoes.
-  version: 0.1.41
+  version: 0.1.42
   contact:
     name: YoHo API Support
     email: reyoho@proton.me
@@ -24,6 +24,7 @@ tags:
   - name: series
   - name: search
   - name: trending
+  - name: anime
   - name: trailers
   - name: collections
   - name: comments
@@ -744,16 +745,11 @@ paths:
       tags: [trending]
       summary: Трендовые и популярные тайтлы
       description: |
-        Возвращает список трендовых/популярных тайтлов.
-        
-        **Фильтры:**
-        - без параметра: общий тренд (movie + tv)
-        - `movie`: трендовые фильмы (свежие)
-        - `popular_movie`: популярные фильмы (по рейтингу/голосам)
-        - `tv`: трендовые сериалы
-        - `popular_tv`: популярные сериалы
-        - `animation`: трендовая анимация (movie + tv)
-        - `popular_animation`: популярная анимация
+        Общая главная (`/`, `/film`, `/series`, `/animation`).
+        Страница `/anime` использует `GET /api/anime`.
+
+        **Фильтры:** `all`, `movie`, `popular_movie`, `tv`, `popular_tv`,
+        `animation`, `popular_animation`, `anime`, `popular_anime`.
       operationId: getTrending
       parameters:
         - name: filter
@@ -764,6 +760,43 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/TrendingResponse' }
+
+  # ============================================================
+  # ANIME HOME
+  # ============================================================
+  /api/anime:
+    get:
+      tags: [anime]
+      summary: Подборки страницы /anime
+      description: |
+        Блоки: trending («Сейчас популярно»), season («Популярно в этом сезоне»),
+        popular («Популярное за всё время»), top / seasonTop (топ-100).
+      operationId: getAnimeHome
+      responses:
+        '200':
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AnimeHomeResponse' }
+
+  /api/anime/list:
+    get:
+      tags: [anime]
+      summary: Пагинация секций /anime
+      operationId: getAnimeList
+      parameters:
+        - name: sort
+          in: query
+          required: true
+          schema: { type: string, enum: [trending, season, popular] }
+        - name: page
+          in: query
+          required: true
+          schema: { type: integer, minimum: 1 }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AnimeListResponse' }
 
   # ============================================================
   # TRAILERS
@@ -1758,7 +1791,79 @@ components:
 
     TrendingFilter:
       type: string
-      enum: [movie, popular_movie, tv, popular_tv, animation, popular_animation]
+      enum:
+        - all
+        - movie
+        - popular_movie
+        - tv
+        - popular_tv
+        - animation
+        - popular_animation
+        - anime
+        - popular_anime
+
+    AnimeSeasonCode:
+      type: string
+      enum: [WINTER, SPRING, SUMMER, FALL]
+
+    AnimeSeasonLabel:
+      type: object
+      properties:
+        season: { $ref: '#/components/schemas/AnimeSeasonCode' }
+        year: { type: integer }
+
+    AnimeItem:
+      type: object
+      properties:
+        anilistId: { type: integer }
+        idMal: { type: integer }
+        title: { type: string }
+        romaji: { type: string }
+        russian: { type: string }
+        ruTitle: { type: string }
+        year: { type: integer }
+        score: { type: number }
+        coverImage: { type: string }
+        ruPosterUrl: { type: string }
+        format: { type: string }
+        status: { type: string }
+        episodes: { type: integer, nullable: true }
+        mediaType: { type: string }
+        tmdbId: { type: integer, nullable: true }
+        kpId: { type: integer, nullable: true }
+        kpRating: { type: number, nullable: true }
+        imdbRating: { type: number, nullable: true }
+        ruOverview: { type: string }
+
+    AnimeListPage:
+      type: object
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/AnimeItem' }
+        nextPage: { type: integer, nullable: true }
+
+    AnimeListResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/AnimeItem' }
+        nextPage: { type: integer, nullable: true }
+
+    AnimeHomeResponse:
+      type: object
+      properties:
+        trending: { $ref: '#/components/schemas/AnimeListPage' }
+        season: { $ref: '#/components/schemas/AnimeListPage' }
+        popular: { $ref: '#/components/schemas/AnimeListPage' }
+        top:
+          type: array
+          items: { $ref: '#/components/schemas/AnimeItem' }
+        seasonTop:
+          type: array
+          items: { $ref: '#/components/schemas/AnimeItem' }
+        seasonLabel: { $ref: '#/components/schemas/AnimeSeasonLabel' }
 
     DiaryStatus:
       type: string

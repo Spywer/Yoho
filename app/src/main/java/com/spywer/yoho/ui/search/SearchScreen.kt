@@ -1,5 +1,6 @@
 package com.spywer.yoho.ui.search
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -10,6 +11,7 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -54,7 +56,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
@@ -65,11 +66,8 @@ import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import coil.compose.AsyncImage
 import com.spywer.yoho.R
-import com.spywer.yoho.data.remote.SuggestItemDto
 import com.spywer.yoho.data.remote.TitleDto
-import com.spywer.yoho.data.remote.absMediaUrl
 import com.spywer.yoho.ui.components.PosterCard
 import com.spywer.yoho.ui.components.YohoBackButton
 import com.spywer.yoho.ui.detail.TitleDetailActivity
@@ -92,6 +90,13 @@ fun SearchScreen(
     val context = LocalContext.current
     var showFilterSheet by remember { mutableStateOf(false) }
 
+    BackHandler(enabled = showFilterSheet || showBack) {
+        when {
+            showFilterSheet -> showFilterSheet = false
+            else -> onBack()
+        }
+    }
+
     fun openTitle(item: TitleDto) {
         if (item.idKp == null && item.idTmdb == null) return
         onOpenTitle?.invoke(item.idKp, item.idTmdb, item.mediaType)
@@ -103,6 +108,7 @@ fun SearchScreen(
     CompositionLocalProvider(LocalHomeMetrics provides metrics) {
         Scaffold(
             containerColor = MaterialTheme.colorScheme.background,
+            contentWindowInsets = WindowInsets(0, 0, 0, 0),
             topBar = {
                 SearchContentColumn(metrics) {
                     Column(
@@ -110,20 +116,24 @@ fun SearchScreen(
                             .fillMaxWidth()
                             .statusBarsPadding()
                             .background(MaterialTheme.colorScheme.background)
-                            .padding(horizontal = metrics.screenPadding, vertical = 12.dp),
+                            .padding(
+                                horizontal = metrics.screenPadding,
+                                vertical = metrics.sectionGap,
+                            ),
                     ) {
                         if (!title.isNullOrBlank() && !showBack) {
                             Text(
                                 text = title,
                                 color = MaterialTheme.colorScheme.onBackground,
                                 fontSize = metrics.sectionTitleSize,
+                                lineHeight = metrics.lineOf(metrics.sectionTitleSize),
                                 fontWeight = FontWeight.Bold,
-                                modifier = Modifier.padding(bottom = 12.dp),
+                                modifier = Modifier.padding(bottom = metrics.sectionGap),
                             )
                         }
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            horizontalArrangement = Arrangement.spacedBy(metrics.blockGap),
                         ) {
                             if (showBack) {
                                 YohoBackButton(onClick = onBack)
@@ -137,14 +147,7 @@ fun SearchScreen(
                                 modifier = Modifier.weight(1f),
                             )
                         }
-                        if (state.suggestions.isNotEmpty()) {
-                            SuggestDropdown(
-                                items = state.suggestions,
-                                textSize = metrics.searchTextSize,
-                                onPick = viewModel::applySuggestion,
-                            )
-                        }
-                        Spacer(Modifier.height(12.dp))
+                        Spacer(Modifier.height(metrics.sectionGap))
                         SearchControlsRow(
                             state = state,
                             textSize = metrics.chipTextSize,
@@ -168,7 +171,8 @@ fun SearchScreen(
                 )
             }
             PullToRefreshBox(
-                isRefreshing = state.loading,
+                // Не дублировать синий CircularProgress при пустой выдаче.
+                isRefreshing = state.loading && state.results.isNotEmpty(),
                 onRefresh = viewModel::refresh,
                 modifier = Modifier
                     .fillMaxSize()
@@ -235,9 +239,10 @@ private fun SearchControlsRow(
         }.joinToString(", ")
     }
 
+    val metrics = LocalHomeMetrics.current
     FlowRow(
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
+        horizontalArrangement = Arrangement.spacedBy(metrics.blockGap),
+        verticalArrangement = Arrangement.spacedBy(metrics.blockGap),
     ) {
         Box {
             FilterChip(
@@ -512,6 +517,7 @@ private fun SearchBar(
             value = query,
             onValueChange = onQueryChange,
             singleLine = true,
+            maxLines = 1,
             textStyle = TextStyle(
                 color = MaterialTheme.colorScheme.onBackground,
                 fontSize = textSize,
@@ -521,9 +527,18 @@ private fun SearchBar(
             decorationBox = { inner ->
                 if (query.isEmpty()) {
                     Text(
-                        text = stringResource(R.string.search_hint),
+                        text = stringResource(
+                            if (LocalHomeMetrics.current.isTablet) {
+                                R.string.search_hint
+                            } else {
+                                R.string.search_hint_compact
+                            },
+                        ),
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         fontSize = textSize,
+                        maxLines = 1,
+                        softWrap = false,
+                        overflow = TextOverflow.Ellipsis,
                     )
                 }
                 inner()
@@ -536,60 +551,6 @@ private fun SearchBar(
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-            }
-        }
-    }
-}
-
-@Composable
-private fun SuggestDropdown(
-    items: List<SuggestItemDto>,
-    textSize: TextUnit,
-    onPick: (String) -> Unit,
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(top = 8.dp)
-            .clip(RoundedCornerShape(12.dp))
-            .background(MaterialTheme.colorScheme.surface)
-            .padding(vertical = 4.dp),
-    ) {
-        items.forEach { item ->
-            val title = item.title.orEmpty()
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable {
-                        if (title.isNotBlank()) onPick(title)
-                    }
-                    .padding(horizontal = 12.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                AsyncImage(
-                    model = item.poster.absMediaUrl(),
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier
-                        .size(40.dp, 56.dp)
-                        .clip(RoundedCornerShape(6.dp)),
-                )
-                Spacer(Modifier.width(12.dp))
-                Column(Modifier.weight(1f)) {
-                    Text(
-                        text = title,
-                        color = MaterialTheme.colorScheme.onBackground,
-                        fontSize = textSize,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        fontWeight = FontWeight.Medium,
-                    )
-                    Text(
-                        text = listOfNotNull(item.type, item.year?.toString()).joinToString(" · "),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        fontSize = (textSize.value - 4).sp,
-                    )
-                }
             }
         }
     }
