@@ -3,7 +3,6 @@ package com.spywer.yoho.data.remote
 import android.annotation.SuppressLint
 import android.content.Context
 import android.webkit.WebSettings
-import com.google.gson.Gson
 import okhttp3.Request
 import org.json.JSONObject
 import java.util.concurrent.ConcurrentHashMap
@@ -143,12 +142,16 @@ object SiteHttp {
             }
     }
 
+    @Volatile
+    private var cachedUserAgent: String? = null
+
     /**
      * Дефолтный WebView UA без маркера `; wv` / Version/4.0 —
-     * ближе к обычному Chrome на Android.
+     * ближе к обычному Chrome на Android. Кэшируется (дорогой [WebSettings.getDefaultUserAgent]).
      */
     @SuppressLint("SetJavaScriptEnabled")
     fun userAgent(context: Context? = null): String {
+        cachedUserAgent?.let { return it }
         val ctx = context ?: AppContext.getOrNull()
         if (ctx != null) {
             val raw = runCatching { WebSettings.getDefaultUserAgent(ctx) }.getOrNull()
@@ -159,6 +162,7 @@ object SiteHttp {
                     .replace("Version/4.0 ", "")
                     .replace(Regex("""\s+"""), " ")
                     .trim()
+                    .also { cachedUserAgent = it }
             }
         }
         return FALLBACK_UA
@@ -181,8 +185,6 @@ object SiteHttp {
  * Без `yoho_session` сервер отдаёт `null` + takenDownReason=login.
  */
 object PlayerConfigPageParser {
-    private val gson = Gson()
-
     fun parse(html: String): PlayerConfigDto? {
         val marker = "\"initialPlayerConfig\":"
         val start = html.indexOf(marker)
@@ -196,7 +198,7 @@ object PlayerConfigPageParser {
             .replace("\\u0026", "&")
             .replace("\\/", "/")
         return runCatching {
-            gson.fromJson(unescaped, PlayerConfigDto::class.java)
+            YohoGson.instance.fromJson(unescaped, PlayerConfigDto::class.java)
         }.getOrNull()
     }
 
@@ -243,13 +245,13 @@ fun fetchTitlePageHtml(
         mediaType.equals("tv", true) || mediaType.equals("anime", true) -> "series"
         else -> "film"
     }
+    // Заголовки UA/Referer/Accept-Language ставит SiteHeadersInterceptor.
     val url = SiteHttp.REFERER + "$kind/$kinopoiskId"
+    val accept = SiteHttp.documentHeaders()["Accept"]
+        ?: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
     val req = Request.Builder()
         .url(url)
-        .header("User-Agent", SiteHttp.USER_AGENT)
-        .header("Referer", SiteHttp.REFERER)
-        .header("Accept", SiteHttp.documentHeaders()["Accept"]!!)
-        .header("Accept-Language", "ru,en;q=0.9")
+        .header("Accept", accept)
         .get()
         .build()
     return runCatching {

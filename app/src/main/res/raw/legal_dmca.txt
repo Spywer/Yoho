@@ -20,7 +20,7 @@ YoHo — справочно-информационный каталог в ви�
 
 Чего мы не делаем
 
-• не удаляем файлы и потоки на сторонних сайтах и у операторов плееров — только ограничиваем доступ через YoHo;
+• не удаляем файлы и потоки на сторонних ресурсах и у операторов плееров — только ограничиваем доступ через приложение YoHo;
 • не проверяем превентивно весь контент всех сторонних источников;
 • не являемся правообладателем произведений в каталоге и не выдаём лицензии на просмотр.
 
@@ -32,7 +32,7 @@ YoHo — справочно-информационный каталог в ви�
 
 • ФИО или наименование правообладателя, контактный email
 • Подтверждение полномочий, если обращаетесь как представитель
-• Прямую ссылку (URL) на страницу тайтла на сайте YoHo и/или идентификатор (Kinopoisk ID) карточки в приложении
+• Идентификатор карточки в приложении (Kinopoisk ID) и/или точное название тайтла
 • Название произведения, сезон/серию (если применимо)
 • Описание нарушения и документы, подтверждающие права (договор, свидетельство, выписка из реестра)
 • Требуемое действие: ограничить доступ к карточке, отключить плеер и т.п.
@@ -65,7 +65,7 @@ Review normally takes up to 10 business days from the moment we receive a comple
 
 What we cannot do
 
-• we do not delete files or streams on third-party sites or with player operators — we only restrict access through YoHo;
+• we do not delete files or streams on third-party resources or with player operators — we only restrict access through the YoHo app;
 • we do not pre-screen all content from all third-party sources;
 • we are not the rights holder of the works in the catalogue and do not grant viewing licences.
 
@@ -75,10 +75,10 @@ What to include
 
 • Full name or company name of the rights holder and a contact email
 • Proof of authority if you are writing as a representative
-• A direct link (URL) to the YoHo title page and/or the Kinopoisk ID used in the app
+• The Kinopoisk ID used in the app and/or the exact title name
 • Title of the work, season and episode where applicable
 • Description of the infringement and documents confirming your rights
-• The action requested: restrict access to the page, disable the player, and so on
+• The action requested: restrict access to the title, disable the player, and so on
 
 How to send
 

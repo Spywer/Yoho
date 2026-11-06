@@ -1,6 +1,5 @@
 package com.spywer.yoho.data.remote
 
-import com.google.gson.Gson
 import com.google.gson.annotations.SerializedName
 import retrofit2.HttpException
 import retrofit2.Response
@@ -13,8 +12,6 @@ data class AuthErrorDto(
 )
 
 object AuthErrors {
-    private val gson = Gson()
-
     fun fromResponse(response: Response<*>): String =
         parse(response.code(), response.errorBody()?.string())
 
@@ -28,7 +25,11 @@ object AuthErrors {
     fun parse(httpCode: Int, rawBody: String?): String {
         val dto = rawBody
             ?.takeIf { it.isNotBlank() }
-            ?.let { runCatching { gson.fromJson(it, AuthErrorDto::class.java) }.getOrNull() }
+            ?.let {
+                runCatching {
+                    YohoGson.instance.fromJson(it, AuthErrorDto::class.java)
+                }.getOrNull()
+            }
         val code = dto?.code?.trim().orEmpty()
         val message = dto?.message?.trim().orEmpty()
         localize(code, message)?.let { return it }

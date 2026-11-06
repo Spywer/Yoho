@@ -76,7 +76,6 @@ import coil.compose.AsyncImage
 import com.spywer.yoho.BuildConfig
 import com.spywer.yoho.R
 import com.spywer.yoho.data.AppSettings
-import com.spywer.yoho.data.remote.SiteHttp
 import com.spywer.yoho.ui.components.YohoBackButton
 import com.spywer.yoho.ui.layout.HomeMetrics
 import com.spywer.yoho.ui.layout.rememberHomeMetrics
@@ -490,24 +489,6 @@ private fun AccountAboutPage(
                 context.startActivity(LegalDocumentActivity.intent(context, LegalDocument.Dmca))
             },
         )
-        Spacer(Modifier.height(metrics.sectionGap * 2))
-        OutlinedButton(
-            onClick = {
-                runCatching {
-                    context.startActivity(
-                        Intent(Intent.ACTION_VIEW, Uri.parse(SiteHttp.ORIGIN)),
-                    )
-                }
-            },
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(if (metrics.isTablet) 52.dp else metrics.searchHeight),
-        ) {
-            Text(
-                stringResource(R.string.account_about_open_site),
-                fontSize = bodySize,
-            )
-        }
         Spacer(Modifier.height(metrics.sectionGap * 2))
         Text(
             text = stringResource(R.string.account_about_version, BuildConfig.VERSION_NAME),

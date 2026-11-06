@@ -35,7 +35,7 @@ object NetworkModule {
         Retrofit.Builder()
             .baseUrl(SiteHttp.NOMINAL_BASE)
             .client(httpClient)
-            .addConverterFactory(GsonConverterFactory.create())
+            .addConverterFactory(GsonConverterFactory.create(YohoGson.instance))
             .build()
             .create(YohoApi::class.java)
     }
@@ -87,15 +87,24 @@ private object SiteFailoverInterceptor : Interceptor {
                 lastIo = e
             }
 
+            val error = lastIo ?: IOException("Зеркало $host недоступно")
             val next = SiteHttp.failoverFrom(host)
             if (next == null || next.lowercase() in tried) {
-                // lastIo всегда задан после try/catch выше
-                throw lastIo
+                throw error
             }
             SessionCookieJar.get().migrateSessionTo(next)
+            // POST/body one-shot нельзя безопасно повторить — хост уже сменён для следующих запросов.
+            if (!canReplay(request)) {
+                throw error
+            }
             request = rewriteToActive(request, forceHost = next)
         }
         throw lastIo ?: IOException("Все зеркала недоступны")
+    }
+
+    private fun canReplay(request: Request): Boolean {
+        val body = request.body ?: return true
+        return !body.isOneShot()
     }
 
     private fun rewriteToActive(
