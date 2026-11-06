@@ -188,10 +188,16 @@ fun MainShell() {
                                     tab = spec.tab
                                 },
                                 icon = {
+                                    val compactNav = !metrics.isTablet
                                     Column(
                                         horizontalAlignment = Alignment.CenterHorizontally,
-                                        verticalArrangement = Arrangement.spacedBy(2.dp),
-                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                        verticalArrangement = Arrangement.spacedBy(
+                                            if (compactNav) 0.dp else 2.dp,
+                                        ),
+                                        modifier = Modifier.padding(
+                                            horizontal = if (compactNav) 4.dp else 6.dp,
+                                            vertical = if (compactNav) 0.dp else 2.dp,
+                                        ),
                                     ) {
                                         Icon(
                                             imageVector = if (selected) {
