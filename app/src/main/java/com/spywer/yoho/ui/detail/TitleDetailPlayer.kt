@@ -184,23 +184,7 @@ internal fun PlayerBlock(
             .padding(horizontal = padding)
             .padding(top = 8.dp, bottom = 8.dp),
     ) {
-        if (loading) {
-            Box(
-                Modifier
-                    .fillMaxWidth()
-                    .aspectRatio(16f / 9f)
-                    .clip(RoundedCornerShape(14.dp))
-                    .background(Color.Black),
-                contentAlignment = Alignment.Center,
-            ) {
-                CircularProgressIndicator(
-                    Modifier.size(28.dp),
-                    color = MaterialTheme.colorScheme.primary,
-                    strokeWidth = 3.dp,
-                )
-            }
-        } else {
-            if (choices.isNotEmpty()) {
+            if (choices.isNotEmpty() && !loading) {
                 Row(
                     Modifier
                         .horizontalScroll(rememberScrollState())
@@ -230,6 +214,8 @@ internal fun PlayerBlock(
                 contentAlignment = Alignment.Center,
             ) {
                 when {
+                    // Не снимать WebView на время loading — иначе первый loadUrl до attach
+                    // иногда даёт пустой кадр до ручного переключения источника.
                     hasPlayer -> {
                         PlayerWebView(
                             url = playUrl,
@@ -248,6 +234,7 @@ internal fun PlayerBlock(
                             )
                         }
                     }
+                    loading -> Unit
                     noSources -> {
                         NoSourcesPlaceholder(
                             mediaType = mediaType,
@@ -293,10 +280,24 @@ internal fun PlayerBlock(
                         }
                     }
                 }
+                if (loading) {
+                    Box(
+                        Modifier
+                            .fillMaxSize()
+                            .background(Color.Black),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        CircularProgressIndicator(
+                            Modifier.size(28.dp),
+                            color = MaterialTheme.colorScheme.primary,
+                            strokeWidth = 3.dp,
+                        )
+                    }
+                }
             }
 
             // Как на сайте: панель под плеером (без «Запретки»)
-            if (hasPlayer) {
+            if (hasPlayer && !loading) {
                 PlayerUnderBar(
                     diaryStatusLabel = diaryStatusLabel,
                     diaryBusy = diaryBusy,
@@ -310,7 +311,6 @@ internal fun PlayerBlock(
                     onCinema = { fullscreen = true },
                 )
             }
-        }
     }
 }
 
@@ -1227,45 +1227,16 @@ private fun PlayerWebView(
                 context = ctx,
                 holder = holder,
                 sourceState = sourceState,
-            ).also { created ->
-                holder.webView = created
-                created.tag = loadKey
-                loadPlayerContent(created, url, embedHtml)
-            }
-            if (holder.fullscreenOverlay == null) {
-                (webView.parent as? ViewGroup)?.removeView(webView)
-                frame.addView(
-                    webView,
-                    FrameLayout.LayoutParams(
-                        ViewGroup.LayoutParams.MATCH_PARENT,
-                        ViewGroup.LayoutParams.MATCH_PARENT,
-                    ),
-                )
-                refreshWebViewSurface(webView)
-            }
+            ).also { holder.webView = it }
+            attachPlayerWebViewIfNeeded(holder, frame, webView)
+            schedulePlayerContentLoad(webView, loadKey, url, embedHtml)
             frame
         },
         update = { frame ->
             holder.inlineContainer = frame
             val webView = holder.webView ?: return@AndroidView
-            if (webView.tag != loadKey) {
-                webView.tag = loadKey
-                loadPlayerContent(webView, url, embedHtml)
-            }
-            if (holder.fullscreenOverlay == null &&
-                !holder.isHtmlFullscreen &&
-                webView.parent !== frame
-            ) {
-                (webView.parent as? ViewGroup)?.removeView(webView)
-                frame.addView(
-                    webView,
-                    FrameLayout.LayoutParams(
-                        ViewGroup.LayoutParams.MATCH_PARENT,
-                        ViewGroup.LayoutParams.MATCH_PARENT,
-                    ),
-                )
-                refreshWebViewSurface(webView)
-            }
+            attachPlayerWebViewIfNeeded(holder, frame, webView)
+            schedulePlayerContentLoad(webView, loadKey, url, embedHtml)
         },
         onRelease = { frame ->
             if (holder.inlineContainer === frame) {
@@ -1274,6 +1245,43 @@ private fun PlayerWebView(
         },
         modifier = modifier,
     )
+}
+
+/** Сначала в иерархию, потом load — иначе WebView иногда остаётся пустым. */
+private fun attachPlayerWebViewIfNeeded(
+    holder: PlayerWebViewHolder,
+    frame: FrameLayout,
+    webView: WebView,
+) {
+    if (holder.fullscreenOverlay != null || holder.isHtmlFullscreen) return
+    if (webView.parent === frame) {
+        refreshWebViewSurface(webView)
+        return
+    }
+    (webView.parent as? ViewGroup)?.removeView(webView)
+    frame.addView(
+        webView,
+        FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.MATCH_PARENT,
+        ),
+    )
+    refreshWebViewSurface(webView)
+}
+
+private fun schedulePlayerContentLoad(
+    webView: WebView,
+    loadKey: String,
+    url: String?,
+    embedHtml: String?,
+) {
+    if (webView.tag == loadKey) return
+    webView.tag = loadKey
+    val key = loadKey
+    webView.post {
+        if (webView.tag != key) return@post
+        loadPlayerContent(webView, url, embedHtml)
+    }
 }
 
 @SuppressLint("SetJavaScriptEnabled")

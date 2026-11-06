@@ -104,6 +104,7 @@ class TitleDetailViewModel : ViewModel() {
                     playerIframeUrl = null,
                     playerEmbedHtml = null,
                     playerNeedsLogin = false,
+                    playerLoading = true,
                 )
             }
             runCatching {
