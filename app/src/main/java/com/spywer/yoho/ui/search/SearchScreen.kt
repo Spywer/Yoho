@@ -171,7 +171,8 @@ fun SearchScreen(
                 )
             }
             PullToRefreshBox(
-                isRefreshing = state.loading,
+                // Не дублировать синий CircularProgress при пустой выдаче.
+                isRefreshing = state.loading && state.results.isNotEmpty(),
                 onRefresh = viewModel::refresh,
                 modifier = Modifier
                     .fillMaxSize()

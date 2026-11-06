@@ -7,6 +7,7 @@ import com.spywer.yoho.data.remote.SearchFacetsDto
 import com.spywer.yoho.data.remote.SearchFiltersCatalogDto
 import com.spywer.yoho.data.remote.TitleDto
 import com.spywer.yoho.data.remote.toTitle
+import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -159,6 +160,7 @@ class SearchViewModel : ViewModel() {
             it.copy(
                 loading = !append,
                 loadingMore = append,
+                error = if (append) it.error else null,
             )
         }
         val f = snapshot.filters
@@ -264,6 +266,8 @@ class SearchViewModel : ViewModel() {
                 )
             }
         }.onFailure { e ->
+            // Отмена debounce/нового запроса — не ошибка UI.
+            if (e is CancellationException) throw e
             _state.update {
                 it.copy(
                     loading = false,
