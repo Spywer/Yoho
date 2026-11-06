@@ -86,7 +86,7 @@ fun TitleDetailScreen(
         Box(
             Modifier
                 .fillMaxSize()
-                .background(MaterialTheme.colorScheme.background),
+                .background(if (inPip) Color.Black else MaterialTheme.colorScheme.background),
         ) {
             when {
                 state.loading && state.detail == null -> {

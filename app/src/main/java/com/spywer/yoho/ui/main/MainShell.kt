@@ -50,6 +50,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.spywer.yoho.R
 import com.spywer.yoho.data.SessionRepository
 import com.spywer.yoho.ui.account.AccountScreen
+import com.spywer.yoho.ui.detail.LocalDetailPip
 import com.spywer.yoho.ui.detail.TitleDetailScreen
 import com.spywer.yoho.ui.detail.TitleDetailViewModel
 import com.spywer.yoho.ui.favorites.FavoritesScreen
@@ -60,6 +61,7 @@ import com.spywer.yoho.ui.search.SearchActivity
 import com.spywer.yoho.ui.search.SearchScreen
 import com.spywer.yoho.ui.search.SearchViewModel
 import com.spywer.yoho.ui.search.genreSlugOf
+import androidx.compose.ui.graphics.Color
 
 enum class MainTab {
     Home,
@@ -137,74 +139,82 @@ fun MainShell() {
         tab = MainTab.Home
     }
 
+    val inPip = LocalDetailPip.current?.inPipState?.value == true
+
     CompositionLocalProvider(LocalHomeMetrics provides metrics) {
     Scaffold(
-        containerColor = MaterialTheme.colorScheme.background,
+        containerColor = if (inPip) {
+            Color.Black
+        } else {
+            MaterialTheme.colorScheme.background
+        },
         // Только bottomBar; statusBars — на экранах (иначе двойной верхний отступ).
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         bottomBar = {
-            Column(
-                Modifier
-                    .fillMaxWidth()
-                    .background(MaterialTheme.colorScheme.surface)
-                    .navigationBarsPadding(),
-            ) {
-                NavigationBar(
-                    containerColor = MaterialTheme.colorScheme.surface,
-                    tonalElevation = 0.dp,
-                    windowInsets = WindowInsets(0, 0, 0, 0),
-                    modifier = Modifier.height(metrics.navBarHeight),
+            // В PiP — только видео, без навбара.
+            if (!inPip) {
+                Column(
+                    Modifier
+                        .fillMaxWidth()
+                        .background(MaterialTheme.colorScheme.surface)
+                        .navigationBarsPadding(),
                 ) {
-                    tabs.forEach { spec ->
-                        val selected = tab == spec.tab
-                        val active = MaterialTheme.colorScheme.primary
-                        val inactive = MaterialTheme.colorScheme.onSurfaceVariant
-                        NavigationBarItem(
-                            selected = selected,
-                            onClick = {
-                                titleStack.clear()
-                                tab = spec.tab
-                            },
-                            // Иконка+подпись в одном слоте — индикатор подсветки охватывает оба.
-                            icon = {
-                                Column(
-                                    horizontalAlignment = Alignment.CenterHorizontally,
-                                    verticalArrangement = Arrangement.spacedBy(2.dp),
-                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                                ) {
-                                    Icon(
-                                        imageVector = if (selected) {
-                                            spec.selectedIcon
-                                        } else {
-                                            spec.unselectedIcon
-                                        },
-                                        contentDescription = stringResource(spec.labelRes),
-                                        modifier = Modifier.size(metrics.navIconSize),
-                                        tint = if (selected) active else inactive,
-                                    )
-                                    Text(
-                                        text = stringResource(spec.labelRes),
-                                        fontSize = metrics.navLabelSize,
-                                        fontWeight = if (selected) {
-                                            FontWeight.SemiBold
-                                        } else {
-                                            FontWeight.Medium
-                                        },
-                                        color = if (selected) active else inactive,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
-                                    )
-                                }
-                            },
-                            label = null,
-                            colors = NavigationBarItemDefaults.colors(
-                                selectedIconColor = active,
-                                selectedTextColor = active,
-                                indicatorColor = MaterialTheme.colorScheme.surfaceVariant,
-                                unselectedIconColor = inactive,
-                                unselectedTextColor = inactive,
-                            ),
-                        )
+                    NavigationBar(
+                        containerColor = MaterialTheme.colorScheme.surface,
+                        tonalElevation = 0.dp,
+                        windowInsets = WindowInsets(0, 0, 0, 0),
+                        modifier = Modifier.height(metrics.navBarHeight),
+                    ) {
+                        tabs.forEach { spec ->
+                            val selected = tab == spec.tab
+                            val active = MaterialTheme.colorScheme.primary
+                            val inactive = MaterialTheme.colorScheme.onSurfaceVariant
+                            NavigationBarItem(
+                                selected = selected,
+                                onClick = {
+                                    titleStack.clear()
+                                    tab = spec.tab
+                                },
+                                icon = {
+                                    Column(
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        verticalArrangement = Arrangement.spacedBy(2.dp),
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                    ) {
+                                        Icon(
+                                            imageVector = if (selected) {
+                                                spec.selectedIcon
+                                            } else {
+                                                spec.unselectedIcon
+                                            },
+                                            contentDescription = stringResource(spec.labelRes),
+                                            modifier = Modifier.size(metrics.navIconSize),
+                                            tint = if (selected) active else inactive,
+                                        )
+                                        Text(
+                                            text = stringResource(spec.labelRes),
+                                            fontSize = metrics.navLabelSize,
+                                            fontWeight = if (selected) {
+                                                FontWeight.SemiBold
+                                            } else {
+                                                FontWeight.Medium
+                                            },
+                                            color = if (selected) active else inactive,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                        )
+                                    }
+                                },
+                                label = null,
+                                colors = NavigationBarItemDefaults.colors(
+                                    selectedIconColor = active,
+                                    selectedTextColor = active,
+                                    indicatorColor = MaterialTheme.colorScheme.surfaceVariant,
+                                    unselectedIconColor = inactive,
+                                    unselectedTextColor = inactive,
+                                ),
+                            )
+                        }
                     }
                 }
             }
@@ -213,27 +223,29 @@ fun MainShell() {
         Box(
             Modifier
                 .fillMaxSize()
-                .padding(padding),
+                .then(if (inPip) Modifier else Modifier.padding(padding)),
         ) {
-            when (tab) {
-                MainTab.Home -> HomeScreen(
-                    onOpenCatalog = { tab = MainTab.Catalog },
-                    onOpenTitle = ::openTitle,
-                )
-                MainTab.Catalog -> SearchScreen(
-                    viewModel = catalogVm,
-                    onBack = { tab = MainTab.Home },
-                    showBack = false,
-                    title = stringResource(R.string.nav_catalog),
-                    onOpenTitle = ::openTitle,
-                )
-                MainTab.Favorites -> FavoritesScreen(
-                    onNeedLogin = { tab = MainTab.Account },
-                    onOpenTitle = ::openTitle,
-                )
-                MainTab.Account -> AccountScreen(
-                    onBack = { tab = MainTab.Home },
-                )
+            if (!inPip) {
+                when (tab) {
+                    MainTab.Home -> HomeScreen(
+                        onOpenCatalog = { tab = MainTab.Catalog },
+                        onOpenTitle = ::openTitle,
+                    )
+                    MainTab.Catalog -> SearchScreen(
+                        viewModel = catalogVm,
+                        onBack = { tab = MainTab.Home },
+                        showBack = false,
+                        title = stringResource(R.string.nav_catalog),
+                        onOpenTitle = ::openTitle,
+                    )
+                    MainTab.Favorites -> FavoritesScreen(
+                        onNeedLogin = { tab = MainTab.Account },
+                        onOpenTitle = ::openTitle,
+                    )
+                    MainTab.Account -> AccountScreen(
+                        onBack = { tab = MainTab.Home },
+                    )
+                }
             }
 
             val route = titleStack.lastOrNull()

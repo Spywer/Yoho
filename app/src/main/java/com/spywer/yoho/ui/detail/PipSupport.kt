@@ -5,6 +5,7 @@ import android.app.PictureInPictureParams
 import android.content.pm.PackageManager
 import android.os.Build
 import android.util.Rational
+import android.view.Choreographer
 import android.webkit.WebView
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -80,7 +81,21 @@ fun Activity.enterDetailPipIfPossible(eligible: Boolean): Boolean {
 }
 
 fun Activity.onDetailPipUserLeave(controller: DetailPipController) {
-    enterDetailPipIfPossible(controller.eligible)
+    if (!controller.eligible || !supportsPip() || isInPictureInPictureMode || isFinishing) {
+        return
+    }
+    // Сначала убрать chrome (Compose pipMode), кадр спустя — enter PiP,
+    // иначе в мини-окне мелькает вся страница деталки.
+    controller.setInPip(true)
+    Choreographer.getInstance().postFrameCallback {
+        if (isFinishing) {
+            controller.setInPip(false)
+            return@postFrameCallback
+        }
+        if (!enterDetailPipIfPossible(true)) {
+            controller.setInPip(false)
+        }
+    }
 }
 
 fun Activity.onDetailPipModeChanged(
