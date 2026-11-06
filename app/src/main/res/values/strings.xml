@@ -86,6 +86,9 @@
     <string name="detail_episode_aired_dubs"> · есть озвучка: %1$s</string>
     <string name="detail_season_progress">Вышло %1$d из %2$d</string>
     <string name="detail_season_ends"> · сезон закончится %1$s</string>
+    <string name="detail_season_finished">Сезон закончился</string>
+    <string name="detail_season_finished_on">Сезон закончился %1$s</string>
+    <string name="detail_season_progress_complete">Вышло %1$d из %2$d · сезон вышел полностью</string>
     <string name="detail_days_left">%d дн.</string>
     <string name="detail_days_left_one">%d день</string>
     <string name="detail_days_left_few">%d дня</string>

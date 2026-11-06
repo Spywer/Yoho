@@ -102,7 +102,7 @@ private fun NextEpisodeBlock(
     val totalCount = seasonEps.size.coerceAtLeast(airedCount)
     val seasonEnd = seasonEps
         .maxByOrNull { it.episodeNumber ?: 0 }
-        ?.let { formatAirDateRu(it.airDate) }
+        ?.let { formatLongDateRu(it.airDate) }
     val progress = if (totalCount > 0) airedCount.toFloat() / totalCount.toFloat() else 0f
 
     Column(
@@ -196,23 +196,35 @@ private fun NextEpisodeBlock(
         }
 
         if (totalCount > 0 && airedCount > 0) {
+            val seasonComplete = airedCount >= totalCount
             Column(Modifier.fillMaxWidth()) {
-                Text(
-                    text = buildString {
-                        append(
-                            stringResource(
-                                R.string.detail_season_progress,
-                                airedCount,
-                                totalCount,
-                            ),
-                        )
-                        seasonEnd?.let {
-                            append(stringResource(R.string.detail_season_ends, it))
-                        }
-                    },
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontSize = metrics.scheduleBodySize,
-                )
+                if (seasonComplete) {
+                    Text(
+                        text = seasonEnd?.let {
+                            stringResource(R.string.detail_season_finished_on, it)
+                        } ?: stringResource(R.string.detail_season_finished),
+                        color = MaterialTheme.colorScheme.onBackground,
+                        fontSize = metrics.scheduleBodySize,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                } else {
+                    Text(
+                        text = buildString {
+                            append(
+                                stringResource(
+                                    R.string.detail_season_progress,
+                                    airedCount,
+                                    totalCount,
+                                ),
+                            )
+                            seasonEnd?.let {
+                                append(stringResource(R.string.detail_season_ends, it))
+                            }
+                        },
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontSize = metrics.scheduleBodySize,
+                    )
+                }
                 Spacer(Modifier.height(metrics.blockGap))
                 Box(
                     Modifier
@@ -227,6 +239,18 @@ private fun NextEpisodeBlock(
                             .height(6.dp)
                             .clip(RoundedCornerShape(3.dp))
                             .background(MaterialTheme.colorScheme.primary),
+                    )
+                }
+                if (seasonComplete) {
+                    Text(
+                        text = stringResource(
+                            R.string.detail_season_progress_complete,
+                            airedCount,
+                            totalCount,
+                        ),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontSize = metrics.scheduleBodySize,
+                        modifier = Modifier.padding(top = metrics.blockGap),
                     )
                 }
             }
