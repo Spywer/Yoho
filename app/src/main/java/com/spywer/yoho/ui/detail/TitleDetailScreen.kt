@@ -21,6 +21,7 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PlayArrow
@@ -340,18 +341,17 @@ private fun DetailContent(
                             )
                         }
                         .padding(if (metrics.isTablet) 12.dp else 10.dp)
-                    val thumb = @Composable {
+                    val thumbW = if (metrics.isTablet) 296.dp else 112.dp
+                    val playIcon = if (metrics.isTablet) 48.dp else 28.dp
+                    Row(
+                        modifier = trailerMod,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
                         Box(
                             Modifier
-                                .then(
-                                    if (metrics.isTablet) {
-                                        Modifier.width(296.dp)
-                                    } else {
-                                        Modifier.fillMaxWidth()
-                                    },
-                                )
+                                .width(thumbW)
                                 .aspectRatio(16f / 9f)
-                                .clip(RoundedCornerShape(10.dp))
+                                .clip(RoundedCornerShape(if (metrics.isTablet) 10.dp else 8.dp))
                                 .background(Color.Black),
                             contentAlignment = Alignment.Center,
                         ) {
@@ -366,20 +366,29 @@ private fun DetailContent(
                                 contentDescription = null,
                                 tint = Color.White,
                                 modifier = Modifier
-                                    .size(if (metrics.isTablet) 48.dp else 40.dp)
-                                    .clip(RoundedCornerShape(24.dp))
+                                    .size(playIcon)
+                                    .clip(CircleShape)
                                     .background(Color.Black.copy(alpha = 0.5f))
-                                    .padding(8.dp),
+                                    .padding(if (metrics.isTablet) 8.dp else 4.dp),
                             )
                         }
-                    }
-                    val caption = @Composable { mod: Modifier ->
-                        Column(mod) {
+                        Spacer(Modifier.width(if (metrics.isTablet) 14.dp else 10.dp))
+                        Column(Modifier.weight(1f)) {
                             Text(
                                 text = trailer?.title ?: trailerFallback,
                                 color = MaterialTheme.colorScheme.onBackground,
-                                fontSize = metrics.searchTextSize,
-                                lineHeight = metrics.lineOf(metrics.searchTextSize),
+                                fontSize = if (metrics.isTablet) {
+                                    metrics.searchTextSize
+                                } else {
+                                    metrics.cardMetaSize
+                                },
+                                lineHeight = metrics.lineOf(
+                                    if (metrics.isTablet) {
+                                        metrics.searchTextSize
+                                    } else {
+                                        metrics.cardMetaSize
+                                    },
+                                ),
                                 fontWeight = FontWeight.SemiBold,
                                 maxLines = 2,
                                 overflow = TextOverflow.Ellipsis,
@@ -406,22 +415,6 @@ private fun DetailContent(
                                     modifier = Modifier.padding(top = metrics.blockGap),
                                 )
                             }
-                        }
-                    }
-                    if (metrics.isTablet) {
-                        Row(
-                            modifier = trailerMod,
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            thumb()
-                            Spacer(Modifier.width(14.dp))
-                            caption(Modifier.weight(1f))
-                        }
-                    } else {
-                        Column(modifier = trailerMod) {
-                            thumb()
-                            Spacer(Modifier.height(metrics.blockGap))
-                            caption(Modifier.fillMaxWidth())
                         }
                     }
                 }
