@@ -1171,12 +1171,13 @@ GET /api/player-config?kinopoiskId=12686425&mediaType=movie
 }
 ```
 
-**Ответ для заблокированного тайтла (451 Unavailable For Legal Reasons):**
+**Ответ для заблокированного / недоступного конфига (451 Unavailable For Legal Reasons):**
 ```json
 { "error": "taken_down" }
 ```
 
-HTTP 451 используется для тайтлов, удалённых по DMCA-жалобам.
+HTTP 451: DMCA / нет источников; **без cookie сессии** тот же код часто означает login-wall (SSR: `takenDownReason=login`).  
+В Android-клиенте: **с сессией** пустой/`451` config → UI «Нет доступных источников…»; **без сессии** — сначала HTML SSR, иначе текст про вход. `player-choice` на эту заглушку не влияет.
 
 ### 16.6. Статистика выбора плееров
 

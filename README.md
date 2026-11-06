@@ -33,8 +33,9 @@ API_BASE_URL=http://10.0.2.2:8787/
 ## Возможности
 
 - Главная: тренды / рекомендации / трейлеры; чип **Аниме** — блоки как на `/anime` (`GET /api/anime`)
-- Каталог / поиск с фильтрами (значения query как на сайте)
-- Карточка тайтла: герой, трейлер, плеер (iframe/embed), расписание сериала
+- Поиск на главной: `suggest` + `persons` (без перехода в каталог); лайк в избранное из выдачи
+- Каталог: `discover` + фильтры (без dropdown suggest)
+- Карточка тайтла: герой, трейлер, плеер (iframe/embed), расписание сериала; без источников при сессии — заглушка как на сайте
 - Избранное: `POST /api/me/activity` (`addFavorite` / `removeFavorite`)
 - Дневник: `POST/DELETE /api/diary`, статус через `GET /api/diary/contains`
 - Аккаунт: вход/регистрация (email), cookie `__Secure-better-auth.session_token` / `yoho_session`

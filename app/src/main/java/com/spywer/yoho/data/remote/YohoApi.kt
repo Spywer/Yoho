@@ -221,7 +221,7 @@ interface YohoApi {
     /**
      * Конфиг iframe-источников (как `initialPlayerConfig` на сайте):
      * /api/player-config?kinopoiskId=&tmdbId=&mediaType=
-     * Без yoho_session часто 451 taken_down.
+     * Без сессии часто 451 taken_down (login-wall); с сессией пустой/451 → нет источников.
      */
     @GET("api/player-config")
     suspend fun playerConfig(

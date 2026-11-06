@@ -16,10 +16,11 @@
 |-------|-----------|
 | Вход | `POST api/auth/sign-in/email`, `sign-up/email`, `GET get-session`, `POST sign-out` |
 | Главная (общий layout) | `trending`, `latest-trailers`, `search/recent`, `recommendations/latest` |
+| Главная → поиск | `GET api/search/suggest?q=`, `GET api/search/persons?q=` (параллельно, debounce) |
 | Главная → Аниме | `GET api/anime` (+ опционально `api/anime/list?sort=&page=`), `recommendations/latest` |
-| Каталог | `search/discover`, `facets`, `filters`, `regions`, `recent`, `suggest`, `persons` |
+| Каталог | `search/discover`, `facets`, `filters`, `regions`, `recent` (+ `persons` в фильтре людей) |
 | Карточка | `film-info`, `person/{id}`, `tv-last-air`, `tv-schedule` |
-| Плеер | `player-config`, `player-choice`, `player/{type}/{id}` (+ HTML SSR fallback) |
+| Плеер | `player-config`, `player-choice`, `player/{type}/{id}` (+ HTML SSR fallback без сессии) |
 | Избранное | `POST me/activity` (`addFavorite`/`removeFavorite`), список через `GET sync` |
 | Дневник | `POST diary`, `GET diary/contains?itemId=`, `DELETE diary?itemId=` |
 
@@ -35,6 +36,21 @@
 Блоки **общего** layout: Рекомендации → Сейчас популярно → Трейлеры → Популярные → Новинки.
 
 Блоки **аниме**: Рекомендации → Сейчас популярно → Популярно в этом сезоне · {сезон год} → Популярное за всё время → Топ 100 аниме (без трейлеров/новинок).
+
+### Главная: поиск (как на `/`)
+
+Тап по поиску **не** открывает вкладку «Каталог» — поле ввода на месте.
+
+| Что | Как |
+|-----|-----|
+| API | параллельно `suggest` + `persons` (от 2 символов, debounce ~280 ms) |
+| Suggest ответ | `{ results: [...] }` — `title`, `originalTitle`, `year`, `mediaType`, `posterUrl`, `kinopoiskId`, `tmdbId`, `genres`, `ratingKinopoisk` / `ratingImdb` |
+| UI строки | тип RU · год · жанры; справа КП/IM; лайк в избранное (`me/activity`); оригинал через `—` приглушённо |
+| Чипы типа | скрываются, пока видна выдача (≥2 символа) |
+| Фильтры (иконка) | по-прежнему → Каталог |
+| Клавиатура | при уходе с Каталога / открытии карточки — `clearFocus` + hide IME (`MainShell`) |
+
+На **Каталоге** dropdown suggest **нет** — только `discover` по query/фильтрам. `suggest` в фильтрах названия/людей внутри `FilterSheet` остаётся.
 
 Маппинг `trending` filter (не аниме-layout):
 
@@ -76,6 +92,9 @@
 | Что | Как |
 |-----|-----|
 | UI | `PlayerBlock` + `PlayerWebView` в `TitleDetailScreen` |
+| Конфиг | сначала `GET player-config`; без сессии — SSR `initialPlayerConfig` из HTML карточки |
+| Заглушка | сессия есть и `player-config` пустой / `451 {error:taken_down}` → **«Нет доступных источников…»** (как на сайте). `player-choice` на заглушку **не** влияет |
+| Без сессии | HTML `takenDownReason=login` → текст про вход; иначе no-sources |
 | Скролл деталки | `Column` + `verticalScroll` (не `LazyColumn`): иначе при ландшафте item плеера dispose → мигание FS/WebView |
 | WebView | `PlayerWebViewHolder` живёт на экране деталки (`remember` по id), `destroy()` при уходе |
 | Cinema FS | reparent WebView на `window.decorView` (не Dialog): Dialog ломал surface при возврате |
