@@ -25,6 +25,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
+import android.content.res.Configuration
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -32,6 +33,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -65,8 +67,13 @@ internal fun DetailHero(
     val showFavorite = detail.idKp != null && detail.idKp > 0
     val hasGenres = detail.genres.isNotEmpty()
     val description = detail.description?.takeIf { it.isNotBlank() }
+    // metrics по smallestWidth — телефон в альбоме остаётся Compact;
+    // шапка всё равно как на планшете (горизонтальный блок + backdrop).
+    val landscape = LocalConfiguration.current.orientation ==
+        Configuration.ORIENTATION_LANDSCAPE
+    val wideHero = metrics.isTablet || landscape
 
-    if (metrics.isTablet) {
+    if (wideHero) {
         Box(Modifier.fillMaxWidth()) {
             AsyncImage(
                 model = detail.backdrop ?: detail.poster,
@@ -260,27 +267,37 @@ private fun DetailHeroTablet(
     onToggleFavorite: () -> Unit,
     onOpenGenre: (String, String?) -> Unit,
 ) {
+    val compact = metrics.widthClass == WidthClass.Compact
+    val posterWidth = when (metrics.widthClass) {
+        WidthClass.Expanded -> 360.dp
+        WidthClass.Medium -> 300.dp
+        // Телефон-альбом: не 280 как «фейковый Medium», а posterLarge Compact.
+        WidthClass.Compact -> metrics.posterLarge
+    }
+    val rowGap = if (compact) metrics.cardGap else 16.dp
+    val metaTop = if (compact) metrics.sectionGap else 12.dp
+    val metaStackGap = when (metrics.widthClass) {
+        WidthClass.Expanded -> 24.dp
+        WidthClass.Medium -> 12.dp
+        WidthClass.Compact -> metrics.sectionGap
+    }
+    val descTop = if (compact) metrics.sectionGap else 28.dp
+
     Row(
         Modifier
             .fillMaxWidth()
             .padding(horizontal = metrics.screenPadding)
-            .padding(top = 4.dp),
-        horizontalArrangement = Arrangement.spacedBy(16.dp),
+            .padding(top = if (compact) metrics.blockGap else 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(rowGap),
     ) {
         AsyncImage(
             model = detail.poster,
             contentDescription = titleRu,
             contentScale = ContentScale.Crop,
             modifier = Modifier
-                .width(
-                    when (metrics.widthClass) {
-                        WidthClass.Expanded -> 360.dp
-                        WidthClass.Medium -> 300.dp
-                        WidthClass.Compact -> 280.dp
-                    },
-                )
+                .width(posterWidth)
                 .aspectRatio(2f / 3f)
-                .clip(RoundedCornerShape(12.dp))
+                .clip(RoundedCornerShape(if (compact) 8.dp else 12.dp))
                 .background(Color.White.copy(alpha = 0.12f)),
         )
         Column(Modifier.weight(1f)) {
@@ -290,30 +307,31 @@ private fun DetailHeroTablet(
                 fontSize = metrics.detailTitleSize,
                 lineHeight = metrics.lineOf(metrics.detailTitleSize),
                 fontWeight = FontWeight.Bold,
-                maxLines = 2,
+                maxLines = if (compact) 3 else 2,
                 overflow = TextOverflow.Ellipsis,
             )
             HeroOriginalAgeRow(
                 titleOriginal = titleOriginal,
                 ageRating = detail.ageRating,
                 metrics = metrics,
-                compact = false,
+                compact = compact,
             )
             if (showFavorite || hasGenres || hasRatings) {
                 Row(
                     Modifier
                         .fillMaxWidth()
-                        .padding(top = 12.dp),
+                        .padding(top = metaTop),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.Top,
                 ) {
                     Column(
                         Modifier
                             .weight(1f)
-                            .padding(end = 8.dp, top = 6.dp),
-                        verticalArrangement = Arrangement.spacedBy(
-                            if (metrics.widthClass == WidthClass.Expanded) 24.dp else 12.dp,
-                        ),
+                            .padding(
+                                end = if (compact) metrics.blockGap else 8.dp,
+                                top = if (compact) metrics.blockGap else 6.dp,
+                            ),
+                        verticalArrangement = Arrangement.spacedBy(metaStackGap),
                     ) {
                         if (showFavorite) {
                             HeroFavoriteButton(
@@ -351,7 +369,9 @@ private fun DetailHeroTablet(
                     lineHeight = metrics.detailBodyLine,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(top = 28.dp),
+                        .padding(top = descTop),
+                    maxLines = if (compact) 6 else Int.MAX_VALUE,
+                    overflow = if (compact) TextOverflow.Ellipsis else TextOverflow.Clip,
                 )
             }
         }
