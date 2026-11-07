@@ -1,6 +1,7 @@
 package com.spywer.yoho.data
 
 import android.content.Context
+import androidx.core.content.edit
 
 /** Пользовательские настройки приложения. */
 object AppSettings {
@@ -11,7 +12,7 @@ object AppSettings {
         prefs(context).getBoolean(KEY_PIP_ENABLED, true)
 
     fun setPipEnabled(context: Context, enabled: Boolean) {
-        prefs(context).edit().putBoolean(KEY_PIP_ENABLED, enabled).apply()
+        prefs(context).edit { putBoolean(KEY_PIP_ENABLED, enabled) }
     }
 
     private fun prefs(context: Context) =
