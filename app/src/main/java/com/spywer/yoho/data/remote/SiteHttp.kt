@@ -3,15 +3,22 @@ package com.spywer.yoho.data.remote
 import android.annotation.SuppressLint
 import android.content.Context
 import android.webkit.WebSettings
+import androidx.core.content.edit
 import okhttp3.Request
 import org.json.JSONObject
 import java.util.concurrent.ConcurrentHashMap
-import androidx.core.content.edit
 
-/** UA / Referer как у мобильного Chrome (не desktop — иначе wsdk/капча = «не человек»). */
+/**
+ * UA / Referer как у мобильного Chrome (не desktop — иначе wsdk/капча = «не человек»).
+ */
 object SiteHttp {
+
     /** Зеркала сайта — единственный список хостов. */
-    val CANDIDATES: List<String> = listOf("reyoho.com", "reyoho.ru", "yoho.pw")
+    val CANDIDATES: List<String> = listOf(
+        "reyoho.com",
+        "reyoho.ru",
+        "yoho.pw",
+    )
 
     private const val PREFS = "site_endpoints"
     private const val KEY_ACTIVE = "active_host"
@@ -52,16 +59,24 @@ object SiteHttp {
      * @return новый активный хост или `null`, если переключать некуда / тот же.
      */
     fun failoverFrom(failedHost: String): String? {
+        // Фикс: не обрабатываем сторонние хосты как зеркала сайта.
+        if (!isCandidate(failedHost)) return null
+
         synchronized(lock) {
             ensureLoaded()
+
             val now = System.currentTimeMillis()
             pruneExcludedLocked(now)
+
             excludedUntil[failedHost.lowercase()] = now + COOLDOWN_MS
+
             val next = pickNextLocked(after = failedHost, now = now) ?: return null
+
             if (next.equals(activeHostField, ignoreCase = true)) {
                 persistLocked()
                 return null
             }
+
             activeHostField = next
             persistLocked()
             return next
@@ -70,19 +85,24 @@ object SiteHttp {
 
     fun ensureLoaded() {
         if (loaded) return
+
         synchronized(lock) {
             if (loaded) return
+
             val ctx = AppContext.getOrNull() ?: return
             val prefs = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+
             val saved = prefs.getString(KEY_ACTIVE, null)
             if (!saved.isNullOrBlank() && isCandidate(saved)) {
                 activeHostField = CANDIDATES.first { it.equals(saved, ignoreCase = true) }
             }
+
             val rawExcluded = prefs.getString(KEY_EXCLUDED, null)
             if (!rawExcluded.isNullOrBlank()) {
                 runCatching {
                     val o = JSONObject(rawExcluded)
                     val now = System.currentTimeMillis()
+
                     o.keys().forEach { key ->
                         val until = o.optLong(key, 0L)
                         if (until > now && isCandidate(key)) {
@@ -91,13 +111,16 @@ object SiteHttp {
                     }
                 }
             }
+
             pruneExcludedLocked(System.currentTimeMillis())
+
             val now = System.currentTimeMillis()
             if (isExcludedLocked(activeHostField, now)) {
                 activeHostField = pickNextLocked(after = activeHostField, now = now)
                     ?: CANDIDATES.first()
                 persistLocked()
             }
+
             loaded = true
         }
     }
@@ -111,34 +134,40 @@ object SiteHttp {
 
     private fun pickNextLocked(after: String?, now: Long): String? {
         if (CANDIDATES.isEmpty()) return null
+
         val start = after
             ?.let { failed -> CANDIDATES.indexOfFirst { it.equals(failed, ignoreCase = true) } }
             ?.takeIf { it >= 0 }
             ?: -1
+
         for (offset in 1..CANDIDATES.size) {
             val host = CANDIDATES[(start + offset) % CANDIDATES.size]
             if (!isExcludedLocked(host, now)) return host
         }
+
         // Все в cooldown — снять самый старый exclude и взять его.
         val oldest = excludedUntil.minByOrNull { it.value }?.key
         if (oldest != null) {
             excludedUntil.remove(oldest)
             return CANDIDATES.firstOrNull { it.equals(oldest, ignoreCase = true) } ?: oldest
         }
+
         return CANDIDATES.first()
     }
 
     @SuppressLint("UseKtx")
     private fun persistLocked() {
         val ctx = AppContext.getOrNull() ?: return
+
         val excludedJson = JSONObject()
         excludedUntil.forEach { (host, until) ->
             excludedJson.put(host, until)
         }
+
         ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            .edit {
+            .edit(commit = true) {
                 putString(KEY_ACTIVE, activeHostField)
-                    .putString(KEY_EXCLUDED, excludedJson.toString())
+                putString(KEY_EXCLUDED, excludedJson.toString())
             }
     }
 
@@ -152,6 +181,7 @@ object SiteHttp {
     @SuppressLint("SetJavaScriptEnabled")
     fun userAgent(context: Context? = null): String {
         cachedUserAgent?.let { return it }
+
         val ctx = context ?: AppContext.getOrNull()
         if (ctx != null) {
             val raw = runCatching { WebSettings.getDefaultUserAgent(ctx) }.getOrNull()
@@ -165,15 +195,17 @@ object SiteHttp {
                     .also { cachedUserAgent = it }
             }
         }
+
         return FALLBACK_UA
     }
 
     /** Для OkHttp до готовности Context. */
-    val USER_AGENT: String get() = userAgent()
+    val USER_AGENT: String
+        get() = userAgent()
 
     private const val FALLBACK_UA =
         "Mozilla/5.0 (Linux; Android 14; Mobile) AppleWebKit/537.36 " +
-            "(KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36"
+                "(KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36"
 
     /** Заголовки navigate как у Chrome; для плеера см. [PlayerBrowserProfile.browserHeaders]. */
     fun documentHeaders(context: Context? = null): Map<String, String> =
@@ -185,18 +217,24 @@ object SiteHttp {
  * Без `yoho_session` сервер отдаёт `null` + takenDownReason=login.
  */
 object PlayerConfigPageParser {
+
     fun parse(html: String): PlayerConfigDto? {
-        val marker = "\"initialPlayerConfig\":"
+        val marker = "\"initialPlayerConfig\": "
         val start = html.indexOf(marker)
         if (start < 0) return null
+
         var i = start + marker.length
         while (i < html.length && html[i].isWhitespace()) i++
+
         if (html.startsWith("null", i)) return null
         if (i >= html.length || html[i] != '{') return null
+
         val json = extractObject(html, i) ?: return null
+
         val unescaped = json
             .replace("\\u0026", "&")
             .replace("\\/", "/")
+
         return runCatching {
             YohoGson.instance.fromJson(unescaped, PlayerConfigDto::class.java)
         }.getOrNull()
@@ -214,8 +252,10 @@ object PlayerConfigPageParser {
         var depth = 0
         var inString = false
         var escape = false
+
         for (i in openBrace until src.length) {
             val c = src[i]
+
             if (inString) {
                 when {
                     escape -> escape = false
@@ -224,6 +264,7 @@ object PlayerConfigPageParser {
                 }
                 continue
             }
+
             when (c) {
                 '"' -> inString = true
                 '{' -> depth++
@@ -233,6 +274,7 @@ object PlayerConfigPageParser {
                 }
             }
         }
+
         return null
     }
 }
@@ -245,19 +287,23 @@ fun fetchTitlePageHtml(
         mediaType.equals("tv", true) || mediaType.equals("anime", true) -> "series"
         else -> "film"
     }
+
     // Заголовки UA/Referer/Accept-Language ставит SiteHeadersInterceptor.
     val url = SiteHttp.REFERER + "$kind/$kinopoiskId"
+
     val accept = SiteHttp.documentHeaders()["Accept"]
         ?: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
+
     val req = Request.Builder()
         .url(url)
         .header("Accept", accept)
         .get()
         .build()
+
     return runCatching {
         NetworkModule.httpClient.newCall(req).execute().use { resp ->
             if (!resp.isSuccessful) return@use null
-            resp.body.string()
+            resp.body?.string()
         }
     }.getOrNull()
 }
