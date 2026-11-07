@@ -8,6 +8,8 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.getValue
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.spywer.yoho.ui.detail.DetailPipController
 import com.spywer.yoho.ui.detail.LocalDetailPip
 import com.spywer.yoho.ui.detail.buildDetailPipParams
@@ -17,10 +19,12 @@ import com.spywer.yoho.ui.detail.supportsPip
 import com.spywer.yoho.ui.main.MainShell
 import com.spywer.yoho.ui.main.MainTab
 import com.spywer.yoho.ui.theme.YohoTheme
+import kotlinx.coroutines.flow.MutableStateFlow
 
 /** Хост табов + in-app деталка; PiP при загруженном плеере (Home). */
 class MainActivity : ComponentActivity() {
     val pipController = DetailPipController()
+    private val openTab = MutableStateFlow<MainTab?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -28,8 +32,9 @@ class MainActivity : ComponentActivity() {
         if (supportsPip()) {
             setPictureInPictureParams(buildDetailPipParams(autoEnter = false))
         }
-        val initialTab = tabFromIntent(intent)
+        openTab.value = tabFromIntent(intent)
         setContent {
+            val initialTab by openTab.collectAsStateWithLifecycle()
             CompositionLocalProvider(LocalDetailPip provides pipController) {
                 YohoTheme(darkTheme = true) {
                     MainShell(initialTab = initialTab)
@@ -58,10 +63,7 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        // Пересоздание content при возврате на аккаунт из полок коллекции
-        if (tabFromIntent(intent) != null) {
-            recreate()
-        }
+        openTab.value = tabFromIntent(intent)
     }
 
     override fun onUserLeaveHint() {

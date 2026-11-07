@@ -9,6 +9,7 @@ import com.spywer.yoho.data.remote.FavoriteItemDto
 import com.spywer.yoho.data.remote.MeActivityRequest
 import com.spywer.yoho.data.remote.NetworkModule
 import com.spywer.yoho.data.remote.absMediaUrl
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -78,48 +79,51 @@ data class CollectionUiState(
      * Независим от [diaryStatusFilter] (лайк и статус могут быть вместе).
      */
     val diaryReactionFilter: String? = null,
+    /** Кэш сортировки/фильтра — пересчёт только при смене данных/сорта. */
+    val displayedFavorites: List<FavoriteItemDto> = emptyList(),
+    val displayedHistory: List<FavoriteItemDto> = emptyList(),
+    val displayedDiary: List<DiaryEntryDto> = emptyList(),
     val selectionMode: Boolean = false,
     val selectedIds: Set<String> = emptySet(),
     val error: String? = null,
     val actionError: String? = null,
     val needsLogin: Boolean = false,
-) {
-    val displayedFavorites: List<FavoriteItemDto>
-        get() = sortByDate(favorites, favoritesSort)
+)
 
-    val displayedHistory: List<FavoriteItemDto>
-        get() = sortByDate(history, historySort)
-
-    val displayedDiary: List<DiaryEntryDto>
-        get() {
-            var filtered = diary
-            diaryStatusFilter?.let { status ->
-                filtered = filtered.filter { it.statusLabel == status }
-            }
-            when (diaryReactionFilter) {
-                DiaryFilterLike ->
-                    filtered = filtered.filter { it.sourceReaction == "like" }
-                DiaryFilterDislike ->
-                    filtered = filtered.filter { it.sourceReaction == "dislike" }
-            }
-            return when (diarySort) {
-                DiarySort.AddedDesc ->
-                    filtered.sortedByDescending { it.addedMillis() }
-                DiarySort.AddedAsc ->
-                    filtered.sortedBy { it.addedMillis().takeIf { ms -> ms > 0L } ?: Long.MAX_VALUE }
-                DiarySort.WatchedDesc ->
-                    filtered.sortedWith(
-                        compareByDescending<DiaryEntryDto> { it.watchedMillis() }
-                            .thenByDescending { it.addedMillis() },
-                    )
-                DiarySort.WatchedAsc ->
-                    filtered.sortedWith(
-                        compareBy<DiaryEntryDto> {
-                            it.watchedMillis().takeIf { ms -> ms > 0L } ?: Long.MAX_VALUE
-                        }.thenBy { it.addedMillis().takeIf { ms -> ms > 0L } ?: Long.MAX_VALUE },
-                    )
-            }
-        }
+/** Пересчитать displayed* из сырых списков + sort/filter. */
+private fun CollectionUiState.withDisplayed(): CollectionUiState {
+    var filteredDiary = diary
+    diaryStatusFilter?.let { status ->
+        filteredDiary = filteredDiary.filter { it.statusLabel == status }
+    }
+    when (diaryReactionFilter) {
+        DiaryFilterLike ->
+            filteredDiary = filteredDiary.filter { it.sourceReaction == "like" }
+        DiaryFilterDislike ->
+            filteredDiary = filteredDiary.filter { it.sourceReaction == "dislike" }
+    }
+    val sortedDiary = when (diarySort) {
+        DiarySort.AddedDesc ->
+            filteredDiary.sortedByDescending { it.addedMillis() }
+        DiarySort.AddedAsc ->
+            filteredDiary.sortedBy { it.addedMillis().takeIf { ms -> ms > 0L } ?: Long.MAX_VALUE }
+        DiarySort.WatchedDesc ->
+            filteredDiary.sortedWith(
+                compareByDescending<DiaryEntryDto> { it.watchedMillis() }
+                    .thenByDescending { it.addedMillis() },
+            )
+        DiarySort.WatchedAsc ->
+            filteredDiary.sortedWith(
+                compareBy<DiaryEntryDto> {
+                    it.watchedMillis().takeIf { ms -> ms > 0L } ?: Long.MAX_VALUE
+                }.thenBy { it.addedMillis().takeIf { ms -> ms > 0L } ?: Long.MAX_VALUE },
+            )
+    }
+    return copy(
+        displayedFavorites = sortByDate(favorites, favoritesSort),
+        displayedHistory = sortByDate(history, historySort),
+        displayedDiary = sortedDiary,
+    )
 }
 
 class CollectionViewModel(
@@ -128,6 +132,7 @@ class CollectionViewModel(
     private val api = NetworkModule.api
     private val _state = MutableStateFlow(CollectionUiState(shelf = initialShelf))
     val state: StateFlow<CollectionUiState> = _state.asStateFlow()
+    private var loadJob: Job? = null
 
     init {
         load()
@@ -144,21 +149,26 @@ class CollectionViewModel(
             }
     }
 
+    /** Обновить state и пересчитать displayed*. */
+    private inline fun updateDerived(transform: (CollectionUiState) -> CollectionUiState) {
+        _state.update { transform(it).withDisplayed() }
+    }
+
     fun setFavoritesSort(sort: FavoritesSort) {
-        _state.update { it.copy(favoritesSort = sort) }
+        updateDerived { it.copy(favoritesSort = sort) }
     }
 
     fun setHistorySort(sort: FavoritesSort) {
-        _state.update { it.copy(historySort = sort) }
+        updateDerived { it.copy(historySort = sort) }
     }
 
     fun setDiarySort(sort: DiarySort) {
-        _state.update { it.copy(diarySort = sort) }
+        updateDerived { it.copy(diarySort = sort) }
     }
 
     fun setDiaryStatusFilter(status: String?) {
         val next = status?.takeIf { it in DiaryStatusLabels }
-        _state.update { it.copy(diaryStatusFilter = next) }
+        updateDerived { it.copy(diaryStatusFilter = next) }
     }
 
     fun setDiaryReactionFilter(reaction: String?) {
@@ -167,7 +177,7 @@ class CollectionViewModel(
             DiaryFilterLike, DiaryFilterDislike -> reaction
             else -> null
         }
-        _state.update { it.copy(diaryReactionFilter = next) }
+        updateDerived { it.copy(diaryReactionFilter = next) }
     }
 
     fun startSelectionMode() {
@@ -230,13 +240,12 @@ class CollectionViewModel(
                 val resp = api.diary(body)
                 resp.isSuccessful
             }.getOrDefault(false)
-            _state.update { prev ->
-                if (!ok) {
-                    prev.copy(
-                        mutating = false,
-                        actionError = "Не удалось сменить статус",
-                    )
-                } else {
+            if (!ok) {
+                _state.update {
+                    it.copy(mutating = false, actionError = "Не удалось сменить статус")
+                }
+            } else {
+                updateDerived { prev ->
                     prev.copy(
                         mutating = false,
                         diary = prev.diary.map { item ->
@@ -265,20 +274,20 @@ class CollectionViewModel(
             deleteDiary(setOf(entryKey))
             return
         }
+        val currentStatus = entry.statusLabel ?: return
         // Пустой statusLabel + прежняя реакция: сброс статуса, лайк/дизлайк остаётся
-        val request = entry.toDiaryRequest(entry.statusLabel!!)?.copy(statusLabel = "") ?: return
+        val request = entry.toDiaryRequest(currentStatus)?.copy(statusLabel = "") ?: return
         viewModelScope.launch {
             _state.update { it.copy(mutating = true, actionError = null) }
             val ok = runCatching {
                 api.diary(request).isSuccessful
             }.getOrDefault(false)
-            _state.update { prev ->
-                if (!ok) {
-                    prev.copy(
-                        mutating = false,
-                        actionError = "Не удалось удалить статус",
-                    )
-                } else {
+            if (!ok) {
+                _state.update {
+                    it.copy(mutating = false, actionError = "Не удалось удалить статус")
+                }
+            } else {
+                updateDerived { prev ->
                     prev.copy(
                         mutating = false,
                         diary = prev.diary.map { item ->
@@ -304,11 +313,6 @@ class CollectionViewModel(
         }
     }
 
-    fun deleteDiaryEntry(entryKey: String) {
-        if (_state.value.mutating) return
-        deleteDiary(setOf(entryKey))
-    }
-
     private fun deleteFavorites(keys: Set<String>) {
         viewModelScope.launch {
             _state.update { it.copy(mutating = true, actionError = null) }
@@ -329,7 +333,7 @@ class CollectionViewModel(
                 }.getOrDefault(false)
                 if (ok) removed += item.selectionKey() else failed++
             }
-            _state.update { prev ->
+            updateDerived { prev ->
                 prev.copy(
                     mutating = false,
                     favorites = prev.favorites.filterNot { it.selectionKey() in removed },
@@ -359,7 +363,7 @@ class CollectionViewModel(
                 }.getOrDefault(false)
                 if (ok) removed += item.selectionKey() else failed++
             }
-            _state.update { prev ->
+            updateDerived { prev ->
                 prev.copy(
                     mutating = false,
                     diary = prev.diary.filterNot { it.selectionKey() in removed },
@@ -372,20 +376,24 @@ class CollectionViewModel(
     }
 
     fun load(refresh: Boolean = false) {
-        viewModelScope.launch {
-            val emptyShelves = _state.value.let {
-                it.favorites.isEmpty() && it.history.isEmpty() && it.diary.isEmpty()
+        loadJob?.cancel()
+        loadJob = viewModelScope.launch {
+            val shelf = _state.value.shelf
+            val emptyForShelf = when (shelf) {
+                CollectionShelf.Favorites -> _state.value.favorites.isEmpty()
+                CollectionShelf.History -> _state.value.history.isEmpty()
+                CollectionShelf.Diary -> _state.value.diary.isEmpty()
             }
             _state.update {
                 it.copy(
-                    loading = !refresh && emptyShelves,
+                    loading = !refresh && emptyForShelf,
                     refreshing = refresh,
                     error = null,
                 )
             }
             SessionRepository.refresh()
             if (!SessionRepository.state.value.isLoggedIn) {
-                _state.update {
+                updateDerived {
                     it.copy(
                         loading = false,
                         refreshing = false,
@@ -400,53 +408,70 @@ class CollectionViewModel(
                 }
                 return@launch
             }
-            val syncResult = runCatching { api.sync() }
-            val diaryResult = runCatching { api.diaryList(page = 1, limit = 100) }
 
             fun List<FavoriteItemDto>.normalize(): List<FavoriteItemDto> =
                 map { f -> f.copy(posterUrl = f.posterUrl.absMediaUrl()) }
 
-            syncResult
-                .onSuccess { sync ->
-                    val diaryItems = diaryResult.getOrNull()?.entries.orEmpty()
-                    _state.update { prev ->
-                        val statusFilter = prev.diaryStatusFilter?.takeIf { it in DiaryStatusLabels }
-                        val reactionFilter = prev.diaryReactionFilter?.takeIf {
-                            it == DiaryFilterLike || it == DiaryFilterDislike
+            when (shelf) {
+                CollectionShelf.Favorites, CollectionShelf.History -> {
+                    val syncResult = runCatching { api.sync() }
+                    syncResult
+                        .onSuccess { sync ->
+                            updateDerived { prev ->
+                                prev.copy(
+                                    loading = false,
+                                    refreshing = false,
+                                    needsLogin = false,
+                                    favorites = sync.favorites.normalize(),
+                                    history = sync.watchHistory.normalize(),
+                                    error = null,
+                                )
+                            }
                         }
-                        prev.copy(
-                            loading = false,
-                            refreshing = false,
-                            needsLogin = false,
-                            favorites = sync.favorites.normalize(),
-                            history = sync.watchHistory.normalize(),
-                            diary = diaryItems,
-                            diaryStatusFilter = statusFilter,
-                            diaryReactionFilter = reactionFilter,
-                            error = if (diaryResult.isFailure &&
-                                sync.favorites.isEmpty() &&
-                                sync.watchHistory.isEmpty()
-                            ) {
-                                diaryResult.exceptionOrNull()?.message ?: "Не удалось загрузить"
-                            } else {
-                                null
-                            },
-                        )
-                    }
+                        .onFailure { e ->
+                            _state.update {
+                                it.copy(
+                                    loading = false,
+                                    refreshing = false,
+                                    needsLogin = false,
+                                    error = e.message ?: "Не удалось загрузить",
+                                )
+                            }
+                        }
                 }
-                .onFailure { e ->
-                    _state.update {
-                        it.copy(
-                            loading = false,
-                            refreshing = false,
-                            needsLogin = false,
-                            favorites = emptyList(),
-                            history = emptyList(),
-                            diary = diaryResult.getOrNull()?.entries.orEmpty(),
-                            error = e.message ?: "Не удалось загрузить",
-                        )
-                    }
+                CollectionShelf.Diary -> {
+                    val diaryResult = runCatching { api.diaryList(page = 1, limit = 100) }
+                    diaryResult
+                        .onSuccess { body ->
+                            updateDerived { prev ->
+                                val statusFilter =
+                                    prev.diaryStatusFilter?.takeIf { it in DiaryStatusLabels }
+                                val reactionFilter = prev.diaryReactionFilter?.takeIf {
+                                    it == DiaryFilterLike || it == DiaryFilterDislike
+                                }
+                                prev.copy(
+                                    loading = false,
+                                    refreshing = false,
+                                    needsLogin = false,
+                                    diary = body.entries,
+                                    diaryStatusFilter = statusFilter,
+                                    diaryReactionFilter = reactionFilter,
+                                    error = null,
+                                )
+                            }
+                        }
+                        .onFailure { e ->
+                            _state.update {
+                                it.copy(
+                                    loading = false,
+                                    refreshing = false,
+                                    needsLogin = false,
+                                    error = e.message ?: "Не удалось загрузить",
+                                )
+                            }
+                        }
                 }
+            }
         }
     }
 }

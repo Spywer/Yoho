@@ -41,11 +41,6 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.spywer.yoho.R
-import com.spywer.yoho.data.remote.ProfileFilmDto
-import com.spywer.yoho.data.remote.RatingsDto
-import com.spywer.yoho.data.remote.ScoreDto
-import com.spywer.yoho.data.remote.TitleDto
-import com.spywer.yoho.data.remote.TitleNameDto
 import com.spywer.yoho.ui.components.PosterCard
 import com.spywer.yoho.ui.detail.TitleDetailActivity
 import com.spywer.yoho.ui.layout.LocalHomeMetrics
@@ -126,7 +121,7 @@ fun CollectionHubScreen(
 
             when {
                 state.needsLogin -> Unit
-                state.loading && state.films.isEmpty() -> {
+                state.loading && state.filmsEmpty -> {
                     item(span = { GridItemSpan(maxLineSpan) }) {
                         Box(
                             Modifier
@@ -138,7 +133,7 @@ fun CollectionHubScreen(
                         }
                     }
                 }
-                state.films.isEmpty() -> {
+                state.filmsEmpty -> {
                     item(span = { GridItemSpan(maxLineSpan) }) {
                         Text(
                             text = stringResource(R.string.collection_films_empty),
@@ -150,13 +145,14 @@ fun CollectionHubScreen(
                 }
                 else -> {
                     items(
-                        items = state.films,
-                        key = { it.itemId ?: it.href ?: it.title.orEmpty() },
-                    ) { film ->
+                        items = state.cards,
+                        key = { it.key },
+                    ) { card ->
                         PosterCard(
-                            item = film.toTitleDto(),
+                            item = card.title,
                             modifier = Modifier.fillMaxWidth(),
                             onClick = {
+                                val film = card.film
                                 val kp = film.resolvedKp()
                                 if (kp == null || kp <= 0) return@PosterCard
                                 context.startActivity(
@@ -175,21 +171,6 @@ fun CollectionHubScreen(
         }
     }
 }
-
-private fun ProfileFilmDto.toTitleDto(): TitleDto =
-    TitleDto(
-        idKp = resolvedKp(),
-        idTmdb = tmdbId,
-        mediaType = mediaType,
-        title = TitleNameDto(ru = title),
-        year = year?.toIntOrNull(),
-        poster = resolvedPoster(),
-        ratings = RatingsDto(
-            kinopoisk = kp?.takeIf { it > 0 }?.let { ScoreDto(score = it) },
-            imdb = imdb?.takeIf { it > 0 }?.let { ScoreDto(score = it) },
-        ),
-        reason = status?.takeIf { it.isNotBlank() },
-    )
 
 @Composable
 private fun HubRow(

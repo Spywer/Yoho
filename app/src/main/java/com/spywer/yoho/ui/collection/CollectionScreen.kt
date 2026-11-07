@@ -344,8 +344,9 @@ fun CollectionScreen(
                                             ) { item ->
                                                 val key = item.selectionKey()
                                                 val selected = key in state.selectedIds
+                                                val title = remember(key, item) { item.toTitleDto() }
                                                 PosterCard(
-                                                    item = item.toTitleDto(),
+                                                    item = title,
                                                     selected = selected,
                                                     selectionMode = state.selectionMode,
                                                     onClick = {
@@ -367,8 +368,14 @@ fun CollectionScreen(
                                                 state.displayedHistory,
                                                 key = { "hist-${it.id ?: it.contentId}-${it.ts}" },
                                             ) { item ->
+                                                val title = remember(
+                                                    item.id,
+                                                    item.contentId,
+                                                    item.ts,
+                                                    item,
+                                                ) { item.toTitleDto() }
                                                 PosterCard(
-                                                    item = item.toTitleDto(),
+                                                    item = title,
                                                     onClick = { openFavorite(item) },
                                                     modifier = Modifier.fillMaxWidth(),
                                                 )
@@ -381,8 +388,11 @@ fun CollectionScreen(
                                             ) { item ->
                                                 val key = item.selectionKey()
                                                 val selected = key in state.selectedIds
+                                                val title = remember(key, item, diaryStatusPlaceholder) {
+                                                    item.toTitleDto(diaryStatusPlaceholder)
+                                                }
                                                 PosterCard(
-                                                    item = item.toTitleDto(diaryStatusPlaceholder),
+                                                    item = title,
                                                     selected = selected,
                                                     selectionMode = state.selectionMode,
                                                     reaction = item.sourceReaction
