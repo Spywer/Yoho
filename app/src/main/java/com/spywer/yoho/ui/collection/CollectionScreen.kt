@@ -31,6 +31,7 @@ import androidx.compose.material.icons.outlined.DateRange
 import androidx.compose.material.icons.outlined.Sort
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.DateRangePicker
@@ -48,6 +49,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberDateRangePickerState
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -498,7 +500,11 @@ fun CollectionScreen(
     statusEditEntry?.let { entry ->
         val menuTitleSize = if (metrics.isTablet) metrics.sectionTitleSize else metrics.searchTextSize
         val menuItemSize = if (metrics.isTablet) metrics.cardMetaSize else metrics.searchTextSize
-        val menuItemMin = if (metrics.isTablet) 56.dp else 48.dp
+        val statusPad = PaddingValues(
+            horizontal = if (metrics.isTablet) 16.dp else 8.dp,
+            vertical = if (metrics.isTablet) 14.dp else 2.dp,
+        )
+        val statusMinH = if (metrics.isTablet) 56.dp else 1.dp
         AlertDialog(
             onDismissRequest = { statusEditEntry = null },
             title = {
@@ -509,7 +515,7 @@ fun CollectionScreen(
                 )
             },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(0.dp)) {
                     DiaryStatusLabels.forEach { label ->
                         val active = entry.statusLabel == label
                         TextButton(
@@ -518,9 +524,10 @@ fun CollectionScreen(
                                 statusEditEntry = null
                             },
                             enabled = !state.mutating,
+                            contentPadding = statusPad,
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .heightIn(min = menuItemMin),
+                                .defaultMinSize(minHeight = statusMinH),
                         ) {
                             Text(
                                 text = label,
@@ -543,10 +550,11 @@ fun CollectionScreen(
                                 statusEditEntry = null
                             },
                             enabled = !state.mutating,
+                            contentPadding = statusPad,
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .heightIn(min = menuItemMin)
-                                .padding(top = metrics.blockGap),
+                                .defaultMinSize(minHeight = statusMinH)
+                                .padding(top = 4.dp),
                         ) {
                             Text(
                                 text = stringResource(R.string.collection_diary_remove_status),
@@ -589,29 +597,75 @@ private fun ShelfActionsBar(
 ) {
     var sortOpen by remember { mutableStateOf(false) }
     var dateRangeOpen by remember { mutableStateOf(false) }
-    val textSize = if (metrics.isTablet) metrics.cardMetaSize else metrics.searchTextSize
-    val iconSize = if (metrics.isTablet) 32.dp else 24.dp
-    val actionMin = if (metrics.isTablet) 56.dp else 44.dp
+    val historyBar = state.shelf == CollectionShelf.History
+    val compactHistory = historyBar && !metrics.isTablet
+    val textSize = when {
+        compactHistory -> metrics.chipTextSize
+        metrics.isTablet -> metrics.cardMetaSize
+        else -> metrics.searchTextSize
+    }
+    val iconSize = when {
+        compactHistory -> 20.dp
+        metrics.isTablet -> 32.dp
+        else -> 24.dp
+    }
+    val actionMin = if (metrics.isTablet) 56.dp else 40.dp
+    val actionPad = if (compactHistory) {
+        PaddingValues(horizontal = 4.dp, vertical = 4.dp)
+    } else {
+        ButtonDefaults.TextButtonContentPadding
+    }
     val menuTextSize = if (metrics.isTablet) metrics.cardMetaSize else metrics.searchTextSize
     val canSelect = state.shelf == CollectionShelf.Favorites ||
         state.shelf == CollectionShelf.Diary
     val historyRangeActive = state.historyDateFromEpochDay != null ||
         state.historyDateToEpochDay != null
+    val actionColors = ButtonDefaults.textButtonColors(
+        contentColor = MaterialTheme.colorScheme.primary,
+    )
+
+    val compactSelecting = !metrics.isTablet && state.selectionMode && canSelect
 
     Row(
         modifier = modifier,
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
+        // Compact + выбор: сортировку прячем — место под счётчик и действия.
+        if (compactSelecting) {
+            Text(
+                text = stringResource(
+                    R.string.collection_selected_count,
+                    state.selectedIds.size,
+                ),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontSize = textSize,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(end = 4.dp),
+            )
+        } else {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
-            modifier = Modifier.weight(1f, fill = false),
+            horizontalArrangement = Arrangement.spacedBy(if (compactHistory) 0.dp else 4.dp),
+            modifier = if (historyBar) {
+                Modifier.weight(1f)
+            } else {
+                Modifier.weight(1f, fill = false)
+            },
         ) {
-        Box {
+        Box(
+            modifier = if (historyBar) Modifier.weight(1f) else Modifier,
+        ) {
             TextButton(
                 onClick = { sortOpen = true },
-                modifier = Modifier.heightIn(min = actionMin),
+                colors = actionColors,
+                contentPadding = actionPad,
+                modifier = Modifier
+                    .heightIn(min = actionMin)
+                    .then(if (historyBar) Modifier.fillMaxWidth() else Modifier),
             ) {
                 Icon(
                     Icons.Outlined.Sort,
@@ -645,6 +699,8 @@ private fun ShelfActionsBar(
                     },
                     fontSize = textSize,
                     fontWeight = if (metrics.isTablet) FontWeight.Medium else FontWeight.Normal,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
             }
             val menuItemPadding = PaddingValues(
@@ -749,25 +805,25 @@ private fun ShelfActionsBar(
                 }
             }
         }
-        if (state.shelf == CollectionShelf.History) {
+        if (historyBar) {
             TextButton(
                 onClick = { dateRangeOpen = true },
-                modifier = Modifier.heightIn(min = actionMin),
+                colors = actionColors,
+                contentPadding = actionPad,
+                modifier = Modifier
+                    .weight(1f)
+                    .heightIn(min = actionMin),
             ) {
                 Icon(
                     Icons.Outlined.DateRange,
                     contentDescription = null,
                     modifier = Modifier.size(iconSize),
-                    tint = if (historyRangeActive) {
-                        MaterialTheme.colorScheme.primary
-                    } else {
-                        MaterialTheme.colorScheme.onSurface
-                    },
                 )
                 Text(
                     text = "  " + historyDateRangeLabel(
                         fromEpochDay = state.historyDateFromEpochDay,
                         toEpochDay = state.historyDateToEpochDay,
+                        compact = compactHistory,
                     ),
                     fontSize = textSize,
                     fontWeight = if (historyRangeActive || metrics.isTablet) {
@@ -775,17 +831,13 @@ private fun ShelfActionsBar(
                     } else {
                         FontWeight.Normal
                     },
-                    color = if (historyRangeActive) {
-                        MaterialTheme.colorScheme.primary
-                    } else {
-                        MaterialTheme.colorScheme.onSurface
-                    },
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
             }
         }
         }
+        } // end !compactSelecting
         if (dateRangeOpen && state.shelf == CollectionShelf.History) {
             HistoryDateRangeDialog(
                 fromEpochDay = state.historyDateFromEpochDay,
@@ -802,20 +854,23 @@ private fun ShelfActionsBar(
             )
         }
         if (!canSelect) return@Row
-        Row(verticalAlignment = Alignment.CenterVertically) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(if (!metrics.isTablet) 0.dp else 4.dp),
+        ) {
             if (state.selectionMode) {
-                if (state.selectedIds.isNotEmpty()) {
-                    Text(
-                        text = stringResource(
-                            R.string.collection_selected_count,
-                            state.selectedIds.size,
-                        ),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        fontSize = textSize,
-                        modifier = Modifier.padding(end = 4.dp),
-                    )
-                }
                 if (metrics.isTablet) {
+                    if (state.selectedIds.isNotEmpty()) {
+                        Text(
+                            text = stringResource(
+                                R.string.collection_selected_count,
+                                state.selectedIds.size,
+                            ),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontSize = textSize,
+                            modifier = Modifier.padding(end = 4.dp),
+                        )
+                    }
                     TextButton(onClick = onSelectAll) {
                         Icon(
                             Icons.Outlined.SelectAll,
@@ -859,6 +914,7 @@ private fun ShelfActionsBar(
                         Icon(
                             Icons.Outlined.SelectAll,
                             contentDescription = stringResource(R.string.collection_select_all),
+                            tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(iconSize),
                         )
                     }
@@ -881,6 +937,7 @@ private fun ShelfActionsBar(
                         Icon(
                             Icons.Outlined.Close,
                             contentDescription = stringResource(R.string.collection_cancel_select),
+                            tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(iconSize),
                         )
                     }
@@ -902,6 +959,7 @@ private fun ShelfActionsBar(
                     Icon(
                         Icons.Outlined.CheckBox,
                         contentDescription = stringResource(R.string.collection_select),
+                        tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(iconSize),
                     )
                 }
@@ -1077,24 +1135,35 @@ private fun formatEpochDay(epochDay: Long): String =
         java.time.format.DateTimeFormatter.ofPattern("d MMM yyyy", java.util.Locale("ru")),
     )
 
+private fun formatEpochDayShort(epochDay: Long): String =
+    java.time.LocalDate.ofEpochDay(epochDay).format(
+        java.time.format.DateTimeFormatter.ofPattern("d.MM.yy", java.util.Locale("ru")),
+    )
+
 @Composable
-private fun historyDateRangeLabel(fromEpochDay: Long?, toEpochDay: Long?): String =
-    when {
+private fun historyDateRangeLabel(
+    fromEpochDay: Long?,
+    toEpochDay: Long?,
+    compact: Boolean = false,
+): String {
+    fun fmt(day: Long) = if (compact) formatEpochDayShort(day) else formatEpochDay(day)
+    return when {
         fromEpochDay != null && toEpochDay != null -> stringResource(
             R.string.collection_history_date_range_fmt,
-            formatEpochDay(fromEpochDay),
-            formatEpochDay(toEpochDay),
+            fmt(fromEpochDay),
+            fmt(toEpochDay),
         )
         fromEpochDay != null -> stringResource(
             R.string.collection_history_date_from_fmt,
-            formatEpochDay(fromEpochDay),
+            fmt(fromEpochDay),
         )
         toEpochDay != null -> stringResource(
             R.string.collection_history_date_to_fmt,
-            formatEpochDay(toEpochDay),
+            fmt(toEpochDay),
         )
         else -> stringResource(R.string.collection_history_date_range)
     }
+}
 
 /** UTC midnight millis ↔ LocalDate epoch-day (контракт Material DateRangePicker). */
 private fun epochDayToUtcMillis(epochDay: Long): Long =
@@ -1150,18 +1219,30 @@ private fun HistoryDateRangeDialog(
             }
         },
     ) {
-        DateRangePicker(
-            state = pickerState,
-            title = {
-                Text(
-                    text = stringResource(R.string.collection_history_date_range_title),
-                    modifier = Modifier.padding(start = 24.dp, end = 12.dp, top = 16.dp),
-                )
-            },
-            showModeToggle = false,
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(460.dp),
-        )
+        // headline дат start/end по умолчанию headlineLarge — уменьшаем.
+        val base = MaterialTheme.typography
+        MaterialTheme(
+            colorScheme = MaterialTheme.colorScheme,
+            typography = base.copy(
+                headlineLarge = base.titleMedium,
+                headlineMedium = base.titleSmall,
+            ),
+            shapes = MaterialTheme.shapes,
+        ) {
+            DateRangePicker(
+                state = pickerState,
+                title = {
+                    Text(
+                        text = stringResource(R.string.collection_history_date_range_title),
+                        style = MaterialTheme.typography.titleMedium,
+                        modifier = Modifier.padding(start = 24.dp, end = 12.dp, top = 16.dp),
+                    )
+                },
+                showModeToggle = false,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(460.dp),
+            )
+        }
     }
 }
