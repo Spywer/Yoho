@@ -451,25 +451,6 @@ private fun AccountMenuGrid(
             horizontalArrangement = Arrangement.spacedBy(gap),
         ) {
             AccountMenuTile(
-                icon = Icons.Outlined.People,
-                label = stringResource(R.string.account_friends),
-                textSize = metrics.cardMetaSize,
-                onClick = onFriends,
-                modifier = Modifier.weight(1f).height(tileHeight),
-            )
-            AccountMenuTile(
-                icon = Icons.AutoMirrored.Outlined.Chat,
-                label = stringResource(R.string.account_messages),
-                textSize = metrics.cardMetaSize,
-                onClick = onMessages,
-                modifier = Modifier.weight(1f).height(tileHeight),
-            )
-        }
-        Row(
-            Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(gap),
-        ) {
-            AccountMenuTile(
                 icon = Icons.Outlined.Settings,
                 label = stringResource(R.string.account_settings),
                 textSize = metrics.cardMetaSize,
