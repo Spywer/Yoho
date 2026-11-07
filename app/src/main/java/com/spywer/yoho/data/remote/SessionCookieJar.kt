@@ -1,5 +1,6 @@
 package com.spywer.yoho.data.remote
 
+import android.annotation.SuppressLint
 import android.content.Context
 import android.webkit.CookieManager
 import okhttp3.Cookie
@@ -9,6 +10,7 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.concurrent.ConcurrentHashMap
+import androidx.core.content.edit
 
 /**
  * Cookie-сессия YoHo: память + SharedPreferences (commit) + WebView CookieManager.
@@ -124,6 +126,7 @@ class SessionCookieJar private constructor(
         flushWebView()
     }
 
+    @SuppressLint("UseKtx")
     private fun persistAll() {
         val now = System.currentTimeMillis()
         val arr = JSONArray()
@@ -143,13 +146,14 @@ class SessionCookieJar private constructor(
                 )
             }
         // commit() — синхронно на диск (apply может не успеть до kill/переустановки студией).
-        prefs.edit()
-            .putString(KEY_COOKIES_JSON, arr.toString())
-            .commit()
+        prefs.edit(commit = true) {
+            putString(KEY_COOKIES_JSON, arr.toString())
+        }
     }
 
+    @SuppressLint("UseKtx")
     private fun clearPersisted() {
-        prefs.edit().clear().commit()
+        prefs.edit(commit = true) { clear() }
     }
 
     private fun restorePersisted() {
@@ -349,6 +353,7 @@ class SessionCookieJar private constructor(
     }
 }
 
+@SuppressLint("StaticFieldLeak")
 object AppContext {
     @Volatile
     private var app: Context? = null
