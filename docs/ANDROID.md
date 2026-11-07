@@ -25,8 +25,47 @@
 | Каталог | `search/discover`, `facets`, `filters`, `regions`, `recent` (+ `persons` в фильтре людей) |
 | Карточка | `film-info`, `person/{id}`, `tv-last-air`, `tv-schedule` |
 | Плеер | `player-config`, `player-choice`, `player/{type}/{id}` (+ HTML SSR fallback без сессии) |
-| Избранное | `POST me/activity` (`addFavorite`/`removeFavorite`), список через `GET sync` |
-| Дневник | `POST diary`, `GET diary/contains?itemId=`, `DELETE diary?itemId=` |
+| Коллекция (хаб) | `GET diary?page&limit`, `GET sync`, опц. `GET profile/{username}/films`, `POST posters/resolve` |
+| Избранное / История | `GET sync`; избранное: `POST me/activity` (`addFavorite`/`removeFavorite`) |
+| Дневник | `GET diary`, `POST diary`, `GET diary/contains?itemId=`, `DELETE diary?itemId=` |
+| Реакции like/dislike | `POST me/activity` (setRating) + `POST diary` (`sourceReaction=like\|dislike`); список: `GET ratings` |
+
+## Коллекция
+
+Вкладка нижней навигации **«Коллекция»** (`MainTab.Favorites` / `nav_favorites`).
+
+### IA
+
+| UI | Пакет / класс | Данные |
+|----|---------------|--------|
+| Хаб (список + сетка) | `ui/collection/CollectionHubScreen` + `CollectionHubViewModel` | меню полок + «Мои фильмы и сериалы» |
+| Избранное | `FavoritesListActivity` → `CollectionScreen` (`CollectionShelf.Favorites`) | `sync.favorites` |
+| Дневник | `DiaryActivity` → `CollectionShelf.Diary` | `GET /api/diary` |
+| История | `HistoryActivity` → `CollectionShelf.History` | `sync.watchHistory` |
+
+- Общий UI полки: `CollectionScreen` + `CollectionViewModel(initialShelf)` (factory).
+- На телефоне кнопка «назад» на полках скрыта (системная Back); на планшете — `YohoBackButton` слева от заголовка.
+- `load()` грузит только нужную полку (sync **или** diary), с отменой предыдущего Job.
+
+### Хаб: «Мои фильмы и сериалы»
+
+Как на сайте `/{username}/films` — **не** копия дневника:
+
+1. Сначала `GET /api/profile/{username}/films` (если есть username).
+2. Иначе **дневник ∪ избранное** (`GET diary` + `GET sync.favorites`), сортировка по свежести.
+3. Пустые постеры — `POST /api/posters/resolve`.
+4. В state — `HubFilmCard` (film + кэш `TitleDto`), сетка как `PosterCard` / `metrics.poster`.
+
+### Дневник: статус и реакция
+
+- `statusLabel` (6 русских статусов) и `sourceReaction` (`like` / `dislike` / `manual`) **независимы** и могут быть вместе.
+- Смена статуса не затирает like/dislike; «Удалить статус» при реакции чистит только `statusLabel`, иначе `DELETE diary`.
+- Фильтры: чипы статусов + выпадающий список оценок («Все оценки» / Понравилось / Не понравилось), фильтры комбинируются (AND).
+- `displayed*` (favorites/history/diary) — поля state, пересчёт через `withDisplayed()` при смене данных/сорта/фильтра.
+
+### Аккаунт (навигация)
+
+Подстраницы (Друзья, Сообщения, Настройки, О сервисе, О приложении): стрелка «назад» слева от заголовка; **видима только на планшете** (`showBack = metrics.isTablet`), как на полках коллекции. Логин из полки → `MainActivity.intentOpenAccount` (`StateFlow` вкладки, без `recreate()`).
 
 ## Главная: чипы типа
 
@@ -85,6 +124,7 @@
 - `itemId` / activity `id`: `kp:{kinopoiskId}`
 - `href`: `/series/{kp}` для tv/anime, `/film/{kp}` для movie
 - Дневник `statusLabel`: русские строки UI («Хочу посмотреть», …)
+- Дневник `sourceReaction`: `manual` \| `like` \| `dislike` (лайк/дизлайк не взаимоисключают статус)
 - `contains` ответ: `{ "inDiary": true, "statusLabel": "…" }`
 
 ## Плеер и трейлеры
