@@ -1,6 +1,7 @@
 package com.spywer.yoho.data.remote
 
 import com.google.gson.JsonObject
+import okhttp3.ResponseBody
 import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.DELETE
@@ -201,9 +202,25 @@ interface YohoApi {
         @Query("limit") limit: Int = 50,
     ): DiaryListResponseDto
 
+    /**
+     * Фильмы профиля (как /{username}/films):
+     * GET /api/profile/{username}/films
+     */
+    @GET("api/profile/{username}/films")
+    suspend fun profileFilms(
+        @Path("username") username: String,
+        @Query("page") page: Int = 1,
+    ): Response<ResponseBody>
+
     /** Оценки like/dislike текущего пользователя (сессия). */
     @GET("api/ratings")
     suspend fun userRatings(): UserRatingsResponse
+
+    /** Резолв постеров для карточек: POST /api/posters/resolve */
+    @POST("api/posters/resolve")
+    suspend fun resolvePosters(
+        @Body body: PostersResolveRequest,
+    ): Response<PostersResolveResponse>
 
     /** Последняя / следующая серия: /api/tv-last-air?tmdbId= */
     @GET("api/tv-last-air")

@@ -854,21 +854,21 @@ private fun AccountSubPageHeader(
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(gap),
     ) {
+        if (showBack) {
+            YohoBackButton(onClick = onBack, size = backSize)
+        }
         Text(
             text = title,
             color = MaterialTheme.colorScheme.onBackground,
             fontSize = titleSize,
             fontWeight = FontWeight.Bold,
-            modifier = Modifier
-                .weight(1f)
-                .then(if (showBack) Modifier.padding(end = gap) else Modifier),
+            modifier = Modifier.weight(1f),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
         )
-        if (showBack) {
-            YohoBackButton(onClick = onBack, size = backSize)
-        }
     }
 }
 
@@ -972,8 +972,16 @@ private fun AuthForm(
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween,
+            horizontalArrangement = Arrangement.spacedBy(metrics.blockGap),
         ) {
+            YohoBackButton(
+                onClick = {
+                    if (!busy) {
+                        showErrors = false
+                        onBack()
+                    }
+                },
+            )
             Text(
                 text = stringResource(
                     if (registerMode) R.string.account_sign_up
@@ -983,15 +991,8 @@ private fun AuthForm(
                 fontSize = titleSize,
                 fontWeight = FontWeight.Bold,
                 maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f),
-            )
-            YohoBackButton(
-                onClick = {
-                    if (!busy) {
-                        showErrors = false
-                        onBack()
-                    }
-                },
             )
         }
         Text(

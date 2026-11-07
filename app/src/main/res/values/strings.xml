@@ -72,6 +72,8 @@
     <string name="collection_delete_confirm_body">Будет удалено: %1$d</string>
     <string name="collection_delete_error">Не удалось удалить</string>
     <string name="collection_selected_count">Выбрано: %1$d</string>
+    <string name="collection_films_section">Мои фильмы и сериалы</string>
+    <string name="collection_films_empty">Пока нет тайтлов в коллекции</string>
     <string name="account_sign_in">Войти</string>
     <string name="account_sign_up">Регистрация</string>
     <string name="account_sign_out">Выйти</string>

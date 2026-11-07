@@ -253,7 +253,9 @@ data class DiaryEntryDto(
     val posterUrl: String? = null,
     val kinopoiskId: String? = null,
     val tmdbId: Int? = null,
+    @SerializedName(value = "kpRating", alternate = ["kp"])
     val kpRating: Double? = null,
+    @SerializedName(value = "imdbRating", alternate = ["imdb"])
     val imdbRating: Double? = null,
     val watchedAt: String? = null,
     val createdAt: String? = null,
@@ -325,6 +327,69 @@ private fun parseIsoMillis(raw: String?): Long? {
     if (raw.isNullOrBlank()) return null
     return runCatching { java.time.Instant.parse(raw).toEpochMilli() }.getOrNull()
 }
+
+/**
+ * Тайл из /{username}/films (SSR/API).
+ * Ответ бывает массивом или обёрткой `{ films|entries|items: [...] }`.
+ */
+data class ProfileFilmDto(
+    val itemId: String? = null,
+    val href: String? = null,
+    val title: String? = null,
+    val year: String? = null,
+    val posterUrl: String? = null,
+    val mediaType: String? = null,
+    val tmdbId: Int? = null,
+    val kp: Double? = null,
+    val imdb: Double? = null,
+    val status: String? = null,
+    val watchedAt: String? = null,
+) {
+    fun resolvedKp(): Int? =
+        itemId?.removePrefix("kp:")?.toIntOrNull()
+            ?: href?.substringAfterLast('/')?.substringBefore('?')?.toIntOrNull()
+
+    fun resolvedPoster(): String? {
+        posterUrl.absMediaUrl()?.let { return it }
+        val kpId = resolvedKp() ?: return null
+        return "/api/img/kp/posters/kp_small/$kpId.jpg".absMediaUrl()
+    }
+
+    fun titleWithYear(): String {
+        val base = title?.takeIf { it.isNotBlank() } ?: return ""
+        val y = year?.takeIf { it.isNotBlank() }
+        return if (y != null) "$base ($y)" else base
+    }
+}
+
+data class ProfileFilmsResponseDto(
+    val films: List<ProfileFilmDto>? = null,
+    val entries: List<ProfileFilmDto>? = null,
+    val items: List<ProfileFilmDto>? = null,
+) {
+    fun resolved(): List<ProfileFilmDto> =
+        films ?: entries ?: items ?: emptyList()
+}
+
+/** POST /api/posters/resolve → { posters: { "kp:…": "/api/img/…" } } */
+data class PostersResolveRequest(
+    val items: List<PostersResolveItem> = emptyList(),
+)
+
+data class PostersResolveItem(
+    val id: String,
+    val href: String? = null,
+    val title: String? = null,
+    val year: String? = null,
+    val mediaType: String? = null,
+    val tmdbId: Int? = null,
+)
+
+data class PostersResolveResponse(
+    val posters: Map<String, String> = emptyMap(),
+    val titles: Map<String, String> = emptyMap(),
+    val types: Map<String, String> = emptyMap(),
+)
 
 /** GET /api/diary/contains?itemId=kp:… → { inDiary, statusLabel } */
 data class DiaryContainsResponseDto(

@@ -227,10 +227,11 @@ fun CollectionScreen(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(metrics.blockGap),
                         ) {
-                            if (onBack != null) {
+                            // На телефоне — системная «назад»; кнопка только на планшете
+                            if (onBack != null && metrics.isTablet) {
                                 YohoBackButton(
                                     onClick = onBack,
-                                    size = if (metrics.isTablet) 48.dp else 40.dp,
+                                    size = 48.dp,
                                 )
                             }
                             Text(
