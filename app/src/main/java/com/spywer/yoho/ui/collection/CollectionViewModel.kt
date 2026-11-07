@@ -342,7 +342,7 @@ class CollectionViewModel(
             deleteDiary(setOf(entryKey))
             return
         }
-        val currentStatus = entry.statusLabel ?: return
+        val currentStatus = entry.statusLabel
         // Пустой statusLabel + прежняя реакция: сброс статуса, лайк/дизлайк остаётся
         val request = entry.toDiaryRequest(currentStatus)?.copy(statusLabel = "") ?: return
         viewModelScope.launch {
