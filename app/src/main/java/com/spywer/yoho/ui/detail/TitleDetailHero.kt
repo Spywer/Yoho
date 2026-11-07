@@ -271,8 +271,8 @@ private fun DetailHeroTablet(
     val posterWidth = when (metrics.widthClass) {
         WidthClass.Expanded -> 360.dp
         WidthClass.Medium -> 300.dp
-        // Телефон-альбом: не 280 как «фейковый Medium», а posterLarge Compact.
-        WidthClass.Compact -> metrics.posterLarge
+        // Телефон-альбом: крупнее posterLarge, но меньше Medium (300).
+        WidthClass.Compact -> 200.dp
     }
     val rowGap = if (compact) metrics.cardGap else 16.dp
     val metaTop = if (compact) metrics.sectionGap else 12.dp

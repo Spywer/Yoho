@@ -339,6 +339,7 @@ private fun AccountProfileHeader(
         FlowRow(
             horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
             verticalArrangement = Arrangement.spacedBy(6.dp),
+            itemVerticalAlignment = Alignment.CenterVertically,
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(top = metrics.blockGap),
@@ -348,6 +349,7 @@ private fun AccountProfileHeader(
                     text = roleLabel(role),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     fontSize = metaSize,
+                    lineHeight = metaSize,
                     fontWeight = FontWeight.Medium,
                     modifier = Modifier
                         .clip(RoundedCornerShape(999.dp))
@@ -381,7 +383,7 @@ private fun AccountProfileHeader(
                     text = metaParts.joinToString(" · "),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     fontSize = metaSize,
-                    lineHeight = metrics.lineOf(metaSize),
+                    lineHeight = metaSize,
                     textAlign = TextAlign.Center,
                 )
             }
