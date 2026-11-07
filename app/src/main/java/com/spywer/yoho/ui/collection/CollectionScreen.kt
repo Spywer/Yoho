@@ -21,6 +21,7 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.activity.compose.BackHandler
+import androidx.compose.material.icons.automirrored.outlined.Sort
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.outlined.CheckBox
@@ -28,7 +29,6 @@ import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.SelectAll
 import androidx.compose.material.icons.outlined.DateRange
-import androidx.compose.material.icons.outlined.Sort
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -611,7 +611,7 @@ private fun ShelfActionsBar(
                 modifier = Modifier.heightIn(min = actionMin),
             ) {
                 Icon(
-                    Icons.Outlined.Sort,
+                    Icons.AutoMirrored.Outlined.Sort,
                     contentDescription = null,
                     modifier = Modifier.size(iconSize),
                 )
@@ -1073,12 +1073,12 @@ private fun formatLocalDate(instant: java.time.Instant): String {
 
 private fun formatEpochDay(epochDay: Long): String =
     java.time.LocalDate.ofEpochDay(epochDay).format(
-        java.time.format.DateTimeFormatter.ofPattern("d MMM yyyy", java.util.Locale("ru")),
+        java.time.format.DateTimeFormatter.ofPattern("d MMM yyyy", java.util.Locale.forLanguageTag("ru")),
     )
 
 private fun formatEpochDayShort(epochDay: Long): String =
     java.time.LocalDate.ofEpochDay(epochDay).format(
-        java.time.format.DateTimeFormatter.ofPattern("d.MM.yy", java.util.Locale("ru")),
+        java.time.format.DateTimeFormatter.ofPattern("d.MM.yy", java.util.Locale.forLanguageTag("ru")),
     )
 
 @Composable

@@ -303,7 +303,7 @@ fun fetchTitlePageHtml(
     return runCatching {
         NetworkModule.httpClient.newCall(req).execute().use { resp ->
             if (!resp.isSuccessful) return@use null
-            resp.body?.string()
+            resp.body.string()
         }
     }.getOrNull()
 }

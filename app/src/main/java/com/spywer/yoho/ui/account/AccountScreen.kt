@@ -1,5 +1,6 @@
 package com.spywer.yoho.ui.account
 
+import android.annotation.SuppressLint
 import android.content.Intent
 import android.net.Uri
 import android.util.Patterns
@@ -28,9 +29,9 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.automirrored.outlined.Chat
 import androidx.compose.material.icons.automirrored.outlined.Send
 import androidx.compose.material.icons.filled.ErrorOutline
-import androidx.compose.material.icons.outlined.Chat
 import androidx.compose.material.icons.outlined.Email
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Apps
@@ -92,6 +93,7 @@ import com.spywer.yoho.ui.support.SupportProjectDialog
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import androidx.core.net.toUri
 
 private enum class AccountSubPage {
     Friends,
@@ -426,7 +428,7 @@ private fun roleLabel(role: String): String =
 private fun formatRegisteredDate(raw: String?): String? {
     if (raw.isNullOrBlank()) return null
     val date = runCatching { LocalDate.parse(raw.take(10)) }.getOrNull() ?: return null
-    return date.format(DateTimeFormatter.ofPattern("d MMMM yyyy 'г'.", Locale("ru")))
+    return date.format(DateTimeFormatter.ofPattern("d MMMM yyyy 'г'.", Locale.forLanguageTag("ru")))
 }
 
 @Composable
@@ -456,7 +458,7 @@ private fun AccountMenuGrid(
                 modifier = Modifier.weight(1f).height(tileHeight),
             )
             AccountMenuTile(
-                icon = Icons.Outlined.Chat,
+                icon = Icons.AutoMirrored.Outlined.Chat,
                 label = stringResource(R.string.account_messages),
                 textSize = metrics.cardMetaSize,
                 onClick = onMessages,
@@ -681,6 +683,7 @@ private fun AccountAboutServicePage(
     }
 }
 
+@SuppressLint("UseKtx")
 @Composable
 private fun AccountAboutAppPage(
     metrics: HomeMetrics,
@@ -754,7 +757,7 @@ private fun AccountAboutAppPage(
                         context.startActivity(
                             Intent(
                                 Intent.ACTION_VIEW,
-                                Uri.parse(context.getString(R.string.account_about_dev_telegram_url)),
+                                context.getString(R.string.account_about_dev_telegram_url).toUri(),
                             ),
                         )
                     }
@@ -772,7 +775,7 @@ private fun AccountAboutAppPage(
                         context.startActivity(
                             Intent(
                                 Intent.ACTION_SENDTO,
-                                Uri.parse(context.getString(R.string.account_about_dev_email_uri)),
+                                context.getString(R.string.account_about_dev_email_uri).toUri(),
                             ),
                         )
                     }
