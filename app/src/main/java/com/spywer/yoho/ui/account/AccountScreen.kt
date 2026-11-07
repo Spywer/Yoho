@@ -976,14 +976,16 @@ private fun AuthForm(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(metrics.blockGap),
         ) {
-            YohoBackButton(
-                onClick = {
-                    if (!busy) {
-                        showErrors = false
-                        onBack()
-                    }
-                },
-            )
+            if (metrics.isTablet) {
+                YohoBackButton(
+                    onClick = {
+                        if (!busy) {
+                            showErrors = false
+                            onBack()
+                        }
+                    },
+                )
+            }
             Text(
                 text = stringResource(
                     if (registerMode) R.string.account_sign_up
