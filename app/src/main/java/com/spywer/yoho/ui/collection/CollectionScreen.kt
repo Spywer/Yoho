@@ -27,10 +27,13 @@ import androidx.compose.material.icons.outlined.CheckBox
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.SelectAll
+import androidx.compose.material.icons.outlined.DateRange
 import androidx.compose.material.icons.outlined.Sort
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DatePickerDialog
+import androidx.compose.material3.DateRangePicker
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -43,6 +46,7 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberDateRangePickerState
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -249,6 +253,8 @@ fun CollectionScreen(
                             metrics = metrics,
                             onFavoritesSort = viewModel::setFavoritesSort,
                             onHistorySort = viewModel::setHistorySort,
+                            onHistoryDateRange = viewModel::setHistoryDateRange,
+                            onClearHistoryDateRange = viewModel::clearHistoryDateRange,
                             onDiarySort = viewModel::setDiarySort,
                             onEnterSelect = viewModel::startSelectionMode,
                             onSelectAll = viewModel::selectAllVisible,
@@ -285,6 +291,8 @@ fun CollectionScreen(
                             state.diaryReactionFilter,
                             state.favoritesSort,
                             state.historySort,
+                            state.historyDateFromEpochDay,
+                            state.historyDateToEpochDay,
                             state.diarySort,
                         ) {
                         PullToRefreshBox(
@@ -292,9 +300,17 @@ fun CollectionScreen(
                             onRefresh = { viewModel.load(refresh = true) },
                             modifier = Modifier.fillMaxSize(),
                         ) {
+                            val historyFiltered = state.historyDateFromEpochDay != null ||
+                                state.historyDateToEpochDay != null
                             val emptyText = when (shelf) {
                                 CollectionShelf.Favorites -> stringResource(R.string.favorites_empty)
-                                CollectionShelf.History -> stringResource(R.string.history_empty)
+                                CollectionShelf.History -> stringResource(
+                                    if (historyFiltered && state.history.isNotEmpty()) {
+                                        R.string.collection_history_empty_filtered
+                                    } else {
+                                        R.string.history_empty
+                                    },
+                                )
                                 CollectionShelf.Diary -> stringResource(R.string.diary_empty)
                             }
                             val shelfEmpty = when (shelf) {
@@ -376,6 +392,7 @@ fun CollectionScreen(
                                                 ) { item.toTitleDto() }
                                                 PosterCard(
                                                     item = title,
+                                                    topStartLabel = formatWatchedTs(item.ts),
                                                     onClick = { openFavorite(item) },
                                                     modifier = Modifier.fillMaxWidth(),
                                                 )
@@ -561,6 +578,8 @@ private fun ShelfActionsBar(
     metrics: HomeMetrics,
     onFavoritesSort: (FavoritesSort) -> Unit,
     onHistorySort: (FavoritesSort) -> Unit,
+    onHistoryDateRange: (Long?, Long?) -> Unit,
+    onClearHistoryDateRange: () -> Unit,
     onDiarySort: (DiarySort) -> Unit,
     onEnterSelect: () -> Unit,
     onSelectAll: () -> Unit,
@@ -569,18 +588,26 @@ private fun ShelfActionsBar(
     modifier: Modifier = Modifier,
 ) {
     var sortOpen by remember { mutableStateOf(false) }
+    var dateRangeOpen by remember { mutableStateOf(false) }
     val textSize = if (metrics.isTablet) metrics.cardMetaSize else metrics.searchTextSize
     val iconSize = if (metrics.isTablet) 32.dp else 24.dp
     val actionMin = if (metrics.isTablet) 56.dp else 44.dp
     val menuTextSize = if (metrics.isTablet) metrics.cardMetaSize else metrics.searchTextSize
     val canSelect = state.shelf == CollectionShelf.Favorites ||
         state.shelf == CollectionShelf.Diary
+    val historyRangeActive = state.historyDateFromEpochDay != null ||
+        state.historyDateToEpochDay != null
 
     Row(
         modifier = modifier,
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            modifier = Modifier.weight(1f, fill = false),
+        ) {
         Box {
             TextButton(
                 onClick = { sortOpen = true },
@@ -721,6 +748,58 @@ private fun ShelfActionsBar(
                     }
                 }
             }
+        }
+        if (state.shelf == CollectionShelf.History) {
+            TextButton(
+                onClick = { dateRangeOpen = true },
+                modifier = Modifier.heightIn(min = actionMin),
+            ) {
+                Icon(
+                    Icons.Outlined.DateRange,
+                    contentDescription = null,
+                    modifier = Modifier.size(iconSize),
+                    tint = if (historyRangeActive) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.onSurface
+                    },
+                )
+                Text(
+                    text = "  " + historyDateRangeLabel(
+                        fromEpochDay = state.historyDateFromEpochDay,
+                        toEpochDay = state.historyDateToEpochDay,
+                    ),
+                    fontSize = textSize,
+                    fontWeight = if (historyRangeActive || metrics.isTablet) {
+                        FontWeight.Medium
+                    } else {
+                        FontWeight.Normal
+                    },
+                    color = if (historyRangeActive) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.onSurface
+                    },
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+        }
+        if (dateRangeOpen && state.shelf == CollectionShelf.History) {
+            HistoryDateRangeDialog(
+                fromEpochDay = state.historyDateFromEpochDay,
+                toEpochDay = state.historyDateToEpochDay,
+                onDismiss = { dateRangeOpen = false },
+                onApply = { from, to ->
+                    onHistoryDateRange(from, to)
+                    dateRangeOpen = false
+                },
+                onClear = {
+                    onClearHistoryDateRange()
+                    dateRangeOpen = false
+                },
+            )
         }
         if (!canSelect) return@Row
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -980,8 +1059,109 @@ private fun DiaryStatusChips(
 private fun formatWatchedDate(raw: String?): String? {
     if (raw.isNullOrBlank()) return null
     val instant = runCatching { java.time.Instant.parse(raw) }.getOrNull() ?: return null
+    return formatLocalDate(instant)
+}
+
+private fun formatWatchedTs(ts: Long?): String? {
+    if (ts == null || ts <= 0L) return null
+    return formatLocalDate(java.time.Instant.ofEpochMilli(ts))
+}
+
+private fun formatLocalDate(instant: java.time.Instant): String {
     val date = instant.atZone(java.time.ZoneId.systemDefault()).toLocalDate()
-    return date.format(
+    return formatEpochDay(date.toEpochDay())
+}
+
+private fun formatEpochDay(epochDay: Long): String =
+    java.time.LocalDate.ofEpochDay(epochDay).format(
         java.time.format.DateTimeFormatter.ofPattern("d MMM yyyy", java.util.Locale("ru")),
     )
+
+@Composable
+private fun historyDateRangeLabel(fromEpochDay: Long?, toEpochDay: Long?): String =
+    when {
+        fromEpochDay != null && toEpochDay != null -> stringResource(
+            R.string.collection_history_date_range_fmt,
+            formatEpochDay(fromEpochDay),
+            formatEpochDay(toEpochDay),
+        )
+        fromEpochDay != null -> stringResource(
+            R.string.collection_history_date_from_fmt,
+            formatEpochDay(fromEpochDay),
+        )
+        toEpochDay != null -> stringResource(
+            R.string.collection_history_date_to_fmt,
+            formatEpochDay(toEpochDay),
+        )
+        else -> stringResource(R.string.collection_history_date_range)
+    }
+
+/** UTC midnight millis ↔ LocalDate epoch-day (контракт Material DateRangePicker). */
+private fun epochDayToUtcMillis(epochDay: Long): Long =
+    java.time.LocalDate.ofEpochDay(epochDay)
+        .atStartOfDay(java.time.ZoneOffset.UTC)
+        .toInstant()
+        .toEpochMilli()
+
+private fun utcMillisToEpochDay(millis: Long): Long =
+    java.time.Instant.ofEpochMilli(millis)
+        .atZone(java.time.ZoneOffset.UTC)
+        .toLocalDate()
+        .toEpochDay()
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun HistoryDateRangeDialog(
+    fromEpochDay: Long?,
+    toEpochDay: Long?,
+    onDismiss: () -> Unit,
+    onApply: (Long?, Long?) -> Unit,
+    onClear: () -> Unit,
+) {
+    val pickerState = rememberDateRangePickerState(
+        initialSelectedStartDateMillis = fromEpochDay?.let(::epochDayToUtcMillis),
+        initialSelectedEndDateMillis = toEpochDay?.let(::epochDayToUtcMillis),
+    )
+    DatePickerDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    val start = pickerState.selectedStartDateMillis?.let(::utcMillisToEpochDay)
+                    val end = pickerState.selectedEndDateMillis?.let(::utcMillisToEpochDay)
+                    onApply(start, end)
+                },
+                enabled = pickerState.selectedStartDateMillis != null ||
+                    pickerState.selectedEndDateMillis != null,
+            ) {
+                Text(stringResource(R.string.collection_history_date_range_apply))
+            }
+        },
+        dismissButton = {
+            Row {
+                if (fromEpochDay != null || toEpochDay != null) {
+                    TextButton(onClick = onClear) {
+                        Text(stringResource(R.string.collection_history_date_range_clear))
+                    }
+                }
+                TextButton(onClick = onDismiss) {
+                    Text(stringResource(R.string.collection_cancel_select))
+                }
+            }
+        },
+    ) {
+        DateRangePicker(
+            state = pickerState,
+            title = {
+                Text(
+                    text = stringResource(R.string.collection_history_date_range_title),
+                    modifier = Modifier.padding(start = 24.dp, end = 12.dp, top = 16.dp),
+                )
+            },
+            showModeToggle = false,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(460.dp),
+        )
+    }
 }

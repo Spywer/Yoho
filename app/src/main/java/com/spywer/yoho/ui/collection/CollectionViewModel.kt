@@ -39,6 +39,23 @@ private fun sortByDate(
         FavoritesSort.DateAsc -> items.sortedBy { it.ts ?: Long.MAX_VALUE }
     }
 
+/** Фильтр истории по epoch-day (локальная зона) из DateRangePicker. */
+private fun filterHistoryByDateRange(
+    items: List<FavoriteItemDto>,
+    fromEpochDay: Long?,
+    toEpochDay: Long?,
+): List<FavoriteItemDto> {
+    if (fromEpochDay == null && toEpochDay == null) return items
+    val zone = java.time.ZoneId.systemDefault()
+    return items.filter { item ->
+        val ts = item.ts ?: return@filter false
+        val day = java.time.Instant.ofEpochMilli(ts).atZone(zone).toLocalDate().toEpochDay()
+        if (fromEpochDay != null && day < fromEpochDay) return@filter false
+        if (toEpochDay != null && day > toEpochDay) return@filter false
+        true
+    }
+}
+
 enum class DiarySort {
     AddedDesc,
     AddedAsc,
@@ -70,6 +87,10 @@ data class CollectionUiState(
     val diary: List<DiaryEntryDto> = emptyList(),
     val favoritesSort: FavoritesSort = FavoritesSort.DateDesc,
     val historySort: FavoritesSort = FavoritesSort.DateDesc,
+    /** Inclusive epoch-day (LocalDate.toEpochDay); null — без нижней границы. */
+    val historyDateFromEpochDay: Long? = null,
+    /** Inclusive epoch-day; null — без верхней границы. */
+    val historyDateToEpochDay: Long? = null,
     val diarySort: DiarySort = DiarySort.AddedDesc,
     /** null — все статусы; иначе значение из [DiaryStatusLabels]. */
     val diaryStatusFilter: String? = null,
@@ -121,7 +142,10 @@ private fun CollectionUiState.withDisplayed(): CollectionUiState {
     }
     return copy(
         displayedFavorites = sortByDate(favorites, favoritesSort),
-        displayedHistory = sortByDate(history, historySort),
+        displayedHistory = sortByDate(
+            filterHistoryByDateRange(history, historyDateFromEpochDay, historyDateToEpochDay),
+            historySort,
+        ),
         displayedDiary = sortedDiary,
     )
 }
@@ -160,6 +184,24 @@ class CollectionViewModel(
 
     fun setHistorySort(sort: FavoritesSort) {
         updateDerived { it.copy(historySort = sort) }
+    }
+
+    fun setHistoryDateRange(fromEpochDay: Long?, toEpochDay: Long?) {
+        val from = fromEpochDay
+        val to = toEpochDay
+        val (lo, hi) = when {
+            from != null && to != null && from > to -> to to from
+            else -> from to to
+        }
+        updateDerived {
+            it.copy(historyDateFromEpochDay = lo, historyDateToEpochDay = hi)
+        }
+    }
+
+    fun clearHistoryDateRange() {
+        updateDerived {
+            it.copy(historyDateFromEpochDay = null, historyDateToEpochDay = null)
+        }
     }
 
     fun setDiarySort(sort: DiarySort) {
