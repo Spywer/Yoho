@@ -22,6 +22,8 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.time.Instant
@@ -54,6 +56,25 @@ class CollectionHubViewModel : ViewModel() {
 
     init {
         load()
+        viewModelScope.launch {
+            var wasLoggedIn = SessionRepository.state.value.isLoggedIn
+            SessionRepository.state.map { it.isLoggedIn }.collect { isLoggedIn ->
+                if (isLoggedIn && !wasLoggedIn) {
+                    // Вошли — подгружаем данные
+                    load()
+                } else if (!isLoggedIn && wasLoggedIn) {
+                    // Выйшли — показываем «нужен логин»
+                    _state.update {
+                        it.copy(
+                            loading = false,
+                            cards = emptyList(),
+                            needsLogin = true,
+                        )
+                    }
+                }
+                wasLoggedIn = isLoggedIn
+            }
+        }
     }
 
     fun load() {

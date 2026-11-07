@@ -15,6 +15,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.map
 
 enum class CollectionShelf {
     Favorites,
@@ -160,6 +162,30 @@ class CollectionViewModel(
 
     init {
         load()
+        viewModelScope.launch {
+            var wasLoggedIn = SessionRepository.state.value.isLoggedIn
+            SessionRepository.state.map { it.isLoggedIn }.collect { isLoggedIn ->
+                if (isLoggedIn && !wasLoggedIn) {
+                    // Вошли — подгружаем данные
+                    load()
+                } else if (!isLoggedIn && wasLoggedIn) {
+                    // Выйшли — очищаем полки
+                    updateDerived {
+                        it.copy(
+                            loading = false,
+                            refreshing = false,
+                            needsLogin = true,
+                            favorites = emptyList(),
+                            history = emptyList(),
+                            diary = emptyList(),
+                            selectionMode = false,
+                            selectedIds = emptySet(),
+                        )
+                    }
+                }
+                wasLoggedIn = isLoggedIn
+            }
+        }
     }
 
     companion object {
