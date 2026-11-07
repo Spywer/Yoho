@@ -56,7 +56,7 @@ import com.spywer.yoho.ui.account.AccountScreen
 import com.spywer.yoho.ui.detail.LocalDetailPip
 import com.spywer.yoho.ui.detail.TitleDetailScreen
 import com.spywer.yoho.ui.detail.TitleDetailViewModel
-import com.spywer.yoho.ui.favorites.FavoritesScreen
+import com.spywer.yoho.ui.collection.CollectionHubScreen
 import com.spywer.yoho.ui.home.HomeScreen
 import com.spywer.yoho.ui.layout.LocalHomeMetrics
 import com.spywer.yoho.ui.layout.rememberHomeMetrics
@@ -99,8 +99,11 @@ private data class TitleRoute(
 }
 
 @Composable
-fun MainShell() {
-    var tab by rememberSaveable { mutableStateOf(MainTab.Home) }
+fun MainShell(initialTab: MainTab? = null) {
+    var tab by rememberSaveable { mutableStateOf(initialTab ?: MainTab.Home) }
+    LaunchedEffect(initialTab) {
+        if (initialTab != null) tab = initialTab
+    }
     val catalogVm: SearchViewModel = viewModel()
     val context = LocalContext.current
     val focusManager = LocalFocusManager.current
@@ -257,10 +260,7 @@ fun MainShell() {
                         restoreSearchFocus = titleStack.isEmpty(),
                         onOpenTitle = ::openTitle,
                     )
-                    MainTab.Favorites -> FavoritesScreen(
-                        onNeedLogin = { tab = MainTab.Account },
-                        onOpenTitle = ::openTitle,
-                    )
+                    MainTab.Favorites -> CollectionHubScreen()
                     MainTab.Account -> AccountScreen(
                         onBack = { tab = MainTab.Home },
                     )

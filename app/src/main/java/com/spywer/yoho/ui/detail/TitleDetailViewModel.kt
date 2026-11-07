@@ -301,7 +301,12 @@ class TitleDetailViewModel : ViewModel() {
     /** POST /api/diary — statusLabel как на сайте («Хочу посмотреть» и т.п.). */
     fun setDiaryStatus(statusLabel: String) {
         val detail = _state.value.detail ?: return
-        val body = detail.toDiaryRequest(statusLabel) ?: return
+        // like/dislike независимы от статуса — не затираем реакцию при смене statusLabel
+        val reaction = when (_state.value.playerReaction) {
+            "like", "dislike" -> _state.value.playerReaction!!
+            else -> "manual"
+        }
+        val body = detail.toDiaryRequest(statusLabel, reaction) ?: return
         if (_state.value.diaryBusy) return
         if (!SessionRepository.state.value.isLoggedIn &&
             !SessionCookieJar.get().hasSessionCookie()

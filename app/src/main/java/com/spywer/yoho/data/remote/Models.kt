@@ -255,11 +255,17 @@ data class DiaryEntryDto(
     val tmdbId: Int? = null,
     val kpRating: Double? = null,
     val imdbRating: Double? = null,
+    val watchedAt: String? = null,
+    val createdAt: String? = null,
+    val updatedAt: String? = null,
 ) {
     fun resolvedKp(): Int? =
         kinopoiskId?.toIntOrNull()
             ?: itemId?.removePrefix("kp:")?.toIntOrNull()
             ?: href?.substringAfterLast('/')?.substringBefore('?')?.toIntOrNull()
+
+    fun selectionKey(): String =
+        id ?: itemId ?: "kp:${resolvedKp()}"
 
     /** posterUrl с API часто null — fallback на kp_small. */
     fun resolvedPoster(): String? {
@@ -275,6 +281,49 @@ data class DiaryEntryDto(
                 "dislike" -> "Не нравится"
                 else -> null
             }
+
+    fun addedMillis(): Long =
+        parseIsoMillis(createdAt) ?: parseIsoMillis(updatedAt) ?: 0L
+
+    fun watchedMillis(): Long =
+        parseIsoMillis(watchedAt) ?: 0L
+
+    /**
+     * Лайк/дизлайк ([sourceReaction]) и [statusLabel] независимы и могут быть вместе.
+     * При смене статуса сохраняем like/dislike.
+     */
+    fun toDiaryRequest(statusLabel: String): DiaryRequestDto? {
+        val kp = resolvedKp() ?: return null
+        val item = itemId?.takeIf { it.isNotBlank() } ?: "kp:$kp"
+        val media = mediaType?.takeIf { it.isNotBlank() } ?: "movie"
+        val link = href?.takeIf { it.isNotBlank() } ?: when (media) {
+            "tv", "anime" -> "/series/$kp"
+            else -> "/film/$kp"
+        }
+        val titleText = title?.takeIf { it.isNotBlank() } ?: return null
+        val reaction = when (sourceReaction) {
+            "like", "dislike" -> sourceReaction
+            else -> "manual"
+        }
+        return DiaryRequestDto(
+            itemId = item,
+            href = link,
+            title = titleText,
+            year = year,
+            mediaType = media,
+            sourceReaction = reaction,
+            statusLabel = statusLabel,
+            updateStatusIfItemExists = true,
+        )
+    }
+
+    fun hasLikeOrDislike(): Boolean =
+        sourceReaction == "like" || sourceReaction == "dislike"
+}
+
+private fun parseIsoMillis(raw: String?): Long? {
+    if (raw.isNullOrBlank()) return null
+    return runCatching { java.time.Instant.parse(raw).toEpochMilli() }.getOrNull()
 }
 
 /** GET /api/diary/contains?itemId=kp:… → { inDiary, statusLabel } */
@@ -334,7 +383,30 @@ data class FavoriteItemDto(
     val mediaType: String? = null,
     val ts: Long? = null,
     val tmdbTvId: Int? = null,
-)
+) {
+    fun selectionKey(): String =
+        id ?: contentId?.let { "kp:$it" } ?: "unknown-${title.hashCode()}"
+
+    fun toActivityItem(): MeActivityItemDto? {
+        val kp = contentId ?: id?.removePrefix("kp:")?.toIntOrNull()
+        val itemId = id ?: kp?.let { "kp:$it" } ?: return null
+        val titleText = title?.takeIf { it.isNotBlank() } ?: return null
+        val media = mediaType ?: contentType ?: "movie"
+        val link = href?.takeIf { it.isNotBlank() } ?: when (media) {
+            "tv", "anime" -> if (kp != null) "/series/$kp" else return null
+            else -> if (kp != null) "/film/$kp" else return null
+        }
+        return MeActivityItemDto(
+            id = itemId,
+            href = link,
+            title = titleText,
+            year = year,
+            posterUrl = posterUrl.toFavoritePosterPath(),
+            mediaType = media,
+            ts = ts ?: System.currentTimeMillis(),
+        )
+    }
+}
 
 /** GET /api/sync — избранное и история просмотров */
 data class SyncResponseDto(
@@ -1322,17 +1394,24 @@ fun TitleDetailDto.toFavoriteActivityItem(): MeActivityItemDto? {
     )
 }
 
-fun TitleDetailDto.toDiaryRequest(statusLabel: String): DiaryRequestDto? {
+fun TitleDetailDto.toDiaryRequest(
+    statusLabel: String,
+    sourceReaction: String = "manual",
+): DiaryRequestDto? {
     val kp = idKp?.takeIf { it > 0 } ?: return null
     val href = siteHref() ?: return null
     val titleText = title?.ru ?: title?.original ?: return null
+    val reaction = when (sourceReaction) {
+        "like", "dislike" -> sourceReaction
+        else -> "manual"
+    }
     return DiaryRequestDto(
         itemId = "kp:$kp",
         href = href,
         title = titleText,
         year = (year ?: yearStart)?.toString(),
         mediaType = normalizedMediaType(),
-        sourceReaction = "manual",
+        sourceReaction = reaction,
         statusLabel = statusLabel,
         updateStatusIfItemExists = true,
     )

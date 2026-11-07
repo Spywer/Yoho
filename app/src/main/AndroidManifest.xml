@@ -64,6 +64,27 @@
             android:theme="@style/Theme.Yoho"
             android:windowSoftInputMode="adjustResize" />
         <activity
+            android:name=".ui.collection.FavoritesListActivity"
+            android:exported="false"
+            android:label="@string/favorites_section"
+            android:parentActivityName=".MainActivity"
+            android:resizeableActivity="true"
+            android:theme="@style/Theme.Yoho" />
+        <activity
+            android:name=".ui.collection.DiaryActivity"
+            android:exported="false"
+            android:label="@string/diary_section"
+            android:parentActivityName=".MainActivity"
+            android:resizeableActivity="true"
+            android:theme="@style/Theme.Yoho" />
+        <activity
+            android:name=".ui.collection.HistoryActivity"
+            android:exported="false"
+            android:label="@string/history_section"
+            android:parentActivityName=".MainActivity"
+            android:resizeableActivity="true"
+            android:theme="@style/Theme.Yoho" />
+        <activity
             android:name=".ui.detail.TitleDetailActivity"
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden"
             android:exported="false"
