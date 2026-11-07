@@ -639,7 +639,7 @@ internal class PlayerWebViewHolder {
     fun trackPopupCleanup(popup: WebView, cleanup: Runnable) {
         popupCleanups += popup to cleanup
         popup.tag = cleanup
-        popup.postDelayed(cleanup, 15_000L)
+        popup.postDelayed(cleanup, 5_000L)
     }
 
     fun cancelPopupCleanup(popup: WebView) {
