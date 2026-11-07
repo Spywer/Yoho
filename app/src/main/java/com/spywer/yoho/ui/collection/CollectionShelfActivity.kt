@@ -4,36 +4,21 @@ import android.content.Context
 import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
-import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.activity.viewModels
 import com.spywer.yoho.MainActivity
-import com.spywer.yoho.ui.theme.YohoTheme
 
-/** Общий хост полки коллекции; конкретные Activity задают [shelf]. */
+/**
+ * Совместимость: раньше полки были отдельными Activity без навбара.
+ * Теперь сразу уводим в Main → вкладка Коллекция + полка.
+ */
 abstract class CollectionShelfActivity : ComponentActivity() {
     protected abstract val shelf: CollectionShelf
-
-    private val viewModel: CollectionViewModel by viewModels {
-        CollectionViewModel.factory(shelf)
-    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        setContent {
-            YohoTheme(darkTheme = true) {
-                CollectionScreen(
-                    viewModel = viewModel,
-                    fixedShelf = shelf,
-                    onBack = { finish() },
-                    onNeedLogin = {
-                        startActivity(MainActivity.intentOpenAccount(this@CollectionShelfActivity))
-                        finish()
-                    },
-                )
-            }
-        }
+        startActivity(MainActivity.intentOpenShelf(this, shelf))
+        finish()
     }
 }
 

@@ -49,7 +49,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberDateRangePickerState
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
-import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -77,9 +76,10 @@ import com.spywer.yoho.data.remote.FavoriteItemDto
 import com.spywer.yoho.data.remote.TitleDto
 import com.spywer.yoho.data.remote.TitleNameDto
 import com.spywer.yoho.ui.components.ContentErrorPlaceholder
+import com.spywer.yoho.ui.components.DiaryStatusDropdownMenu
 import com.spywer.yoho.ui.components.PosterCard
 import com.spywer.yoho.ui.components.YohoBackButton
-import com.spywer.yoho.ui.detail.TitleDetailActivity
+import com.spywer.yoho.MainActivity
 import com.spywer.yoho.ui.layout.HomeMetrics
 import com.spywer.yoho.ui.layout.LocalHomeMetrics
 import com.spywer.yoho.ui.layout.rememberHomeMetrics
@@ -100,7 +100,6 @@ fun CollectionScreen(
     val context = LocalContext.current
     val snackbar = remember { SnackbarHostState() }
     var confirmDelete by remember { mutableStateOf(false) }
-    var statusEditEntry by remember { mutableStateOf<DiaryEntryDto?>(null) }
     val titleRes = when (shelf) {
         CollectionShelf.Favorites -> R.string.favorites_section
         CollectionShelf.Diary -> R.string.diary_section
@@ -124,7 +123,7 @@ fun CollectionScreen(
         val media = item.mediaType ?: item.contentType ?: "movie"
         onOpenTitle?.invoke(kp, null, media)
             ?: context.startActivity(
-                TitleDetailActivity.intent(context, kp, null, media),
+                MainActivity.intentOpenTitle(context, kp, null, media),
             )
     }
 
@@ -134,7 +133,7 @@ fun CollectionScreen(
         val media = item.mediaType ?: "movie"
         onOpenTitle?.invoke(kp, item.tmdbId, media)
             ?: context.startActivity(
-                TitleDetailActivity.intent(context, kp, item.tmdbId, media),
+                MainActivity.intentOpenTitle(context, kp, item.tmdbId, media),
             )
     }
 
@@ -410,15 +409,48 @@ fun CollectionScreen(
                                                 val title = remember(key, item, diaryStatusPlaceholder) {
                                                     item.toTitleDto(diaryStatusPlaceholder)
                                                 }
+                                                var statusMenuOpen by remember(key) {
+                                                    mutableStateOf(false)
+                                                }
                                                 PosterCard(
                                                     item = title,
                                                     selected = selected,
                                                     selectionMode = state.selectionMode,
                                                     reaction = item.sourceReaction
-                                                        ?.takeIf { it == "like" || it == "dislike" },
-                                                    topStartLabel = formatWatchedDate(item.watchedAt),
+                                                        ?.takeIf {
+                                                            it == "like" || it == "dislike"
+                                                        },
+                                                    topStartLabel = formatWatchedDate(
+                                                        item.watchedAt,
+                                                    ),
                                                     onReasonClick = if (!state.selectionMode) {
-                                                        { statusEditEntry = item }
+                                                        { statusMenuOpen = true }
+                                                    } else {
+                                                        null
+                                                    },
+                                                    reasonMenu = if (!state.selectionMode) {
+                                                        {
+                                                            DiaryStatusDropdownMenu(
+                                                                expanded = statusMenuOpen,
+                                                                currentStatus = item.statusLabel,
+                                                                busy = state.mutating,
+                                                                metrics = metrics,
+                                                                onDismiss = {
+                                                                    statusMenuOpen = false
+                                                                },
+                                                                onSelectStatus = { label ->
+                                                                    statusMenuOpen = false
+                                                                    viewModel.changeDiaryStatus(
+                                                                        key,
+                                                                        label,
+                                                                    )
+                                                                },
+                                                                onRemove = {
+                                                                    statusMenuOpen = false
+                                                                    viewModel.clearDiaryStatus(key)
+                                                                },
+                                                            )
+                                                        }
                                                     } else {
                                                         null
                                                     },
@@ -497,87 +529,6 @@ fun CollectionScreen(
         )
     }
 
-    statusEditEntry?.let { entry ->
-        val menuTitleSize = if (metrics.isTablet) metrics.sectionTitleSize else metrics.searchTextSize
-        val menuItemSize = if (metrics.isTablet) metrics.cardMetaSize else metrics.searchTextSize
-        val statusPad = PaddingValues(
-            horizontal = if (metrics.isTablet) 16.dp else 8.dp,
-            vertical = if (metrics.isTablet) 14.dp else 2.dp,
-        )
-        val statusMinH = if (metrics.isTablet) 56.dp else 1.dp
-        AlertDialog(
-            onDismissRequest = { statusEditEntry = null },
-            title = {
-                Text(
-                    text = stringResource(R.string.collection_diary_change_status),
-                    fontSize = menuTitleSize,
-                    fontWeight = FontWeight.SemiBold,
-                )
-            },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(0.dp)) {
-                    DiaryStatusLabels.forEach { label ->
-                        val active = entry.statusLabel == label
-                        TextButton(
-                            onClick = {
-                                viewModel.changeDiaryStatus(entry.selectionKey(), label)
-                                statusEditEntry = null
-                            },
-                            enabled = !state.mutating,
-                            contentPadding = statusPad,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .defaultMinSize(minHeight = statusMinH),
-                        ) {
-                            Text(
-                                text = label,
-                                fontSize = menuItemSize,
-                                fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal,
-                                color = if (active) {
-                                    MaterialTheme.colorScheme.primary
-                                } else {
-                                    MaterialTheme.colorScheme.onSurface
-                                },
-                                modifier = Modifier.fillMaxWidth(),
-                                textAlign = TextAlign.Start,
-                            )
-                        }
-                    }
-                    if (!entry.statusLabel.isNullOrBlank()) {
-                        TextButton(
-                            onClick = {
-                                viewModel.clearDiaryStatus(entry.selectionKey())
-                                statusEditEntry = null
-                            },
-                            enabled = !state.mutating,
-                            contentPadding = statusPad,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .defaultMinSize(minHeight = statusMinH)
-                                .padding(top = 4.dp),
-                        ) {
-                            Text(
-                                text = stringResource(R.string.collection_diary_remove_status),
-                                fontSize = menuItemSize,
-                                fontWeight = FontWeight.Medium,
-                                color = MaterialTheme.colorScheme.error,
-                                modifier = Modifier.fillMaxWidth(),
-                                textAlign = TextAlign.Start,
-                            )
-                        }
-                    }
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = { statusEditEntry = null }) {
-                    Text(
-                        text = stringResource(R.string.collection_cancel_select),
-                        fontSize = menuItemSize,
-                    )
-                }
-            },
-        )
-    }
 }
 
 @Composable
@@ -650,22 +601,14 @@ private fun ShelfActionsBar(
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(if (compactHistory) 0.dp else 4.dp),
-            modifier = if (historyBar) {
-                Modifier.weight(1f)
-            } else {
-                Modifier.weight(1f, fill = false)
-            },
+            modifier = Modifier.weight(1f, fill = false),
         ) {
-        Box(
-            modifier = if (historyBar) Modifier.weight(1f) else Modifier,
-        ) {
+        Box {
             TextButton(
                 onClick = { sortOpen = true },
                 colors = actionColors,
                 contentPadding = actionPad,
-                modifier = Modifier
-                    .heightIn(min = actionMin)
-                    .then(if (historyBar) Modifier.fillMaxWidth() else Modifier),
+                modifier = Modifier.heightIn(min = actionMin),
             ) {
                 Icon(
                     Icons.Outlined.Sort,
@@ -810,9 +753,7 @@ private fun ShelfActionsBar(
                 onClick = { dateRangeOpen = true },
                 colors = actionColors,
                 contentPadding = actionPad,
-                modifier = Modifier
-                    .weight(1f)
-                    .heightIn(min = actionMin),
+                modifier = Modifier.heightIn(min = actionMin),
             ) {
                 Icon(
                     Icons.Outlined.DateRange,

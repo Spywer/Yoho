@@ -57,6 +57,9 @@ import com.spywer.yoho.ui.detail.LocalDetailPip
 import com.spywer.yoho.ui.detail.TitleDetailScreen
 import com.spywer.yoho.ui.detail.TitleDetailViewModel
 import com.spywer.yoho.ui.collection.CollectionHubScreen
+import com.spywer.yoho.ui.collection.CollectionScreen
+import com.spywer.yoho.ui.collection.CollectionShelf
+import com.spywer.yoho.ui.collection.CollectionViewModel
 import com.spywer.yoho.ui.home.HomeScreen
 import com.spywer.yoho.ui.layout.LocalHomeMetrics
 import com.spywer.yoho.ui.layout.rememberHomeMetrics
@@ -71,6 +74,13 @@ enum class MainTab {
     Favorites,
     Account,
 }
+
+/** Внешний запрос открыть деталку (из Diary/Favorites Activity → Main). */
+data class TitleOpenRequest(
+    val idKp: Int?,
+    val idTmdb: Int?,
+    val mediaType: String?,
+)
 
 private data class TabSpec(
     val tab: MainTab,
@@ -99,8 +109,15 @@ private data class TitleRoute(
 }
 
 @Composable
-fun MainShell(initialTab: MainTab? = null) {
+fun MainShell(
+    initialTab: MainTab? = null,
+    openTitleRequest: TitleOpenRequest? = null,
+    onOpenTitleConsumed: () -> Unit = {},
+    openShelfRequest: CollectionShelf? = null,
+    onOpenShelfConsumed: () -> Unit = {},
+) {
     var tab by rememberSaveable { mutableStateOf(initialTab ?: MainTab.Home) }
+    var collectionShelf by rememberSaveable { mutableStateOf<String?>(null) }
     LaunchedEffect(initialTab) {
         if (initialTab != null) tab = initialTab
     }
@@ -129,6 +146,23 @@ fun MainShell(initialTab: MainTab? = null) {
         }
     }
 
+    fun openShelf(shelf: CollectionShelf) {
+        tab = MainTab.Favorites
+        collectionShelf = shelf.name
+    }
+
+    LaunchedEffect(openTitleRequest) {
+        val req = openTitleRequest ?: return@LaunchedEffect
+        openTitle(req.idKp, req.idTmdb, req.mediaType)
+        onOpenTitleConsumed()
+    }
+
+    LaunchedEffect(openShelfRequest) {
+        val shelf = openShelfRequest ?: return@LaunchedEffect
+        openShelf(shelf)
+        onOpenShelfConsumed()
+    }
+
     LaunchedEffect(Unit) {
         SessionRepository.refresh()
     }
@@ -149,9 +183,14 @@ fun MainShell(initialTab: MainTab? = null) {
     )
     val metrics = rememberHomeMetrics()
 
-    // Каталог / избранное / аккаунт → на главную (карточка тайтла сама перехватывает назад).
-    BackHandler(enabled = titleStack.isEmpty() && tab != MainTab.Home) {
-        tab = MainTab.Home
+    // Полка → хаб; иначе каталог/избранное/аккаунт → главная (деталка сама ловит назад).
+    BackHandler(
+        enabled = titleStack.isEmpty() && (collectionShelf != null || tab != MainTab.Home),
+    ) {
+        when {
+            collectionShelf != null -> collectionShelf = null
+            else -> tab = MainTab.Home
+        }
     }
 
     val inPip = LocalDetailPip.current?.inPipState?.value == true
@@ -188,6 +227,7 @@ fun MainShell(initialTab: MainTab? = null) {
                                 selected = selected,
                                 onClick = {
                                     titleStack.clear()
+                                    collectionShelf = null
                                     tab = spec.tab
                                 },
                                 icon = {
@@ -260,7 +300,32 @@ fun MainShell(initialTab: MainTab? = null) {
                         restoreSearchFocus = titleStack.isEmpty(),
                         onOpenTitle = ::openTitle,
                     )
-                    MainTab.Favorites -> CollectionHubScreen()
+                    MainTab.Favorites -> {
+                        val shelf = collectionShelf?.let { name ->
+                            runCatching { CollectionShelf.valueOf(name) }.getOrNull()
+                        }
+                        if (shelf != null) {
+                            val shelfVm: CollectionViewModel = viewModel(
+                                key = "collection-shelf-${shelf.name}",
+                                factory = CollectionViewModel.factory(shelf),
+                            )
+                            CollectionScreen(
+                                viewModel = shelfVm,
+                                fixedShelf = shelf,
+                                onBack = { collectionShelf = null },
+                                onNeedLogin = {
+                                    collectionShelf = null
+                                    tab = MainTab.Account
+                                },
+                                onOpenTitle = ::openTitle,
+                            )
+                        } else {
+                            CollectionHubScreen(
+                                onOpenTitle = ::openTitle,
+                                onOpenShelf = ::openShelf,
+                            )
+                        }
+                    }
                     MainTab.Account -> AccountScreen(
                         onBack = { tab = MainTab.Home },
                     )

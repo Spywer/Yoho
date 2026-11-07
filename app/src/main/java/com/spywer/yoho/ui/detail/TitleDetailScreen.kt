@@ -86,7 +86,13 @@ fun TitleDetailScreen(
         }
     }
 
+    // Первый sync делает load(); здесь — только смена сессии (иначе плеер мигает дважды).
+    var playerAllowedSeen by remember { mutableStateOf(false) }
     LaunchedEffect(playerAllowed) {
+        if (!playerAllowedSeen) {
+            playerAllowedSeen = true
+            return@LaunchedEffect
+        }
         viewModel.syncPlayerForSession()
     }
 

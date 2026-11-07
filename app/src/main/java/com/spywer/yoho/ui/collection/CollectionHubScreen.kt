@@ -41,13 +41,15 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.spywer.yoho.R
+import com.spywer.yoho.MainActivity
 import com.spywer.yoho.ui.components.PosterCard
-import com.spywer.yoho.ui.detail.TitleDetailActivity
 import com.spywer.yoho.ui.layout.LocalHomeMetrics
 import com.spywer.yoho.ui.layout.rememberHomeMetrics
 
 @Composable
 fun CollectionHubScreen(
+    onOpenTitle: ((idKp: Int?, idTmdb: Int?, mediaType: String?) -> Unit)? = null,
+    onOpenShelf: (CollectionShelf) -> Unit,
     viewModel: CollectionHubViewModel = viewModel(),
 ) {
     val context = LocalContext.current
@@ -86,7 +88,7 @@ fun CollectionHubScreen(
                         label = stringResource(R.string.favorites_section),
                         textSize = rowText,
                         iconSize = iconSize,
-                        onClick = { context.startActivity(FavoritesListActivity.intent(context)) },
+                        onClick = { onOpenShelf(CollectionShelf.Favorites) },
                     )
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     HubRow(
@@ -94,7 +96,7 @@ fun CollectionHubScreen(
                         label = stringResource(R.string.diary_section),
                         textSize = rowText,
                         iconSize = iconSize,
-                        onClick = { context.startActivity(DiaryActivity.intent(context)) },
+                        onClick = { onOpenShelf(CollectionShelf.Diary) },
                     )
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     HubRow(
@@ -102,7 +104,7 @@ fun CollectionHubScreen(
                         label = stringResource(R.string.history_section),
                         textSize = rowText,
                         iconSize = iconSize,
-                        onClick = { context.startActivity(HistoryActivity.intent(context)) },
+                        onClick = { onOpenShelf(CollectionShelf.History) },
                     )
                     if (!state.needsLogin) {
                         Text(
@@ -155,14 +157,16 @@ fun CollectionHubScreen(
                                 val film = card.film
                                 val kp = film.resolvedKp()
                                 if (kp == null || kp <= 0) return@PosterCard
-                                context.startActivity(
-                                    TitleDetailActivity.intent(
-                                        context,
-                                        kp,
-                                        film.tmdbId,
-                                        film.mediaType ?: "movie",
-                                    ),
-                                )
+                                val media = film.mediaType ?: "movie"
+                                onOpenTitle?.invoke(kp, film.tmdbId, media)
+                                    ?: context.startActivity(
+                                        MainActivity.intentOpenTitle(
+                                            context,
+                                            kp,
+                                            film.tmdbId,
+                                            media,
+                                        ),
+                                    )
                             },
                         )
                     }

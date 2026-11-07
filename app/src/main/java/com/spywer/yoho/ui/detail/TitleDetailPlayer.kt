@@ -29,7 +29,6 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
@@ -39,7 +38,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -50,14 +48,12 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.ThumbDown
 import androidx.compose.material.icons.filled.ThumbUp
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import com.spywer.yoho.ui.components.DiaryStatusDropdownMenu
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableState
@@ -434,15 +430,6 @@ private fun PlayerSourceChip(
     }
 }
 
-private val diaryStatusLabelRes = listOf(
-    R.string.detail_diary_watched,
-    R.string.detail_diary_watching,
-    R.string.detail_diary_want,
-    R.string.detail_diary_rewatching,
-    R.string.detail_diary_on_hold,
-    R.string.detail_diary_dropped,
-)
-
 @Composable
 private fun PlayerUnderBar(
     diaryStatusLabel: String?,
@@ -510,6 +497,7 @@ private fun PlayerUnderBar(
                     modifier = Modifier.size(iconSize),
                 )
             }
+            // DropdownMenu, не AlertDialog: Dialog ломает surface WebView-плеера.
             Box {
                 IconButton(
                     onClick = { if (!diaryBusy) diaryMenuOpen = true },
@@ -536,101 +524,21 @@ private fun PlayerUnderBar(
                         modifier = Modifier.size(iconSize),
                     )
                 }
-                DropdownMenu(
+                DiaryStatusDropdownMenu(
                     expanded = diaryMenuOpen,
-                    onDismissRequest = { diaryMenuOpen = false },
-                    modifier = Modifier.widthIn(min = if (metrics.isTablet) 340.dp else 180.dp),
-                ) {
-                    Text(
-                        text = stringResource(
-                            if (inDiary) {
-                                R.string.detail_diary_menu_title_active
-                            } else {
-                                R.string.detail_diary_menu_title
-                            },
-                        ).uppercase(),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        fontSize = metrics.diaryMenuTitle,
-                        fontWeight = FontWeight.Medium,
-                        modifier = Modifier.padding(
-                            horizontal = if (metrics.isTablet) 20.dp else 10.dp,
-                            vertical = if (metrics.isTablet) 14.dp else 4.dp,
-                        ),
-                    )
-                    diaryStatusLabelRes.forEach { labelRes ->
-                        val label = stringResource(labelRes)
-                        val selected = diaryStatusLabel == label
-                        DropdownMenuItem(
-                            text = {
-                                Text(
-                                    text = label,
-                                    fontSize = metrics.diaryMenuItem,
-                                    fontWeight = FontWeight.Medium,
-                                    color = if (selected) {
-                                        Color.White
-                                    } else {
-                                        MaterialTheme.colorScheme.onSurface
-                                    },
-                                )
-                            },
-                            onClick = {
-                                diaryMenuOpen = false
-                                if (!selected) onSetDiaryStatus(label)
-                            },
-                            modifier = Modifier
-                                .then(
-                                    if (metrics.isTablet) {
-                                        Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
-                                    } else {
-                                        Modifier
-                                            .padding(horizontal = 4.dp)
-                                            .height(36.dp)
-                                    },
-                                )
-                                .clip(RoundedCornerShape(if (metrics.isTablet) 10.dp else 6.dp))
-                                .then(
-                                    if (selected) {
-                                        Modifier.background(MaterialTheme.colorScheme.primary)
-                                    } else {
-                                        Modifier
-                                    },
-                                ),
-                            contentPadding = PaddingValues(
-                                horizontal = if (metrics.isTablet) 16.dp else 10.dp,
-                                vertical = if (metrics.isTablet) 12.dp else 0.dp,
-                            ),
-                        )
-                    }
-                    if (inDiary) {
-                        HorizontalDivider(
-                            Modifier.padding(vertical = if (metrics.isTablet) 8.dp else 2.dp),
-                            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.4f),
-                        )
-                        DropdownMenuItem(
-                            text = {
-                                Text(
-                                    text = stringResource(R.string.detail_diary_remove),
-                                    fontSize = metrics.diaryMenuItem,
-                                    fontWeight = FontWeight.Medium,
-                                    color = Color(0xFFF87171),
-                                )
-                            },
-                            onClick = {
-                                diaryMenuOpen = false
-                                onRemoveFromDiary()
-                            },
-                            modifier = if (metrics.isTablet) {
-                                Modifier
-                            } else {
-                                Modifier.height(36.dp)
-                            },
-                            contentPadding = PaddingValues(
-                                horizontal = if (metrics.isTablet) 20.dp else 10.dp,
-                                vertical = if (metrics.isTablet) 14.dp else 0.dp,
-                            ),
-                        )
-                    }
-                }
+                    currentStatus = diaryStatusLabel,
+                    busy = diaryBusy,
+                    metrics = metrics,
+                    onDismiss = { diaryMenuOpen = false },
+                    onSelectStatus = { label ->
+                        diaryMenuOpen = false
+                        onSetDiaryStatus(label)
+                    },
+                    onRemove = {
+                        diaryMenuOpen = false
+                        onRemoveFromDiary()
+                    },
+                )
             }
             IconButton(
                 onClick = { if (!reactionBusy) onPlayerReaction("dislike") },

@@ -61,6 +61,8 @@ fun PosterCard(
     topStartLabel: String? = null,
     /** Тап по reason (статус дневника). */
     onReasonClick: (() -> Unit)? = null,
+    /** Dropdown у статуса — якорь на reason, не на всю карточку. */
+    reasonMenu: (@Composable () -> Unit)? = null,
 ) {
     val colors = YohoThemeExtras.colors
     val metrics = LocalHomeMetrics.current
@@ -185,28 +187,34 @@ fun PosterCard(
                 }
             }
             item.reason?.takeIf { it.isNotBlank() }?.let { reason ->
-                Text(
-                    text = reason,
-                    color = if (onReasonClick != null) {
-                        MaterialTheme.colorScheme.primary
-                    } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    },
-                    fontSize = metrics.cardMetaSize,
-                    lineHeight = metrics.lineOf(metrics.cardMetaSize),
-                    fontWeight = if (onReasonClick != null) FontWeight.SemiBold else FontWeight.Normal,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = if (onReasonClick != null) {
-                        Modifier
-                            .padding(top = 2.dp)
-                            .clip(RoundedCornerShape(4.dp))
-                            .clickable(onClick = onReasonClick)
-                            .padding(horizontal = 2.dp, vertical = 1.dp)
-                    } else {
-                        Modifier
-                    },
-                )
+                Box(Modifier.padding(top = 2.dp)) {
+                    Text(
+                        text = reason,
+                        color = if (onReasonClick != null) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        },
+                        fontSize = metrics.cardMetaSize,
+                        lineHeight = metrics.lineOf(metrics.cardMetaSize),
+                        fontWeight = if (onReasonClick != null) {
+                            FontWeight.SemiBold
+                        } else {
+                            FontWeight.Normal
+                        },
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = if (onReasonClick != null) {
+                            Modifier
+                                .clip(RoundedCornerShape(4.dp))
+                                .clickable(onClick = onReasonClick)
+                                .padding(horizontal = 2.dp, vertical = 1.dp)
+                        } else {
+                            Modifier
+                        },
+                    )
+                    reasonMenu?.invoke()
+                }
             }
         }
         Column(
