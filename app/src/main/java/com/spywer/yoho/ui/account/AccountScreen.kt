@@ -10,6 +10,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -28,9 +30,11 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.outlined.Send
 import androidx.compose.material.icons.filled.ErrorOutline
+import androidx.compose.material.icons.outlined.Chat
 import androidx.compose.material.icons.outlined.Email
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Apps
+import androidx.compose.material.icons.outlined.People
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -59,6 +63,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -77,14 +82,20 @@ import coil.compose.AsyncImage
 import com.spywer.yoho.BuildConfig
 import com.spywer.yoho.R
 import com.spywer.yoho.data.AppSettings
+import com.spywer.yoho.data.remote.AuthUserDto
 import com.spywer.yoho.ui.components.YohoBackButton
 import com.spywer.yoho.ui.layout.HomeMetrics
 import com.spywer.yoho.ui.layout.rememberHomeMetrics
 import com.spywer.yoho.ui.legal.LegalDocument
 import com.spywer.yoho.ui.legal.LegalDocumentActivity
 import com.spywer.yoho.ui.support.SupportProjectDialog
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
+import java.util.Locale
 
 private enum class AccountSubPage {
+    Friends,
+    Messages,
     Settings,
     About,
     AboutApp,
@@ -116,6 +127,20 @@ fun AccountScreen(
         viewModel.refresh()
     }
     when (val page = subPage) {
+        AccountSubPage.Friends -> AccountSocialSoonPage(
+            title = stringResource(R.string.account_friends),
+            metrics = metrics,
+            titleSize = titleSize,
+            bodySize = bodySize,
+            onBack = { subPage = null },
+        )
+        AccountSubPage.Messages -> AccountSocialSoonPage(
+            title = stringResource(R.string.account_messages),
+            metrics = metrics,
+            titleSize = titleSize,
+            bodySize = bodySize,
+            onBack = { subPage = null },
+        )
         AccountSubPage.Settings -> AccountSettingsPage(
             metrics = metrics,
             titleSize = titleSize,
@@ -178,78 +203,13 @@ fun AccountScreen(
                     fontWeight = FontWeight.Bold,
                 )
                 Spacer(Modifier.height(metrics.sectionGap))
-                val user = state.user!!
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    if (!user.avatar.isNullOrBlank()) {
-                        AsyncImage(
-                            model = user.avatar,
-                            contentDescription = null,
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier
-                                .size(96.dp)
-                                .clip(CircleShape)
-                                .background(MaterialTheme.colorScheme.surfaceVariant),
-                        )
-                    } else {
-                        Box(
-                            Modifier
-                                .size(96.dp)
-                                .clip(CircleShape)
-                                .background(MaterialTheme.colorScheme.surfaceVariant),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Text(
-                                text = (user.resolvedDisplayName() ?: "?")
-                                    .take(1)
-                                    .uppercase(),
-                                fontSize = 36.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                    }
-                    Spacer(Modifier.height(metrics.sectionGap))
-                    Text(
-                        text = user.resolvedDisplayName().orEmpty(),
-                        color = MaterialTheme.colorScheme.onBackground,
-                        fontWeight = FontWeight.SemiBold,
-                        fontSize = (metrics.cardTitleSize.value + 4f).sp,
-                        lineHeight = metrics.lineOf((metrics.cardTitleSize.value + 4f).sp),
-                    )
-                    if (!user.username.isNullOrBlank()) {
-                        Text(
-                            text = "@${user.username}${user.userCode.orEmpty()}",
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            fontSize = bodySize,
-                            lineHeight = metrics.lineOf(bodySize),
-                        )
-                    }
-                    if (!user.email.isNullOrBlank()) {
-                        Text(
-                            text = user.email,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            fontSize = bodySize,
-                            lineHeight = metrics.lineOf(bodySize),
-                            modifier = Modifier.padding(top = metrics.blockGap),
-                        )
-                    }
-                    Spacer(Modifier.height(if (metrics.isTablet) 28.dp else metrics.sectionGap * 2))
-                    OutlinedButton(
-                        onClick = viewModel::signOut,
-                        enabled = !state.busy,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(if (metrics.isTablet) 52.dp else metrics.searchHeight),
-                    ) {
-                        Text(
-                            stringResource(R.string.account_sign_out),
-                            fontSize = bodySize,
-                            lineHeight = metrics.lineOf(bodySize),
-                        )
-                    }
-                }
+                AccountProfileHeader(
+                    user = state.user!!,
+                    metrics = metrics,
+                    bodySize = bodySize,
+                    busy = state.busy,
+                    onSignOut = viewModel::signOut,
+                )
             }
 
             else -> {
@@ -275,6 +235,8 @@ fun AccountScreen(
         Spacer(Modifier.height(if (metrics.isTablet) 48.dp else 36.dp))
         AccountMenuGrid(
             metrics = metrics,
+            onFriends = { subPage = AccountSubPage.Friends },
+            onMessages = { subPage = AccountSubPage.Messages },
             onSettings = { subPage = AccountSubPage.Settings },
             onAbout = { subPage = AccountSubPage.About },
             onAboutApp = { subPage = AccountSubPage.AboutApp },
@@ -302,9 +264,174 @@ fun AccountScreen(
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun AccountProfileHeader(
+    user: AuthUserDto,
+    metrics: HomeMetrics,
+    bodySize: TextUnit,
+    busy: Boolean,
+    onSignOut: () -> Unit,
+) {
+    val metaSize = metrics.cardMetaSize
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        if (!user.avatar.isNullOrBlank()) {
+            AsyncImage(
+                model = user.avatar,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier
+                    .size(96.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.surfaceVariant),
+            )
+        } else {
+            Box(
+                Modifier
+                    .size(96.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.surfaceVariant),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    text = (user.resolvedDisplayName() ?: "?")
+                        .take(1)
+                        .uppercase(),
+                    fontSize = 36.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+        Spacer(Modifier.height(metrics.sectionGap))
+        Text(
+            text = user.resolvedDisplayName().orEmpty(),
+            color = MaterialTheme.colorScheme.onBackground,
+            fontWeight = FontWeight.SemiBold,
+            fontSize = (metrics.cardTitleSize.value + 4f).sp,
+            lineHeight = metrics.lineOf((metrics.cardTitleSize.value + 4f).sp),
+        )
+        if (!user.username.isNullOrBlank()) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center,
+                modifier = Modifier.padding(top = 4.dp),
+            ) {
+                Text(
+                    text = "@${user.username}",
+                    color = MaterialTheme.colorScheme.primary,
+                    fontSize = bodySize,
+                    lineHeight = metrics.lineOf(bodySize),
+                    fontWeight = FontWeight.Medium,
+                )
+                user.resolvedUserCode()?.let { code ->
+                    Text(
+                        text = " $code",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontSize = bodySize,
+                        lineHeight = metrics.lineOf(bodySize),
+                    )
+                }
+            }
+        }
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = metrics.blockGap),
+        ) {
+            user.role?.takeIf { it.isNotBlank() }?.let { role ->
+                Text(
+                    text = roleLabel(role),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontSize = metaSize,
+                    fontWeight = FontWeight.Medium,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(999.dp))
+                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                        .padding(horizontal = 10.dp, vertical = 4.dp),
+                )
+            }
+            val metaParts = buildList {
+                formatRegisteredDate(user.registeredAt)?.let { date ->
+                    add(stringResource(R.string.account_registered_since, date))
+                }
+                val following = user.followingCount ?: 0
+                val followers = user.followersCount ?: 0
+                add(
+                    pluralStringResource(
+                        R.plurals.account_following,
+                        following,
+                        following,
+                    ),
+                )
+                add(
+                    pluralStringResource(
+                        R.plurals.account_followers,
+                        followers,
+                        followers,
+                    ),
+                )
+            }
+            if (metaParts.isNotEmpty()) {
+                Text(
+                    text = metaParts.joinToString(" · "),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontSize = metaSize,
+                    lineHeight = metrics.lineOf(metaSize),
+                    textAlign = TextAlign.Center,
+                )
+            }
+        }
+        if (!user.email.isNullOrBlank()) {
+            Text(
+                text = user.email,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
+                fontSize = metaSize,
+                lineHeight = metrics.lineOf(metaSize),
+                modifier = Modifier.padding(top = metrics.blockGap),
+            )
+        }
+        Spacer(Modifier.height(if (metrics.isTablet) 28.dp else metrics.sectionGap * 2))
+        OutlinedButton(
+            onClick = onSignOut,
+            enabled = !busy,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(if (metrics.isTablet) 52.dp else metrics.searchHeight),
+        ) {
+            Text(
+                stringResource(R.string.account_sign_out),
+                fontSize = bodySize,
+                lineHeight = metrics.lineOf(bodySize),
+            )
+        }
+    }
+}
+
+@Composable
+private fun roleLabel(role: String): String =
+    when (role.lowercase()) {
+        "moderator", "mod" -> stringResource(R.string.account_role_moderator)
+        "admin" -> stringResource(R.string.account_role_admin)
+        "streamer" -> stringResource(R.string.account_role_streamer)
+        else -> stringResource(R.string.account_role_user)
+    }
+
+private fun formatRegisteredDate(raw: String?): String? {
+    if (raw.isNullOrBlank()) return null
+    val date = runCatching { LocalDate.parse(raw.take(10)) }.getOrNull() ?: return null
+    return date.format(DateTimeFormatter.ofPattern("d MMMM yyyy 'г'.", Locale("ru")))
+}
+
 @Composable
 private fun AccountMenuGrid(
     metrics: HomeMetrics,
+    onFriends: () -> Unit,
+    onMessages: () -> Unit,
     onSettings: () -> Unit,
     onAbout: () -> Unit,
     onAboutApp: () -> Unit,
@@ -315,6 +442,25 @@ private fun AccountMenuGrid(
         Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(gap),
     ) {
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(gap),
+        ) {
+            AccountMenuTile(
+                icon = Icons.Outlined.People,
+                label = stringResource(R.string.account_friends),
+                textSize = metrics.cardMetaSize,
+                onClick = onFriends,
+                modifier = Modifier.weight(1f).height(tileHeight),
+            )
+            AccountMenuTile(
+                icon = Icons.Outlined.Chat,
+                label = stringResource(R.string.account_messages),
+                textSize = metrics.cardMetaSize,
+                onClick = onMessages,
+                modifier = Modifier.weight(1f).height(tileHeight),
+            )
+        }
         Row(
             Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(gap),
@@ -340,6 +486,37 @@ private fun AccountMenuGrid(
             textSize = metrics.cardMetaSize,
             onClick = onAboutApp,
             modifier = Modifier.fillMaxWidth().height(tileHeight),
+        )
+    }
+}
+
+@Composable
+private fun AccountSocialSoonPage(
+    title: String,
+    metrics: HomeMetrics,
+    titleSize: TextUnit,
+    bodySize: TextUnit,
+    onBack: () -> Unit,
+) {
+    Column(
+        Modifier
+            .fillMaxSize()
+            .statusBarsPadding()
+            .padding(horizontal = metrics.screenPadding, vertical = metrics.sectionGap),
+    ) {
+        AccountSubPageHeader(
+            title = title,
+            titleSize = titleSize,
+            gap = metrics.sectionGap,
+            onBack = onBack,
+            showBack = metrics.isTablet,
+        )
+        Spacer(Modifier.height(metrics.sectionGap))
+        Text(
+            text = stringResource(R.string.account_social_soon),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            fontSize = bodySize,
+            lineHeight = metrics.lineOf(bodySize),
         )
     }
 }

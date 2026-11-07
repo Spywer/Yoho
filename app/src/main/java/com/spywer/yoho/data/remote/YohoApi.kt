@@ -23,6 +23,10 @@ interface YohoApi {
     @GET("api/auth/get-session")
     suspend fun authGetSession(): Response<AuthSessionResponse>
 
+    /** Профиль текущего пользователя: роль, код, подписки. */
+    @GET("api/profile/me")
+    suspend fun profileMe(): Response<ProfileMeResponseDto>
+
     /** Персональные рекомендации (нужна сессия). */
     @GET("api/recommendations/latest")
     suspend fun recommendationsLatest(): Response<RecommendationsLatestResponse>
@@ -189,6 +193,13 @@ interface YohoApi {
     /** Избранное + история: GET /api/sync → { ok, favorites, watchHistory } */
     @GET("api/sync")
     suspend fun sync(): SyncResponseDto
+
+    /** Свой дневник: GET /api/diary?page=&limit= → { entries, total, page, pageSize } */
+    @GET("api/diary")
+    suspend fun diaryList(
+        @Query("page") page: Int = 1,
+        @Query("limit") limit: Int = 50,
+    ): DiaryListResponseDto
 
     /** Оценки like/dislike текущего пользователя (сессия). */
     @GET("api/ratings")

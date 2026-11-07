@@ -21,13 +21,35 @@
     <string name="legal_dmca_title">DMCA</string>
     <string name="nav_home">Главная</string>
     <string name="nav_catalog">Каталог</string>
-    <string name="nav_favorites">Избранное</string>
+    <string name="nav_favorites">Коллекция</string>
     <string name="nav_account">Аккаунт</string>
+    <string name="account_friends">Друзья</string>
+    <string name="account_messages">Сообщения</string>
+    <string name="account_social_soon">Скоро в приложении</string>
+    <string name="account_role_user">Пользователь</string>
+    <string name="account_role_moderator">Модератор</string>
+    <string name="account_role_admin">Админ</string>
+    <string name="account_role_streamer">Стример</string>
+    <string name="account_registered_since">с %1$s</string>
+    <plurals name="account_following">
+        <item quantity="one">%d подписка</item>
+        <item quantity="few">%d подписки</item>
+        <item quantity="many">%d подписок</item>
+        <item quantity="other">%d подписок</item>
+    </plurals>
+    <plurals name="account_followers">
+        <item quantity="one">%d подписчик</item>
+        <item quantity="few">%d подписчика</item>
+        <item quantity="many">%d подписчиков</item>
+        <item quantity="other">%d подписчиков</item>
+    </plurals>
     <string name="favorites_empty">Пока пусто — добавьте тайтлы в избранное</string>
     <string name="favorites_section">Избранное</string>
     <string name="history_section">История</string>
     <string name="history_empty">История просмотров пуста</string>
-    <string name="favorites_need_login">Войдите, чтобы видеть избранное и историю</string>
+    <string name="diary_section">Дневник</string>
+    <string name="diary_empty">Дневник пуст — добавьте тайтл со статусом</string>
+    <string name="favorites_need_login">Войдите, чтобы видеть коллекцию</string>
     <string name="account_sign_in">Войти</string>
     <string name="account_sign_up">Регистрация</string>
     <string name="account_sign_out">Выйти</string>

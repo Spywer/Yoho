@@ -14,13 +14,13 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.ui.Alignment
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Explore
-import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material.icons.outlined.Explore
-import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Person
+import androidx.compose.material.icons.outlined.VideoLibrary
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
@@ -141,7 +141,7 @@ fun MainShell() {
     val tabs = listOf(
         TabSpec(MainTab.Home, R.string.nav_home, Icons.Filled.Home, Icons.Outlined.Home),
         TabSpec(MainTab.Catalog, R.string.nav_catalog, Icons.Filled.Explore, Icons.Outlined.Explore),
-        TabSpec(MainTab.Favorites, R.string.nav_favorites, Icons.Filled.Favorite, Icons.Outlined.FavoriteBorder),
+        TabSpec(MainTab.Favorites, R.string.nav_favorites, Icons.Filled.VideoLibrary, Icons.Outlined.VideoLibrary),
         TabSpec(MainTab.Account, R.string.nav_account, Icons.Filled.Person, Icons.Outlined.Person),
     )
     val metrics = rememberHomeMetrics()

@@ -233,6 +233,14 @@ data class DiaryResponseDto(
     val entry: DiaryEntryDto? = null,
 )
 
+/** GET /api/diary?page=&limit= → { entries, total, page, pageSize } */
+data class DiaryListResponseDto(
+    val entries: List<DiaryEntryDto> = emptyList(),
+    val total: Int = 0,
+    val page: Int = 1,
+    val pageSize: Int = 50,
+)
+
 data class DiaryEntryDto(
     val id: String? = null,
     val itemId: String? = null,
@@ -241,7 +249,33 @@ data class DiaryEntryDto(
     val year: String? = null,
     val mediaType: String? = null,
     val statusLabel: String? = null,
-)
+    val sourceReaction: String? = null,
+    val posterUrl: String? = null,
+    val kinopoiskId: String? = null,
+    val tmdbId: Int? = null,
+    val kpRating: Double? = null,
+    val imdbRating: Double? = null,
+) {
+    fun resolvedKp(): Int? =
+        kinopoiskId?.toIntOrNull()
+            ?: itemId?.removePrefix("kp:")?.toIntOrNull()
+            ?: href?.substringAfterLast('/')?.substringBefore('?')?.toIntOrNull()
+
+    /** posterUrl с API часто null — fallback на kp_small. */
+    fun resolvedPoster(): String? {
+        posterUrl.absMediaUrl()?.let { return it }
+        val kp = resolvedKp() ?: return null
+        return "/api/img/kp/posters/kp_small/$kp.jpg".absMediaUrl()
+    }
+
+    fun displayStatus(): String? =
+        statusLabel?.takeIf { it.isNotBlank() }
+            ?: when (sourceReaction) {
+                "like" -> "Нравится"
+                "dislike" -> "Не нравится"
+                else -> null
+            }
+}
 
 /** GET /api/diary/contains?itemId=kp:… → { inDiary, statusLabel } */
 data class DiaryContainsResponseDto(
@@ -364,6 +398,8 @@ data class AuthUserDto(
     @SerializedName("avatar_source") val avatarSource: String? = null,
     @SerializedName("registered_at") val registeredAt: String? = null,
     @SerializedName("is_private") val isPrivate: Boolean? = null,
+    @SerializedName("followers_count") val followersCount: Int? = null,
+    @SerializedName("following_count") val followingCount: Int? = null,
 ) {
     fun resolvedDisplayName(): String? =
         displayName?.takeIf { it.isNotBlank() }
@@ -372,7 +408,19 @@ data class AuthUserDto(
 
     fun resolvedAvatar(): String? =
         avatar?.takeIf { it.isNotBlank() } ?: image?.takeIf { it.isNotBlank() }
+
+    fun resolvedUserCode(): String? {
+        val raw = userCode?.trim()?.takeIf { it.isNotBlank() } ?: return null
+        return if (raw.startsWith("#")) raw else "#$raw"
+    }
 }
+
+/** GET /api/profile/me — обогащает сессию (роль, код, подписки). */
+data class ProfileMeResponseDto(
+    val user: AuthUserDto? = null,
+    @SerializedName("followers_count") val followersCount: Int? = null,
+    @SerializedName("following_count") val followingCount: Int? = null,
+)
 
 data class AuthSessionDto(
     val id: String? = null,

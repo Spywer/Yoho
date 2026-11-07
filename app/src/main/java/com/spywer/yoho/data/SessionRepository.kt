@@ -119,10 +119,11 @@ object SessionRepository {
         val resp = runCatching { api.authGetSession() }.getOrNull() ?: return null
         if (!resp.isSuccessful) return null
         // Better Auth: 200 + null body = нет сессии
-        return resp.body()?.user?.normalized()
+        val sessionUser = resp.body()?.user?.normalized() ?: return null
+        return enrichFromProfile(sessionUser)
     }
 
-    private fun applyAuthResponse(
+    private suspend fun applyAuthResponse(
         resp: Response<AuthSessionResponse>,
         failFallback: String,
     ): Boolean {
@@ -139,10 +140,33 @@ object SessionRepository {
             }
             return false
         }
+        val enriched = enrichFromProfile(user)
         _state.update {
-            it.copy(busy = false, user = user, error = null, loading = false)
+            it.copy(busy = false, user = enriched, error = null, loading = false)
         }
         return true
+    }
+
+    /** Подтянуть роль / код / подписки из /api/profile/me. */
+    private suspend fun enrichFromProfile(user: AuthUserDto): AuthUserDto {
+        val profile = runCatching { api.profileMe() }
+            .getOrNull()
+            ?.takeIf { it.isSuccessful }
+            ?.body()
+            ?: return user
+        val p = profile.user
+        return user.copy(
+            username = p?.username?.takeIf { it.isNotBlank() } ?: user.username,
+            userCode = p?.userCode?.takeIf { it.isNotBlank() } ?: user.userCode,
+            role = p?.role?.takeIf { it.isNotBlank() } ?: user.role,
+            registeredAt = p?.registeredAt?.takeIf { it.isNotBlank() } ?: user.registeredAt,
+            followersCount = p?.followersCount ?: profile.followersCount ?: user.followersCount,
+            followingCount = p?.followingCount ?: profile.followingCount ?: user.followingCount,
+            displayName = p?.resolvedDisplayName() ?: user.displayName,
+            avatar = (p?.resolvedAvatar() ?: user.avatar),
+            name = p?.name ?: user.name,
+            image = p?.image ?: user.image,
+        ).normalized()
     }
 
     private fun clearCookies() {
