@@ -11,7 +11,7 @@
 
 ## Запуск
 
-1. Android Studio / JDK 11+
+1. Android Studio / JDK 17+
 2. База API — `SiteHttp` (зеркала `reyoho.com` / `reyoho.ru` / `yoho.pw`, failover)
 3. Сборка:
 
@@ -49,5 +49,5 @@ app/src/main/java/com/spywer/yoho/
 
 - Без входа часть плееров и личные полки недоступны (как на сайте).
 - Кино-плеер и трейлеры — разные поверхности (см. `docs/ANDROID.md` → Плеер и трейлеры).
-- Иконка приложения: белые **YH** на фоне `#1A2026`.
+- Иконка приложения: белые **YH** на фоне `#1A2026` (шрифт Google Sans Bold).
 - Документация: `docs/API.md` (0.1.42), `docs/openapi.yaml`, `docs/ANDROID.md`
