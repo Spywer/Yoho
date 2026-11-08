@@ -13,8 +13,8 @@ android {
         applicationId = "com.spywer.yoho"
         minSdk = 28
         targetSdk = 37
-        versionCode = 16
-        versionName = "1.0.5"
+        versionCode = 17
+        versionName = "1.0.6"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
