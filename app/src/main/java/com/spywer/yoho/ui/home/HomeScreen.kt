@@ -522,8 +522,22 @@ fun HomeScreen(
                         onPickTitle = ::openSuggest,
                         onToggleFavorite = ::toggleSuggestFavorite,
                         onPickPerson = { id ->
-                            selectedPersonId = id
+                            val person = persons.find { it.id == id }
+                            val name = person?.name?.takeIf { it.isNotBlank() } ?: return@HomeSearchResults
+                            val kp = person.id?.toString().takeIf { it != null }
+                            searchActive = false
+                            query = ""
+                            titles = emptyList()
+                            persons = emptyList()
                             keyboard?.hide()
+                            context.startActivity(
+                                SearchActivity.intent(
+                                    context,
+                                    actor = name,
+                                    actorKp = kp,
+                                    type = state.filter.trendingNow(),
+                                ),
+                            )
                         },
                         modifier = Modifier
                             .fillMaxSize()
