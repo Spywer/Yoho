@@ -323,6 +323,7 @@ fun MainShell(
                             CollectionHubScreen(
                                 onOpenTitle = ::openTitle,
                                 onOpenShelf = ::openShelf,
+                                onNeedLogin = { tab = MainTab.Account },
                             )
                         }
                     }

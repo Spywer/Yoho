@@ -6,8 +6,11 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -20,6 +23,7 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.AutoStories
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.outlined.History
+import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -34,6 +38,8 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
@@ -50,6 +56,7 @@ import com.spywer.yoho.ui.layout.rememberHomeMetrics
 fun CollectionHubScreen(
     onOpenTitle: ((idKp: Int?, idTmdb: Int?, mediaType: String?) -> Unit)? = null,
     onOpenShelf: (CollectionShelf) -> Unit,
+    onNeedLogin: (() -> Unit)? = null,
     viewModel: CollectionHubViewModel = viewModel(),
 ) {
     val context = LocalContext.current
@@ -122,7 +129,51 @@ fun CollectionHubScreen(
             }
 
             when {
-                state.needsLogin -> Unit
+                state.needsLogin -> {
+                    item(span = { GridItemSpan(maxLineSpan) }) {
+                        val loginTextSize = if (metrics.isTablet) {
+                            metrics.sectionTitleSize
+                        } else {
+                            metrics.searchTextSize
+                        }
+                        val loginBtnHeight = if (metrics.isTablet) 56.dp else metrics.searchHeight
+                        Column(
+                            Modifier
+                                .fillMaxSize()
+                                .padding(if (metrics.isTablet) 40.dp else 24.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center,
+                        ) {
+                            Text(
+                                text = stringResource(R.string.favorites_need_login),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                textAlign = TextAlign.Center,
+                                fontSize = loginTextSize,
+                                lineHeight = metrics.lineOf(loginTextSize),
+                                fontWeight = if (metrics.isTablet) FontWeight.Medium else FontWeight.Normal,
+                            )
+                            Spacer(Modifier.height(if (metrics.isTablet) 28.dp else 16.dp))
+                            Button(
+                                onClick = {
+                                    onNeedLogin?.invoke()
+                                        ?: (context as? android.app.Activity)?.finish()
+                                },
+                                modifier = Modifier
+                                    .widthIn(min = if (metrics.isTablet) 280.dp else 0.dp)
+                                    .height(loginBtnHeight),
+                            ) {
+                                Text(
+                                    text = stringResource(R.string.account_sign_in),
+                                    fontSize = if (metrics.isTablet) {
+                                        metrics.searchTextSize
+                                    } else {
+                                        metrics.chipTextSize
+                                    },
+                                )
+                            }
+                        }
+                    }
+                }
                 state.loading && state.filmsEmpty -> {
                     item(span = { GridItemSpan(maxLineSpan) }) {
                         Box(
@@ -138,7 +189,7 @@ fun CollectionHubScreen(
                 state.filmsEmpty -> {
                     item(span = { GridItemSpan(maxLineSpan) }) {
                         Text(
-                            text = stringResource(R.string.collection_films_empty),
+                            text = stringResource(R.string.collection_empty),
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             fontSize = rowText,
                             modifier = Modifier.padding(vertical = metrics.blockGap),
