@@ -111,21 +111,22 @@ private data class TitleRoute(
 @Composable
 fun MainShell(
     initialTab: MainTab? = null,
+    openTabRequest: MainTab? = null,
+    onOpenTabConsumed: () -> Unit = {},
     openTitleRequest: TitleOpenRequest? = null,
     onOpenTitleConsumed: () -> Unit = {},
     openShelfRequest: CollectionShelf? = null,
     onOpenShelfConsumed: () -> Unit = {},
+    openActorRequest: Pair<String, String>? = null,
+    onOpenActorConsumed: () -> Unit = {},
 ) {
     var tab by rememberSaveable { mutableStateOf(initialTab ?: MainTab.Home) }
     var collectionShelf by rememberSaveable { mutableStateOf<String?>(null) }
-    LaunchedEffect(initialTab) {
-        if (initialTab != null) tab = initialTab
-    }
+    var lastCatalogTab by remember { mutableStateOf<MainTab?>(null) }
     val catalogVm: SearchViewModel = viewModel()
     val context = LocalContext.current
     val focusManager = LocalFocusManager.current
     val keyboard = LocalSoftwareKeyboardController.current
-
     val titleStack = rememberSaveable(
         saver = listSaver(
             save = { list -> list.map { it.encode() } },
@@ -133,6 +134,22 @@ fun MainShell(
         ),
     ) {
         emptyList<TitleRoute>().toMutableStateList()
+    }
+    LaunchedEffect(initialTab) {
+        if (initialTab != null) tab = initialTab
+    }
+    LaunchedEffect(openTabRequest) {
+        val target = openTabRequest ?: return@LaunchedEffect
+        tab = target
+        onOpenTabConsumed()
+    }
+    LaunchedEffect(openTabRequest, openActorRequest) {
+        if (openTabRequest == MainTab.Catalog) {
+            catalogVm.clearFilters()
+        }
+        val req = openActorRequest ?: return@LaunchedEffect
+        catalogVm.setInitial(actor = req.first, actorKp = req.second)
+        onOpenActorConsumed()
     }
 
     fun openTitle(idKp: Int?, idTmdb: Int?, mediaType: String?) {
@@ -168,10 +185,18 @@ fun MainShell(
     }
 
     // Каталог держит IME; при уходе с вкладки / открытии карточки — закрыть.
+    // При уходе с Catalog — сбросить фильтры, чтобы при возврате каталог был пустым.
+    // lastCatalogTab — отслеживаем, когда пользователь реально переключился с Catalog.
     LaunchedEffect(tab, titleStack.size) {
         if (tab != MainTab.Catalog || titleStack.isNotEmpty()) {
             focusManager.clearFocus(force = true)
             keyboard?.hide()
+        }
+        if (lastCatalogTab == MainTab.Catalog && tab != MainTab.Catalog && titleStack.isEmpty()) {
+            catalogVm.clearFilters()
+        }
+        if (tab == MainTab.Catalog) {
+            lastCatalogTab = MainTab.Catalog
         }
     }
 

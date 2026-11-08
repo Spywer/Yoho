@@ -29,6 +29,7 @@ class MainActivity : ComponentActivity() {
     private val openTab = MutableStateFlow<MainTab?>(null)
     private val openTitle = MutableStateFlow<TitleOpenRequest?>(null)
     private val openShelf = MutableStateFlow<CollectionShelf?>(null)
+    private val openActor = MutableStateFlow<Pair<String, String>?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -41,14 +42,19 @@ class MainActivity : ComponentActivity() {
             val initialTab by openTab.collectAsStateWithLifecycle()
             val titleRequest by openTitle.collectAsStateWithLifecycle()
             val shelfRequest by openShelf.collectAsStateWithLifecycle()
+            val actorRequest by openActor.collectAsStateWithLifecycle()
             CompositionLocalProvider(LocalDetailPip provides pipController) {
                 YohoTheme(darkTheme = true) {
                     MainShell(
                         initialTab = initialTab,
+                        openTabRequest = openTab.value, 
+                        onOpenTabConsumed = { openTab.value = null },
                         openTitleRequest = titleRequest,
                         onOpenTitleConsumed = { openTitle.value = null },
                         openShelfRequest = shelfRequest,
                         onOpenShelfConsumed = { openShelf.value = null },
+                        openActorRequest = actorRequest,
+                        onOpenActorConsumed = { openActor.value = null },
                     )
                 }
             }
@@ -59,16 +65,25 @@ class MainActivity : ComponentActivity() {
         openTab.value = tabFromIntent(intent)
         openTitle.value = titleFromIntent(intent)
         openShelf.value = shelfFromIntent(intent)
+        val actor = intent?.getStringExtra(EXTRA_OPEN_ACTOR)
+        val actorKp = intent?.getStringExtra(EXTRA_OPEN_ACTOR_KP)
+        if (!actor.isNullOrBlank() && !actorKp.isNullOrBlank()) {
+            openActor.value = actor to actorKp
+        }
     }
 
     companion object {
         const val EXTRA_OPEN_TAB = "extra_open_tab"
         const val TAB_ACCOUNT = "account"
         const val TAB_FAVORITES = "favorites"
+        const val TAB_CATALOG = "catalog"
+        const val TAB_HOME = "home"
         const val EXTRA_OPEN_TITLE_KP = "extra_open_title_kp"
         const val EXTRA_OPEN_TITLE_TMDB = "extra_open_title_tmdb"
         const val EXTRA_OPEN_TITLE_MEDIA = "extra_open_title_media"
         const val EXTRA_OPEN_SHELF = "extra_open_shelf"
+        const val EXTRA_OPEN_ACTOR = "extra_open_actor"
+        const val EXTRA_OPEN_ACTOR_KP = "extra_open_actor_kp"
 
         fun intentOpenAccount(context: Context): Intent =
             Intent(context, MainActivity::class.java).apply {
@@ -96,6 +111,7 @@ class MainActivity : ComponentActivity() {
             when (intent?.getStringExtra(EXTRA_OPEN_TAB)) {
                 TAB_ACCOUNT -> MainTab.Account
                 TAB_FAVORITES -> MainTab.Favorites
+                TAB_CATALOG -> MainTab.Catalog
                 else -> null
             }
 
@@ -116,6 +132,18 @@ class MainActivity : ComponentActivity() {
                 flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
                 putExtra(EXTRA_OPEN_TAB, TAB_FAVORITES)
                 putExtra(EXTRA_OPEN_SHELF, shelf.name)
+            }
+
+        fun intentOpenCatalogWithActor(
+            context: Context,
+            actor: String,
+            actorKp: String,
+        ): Intent =
+            Intent(context, MainActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+                putExtra(EXTRA_OPEN_TAB, TAB_CATALOG)
+                putExtra(EXTRA_OPEN_ACTOR, actor)
+                putExtra(EXTRA_OPEN_ACTOR_KP, actorKp)
             }
 
         fun shelfFromIntent(intent: Intent?): CollectionShelf? {

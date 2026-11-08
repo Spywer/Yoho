@@ -8,6 +8,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
 import androidx.compose.runtime.LaunchedEffect
+import com.spywer.yoho.MainActivity
 import com.spywer.yoho.ui.theme.YohoTheme
 
 class SearchActivity : ComponentActivity() {
@@ -35,6 +36,9 @@ class SearchActivity : ComponentActivity() {
                 SearchScreen(
                     viewModel = viewModel,
                     onBack = { finish() },
+                    onOpenTitle = { idKp, idTmdb, mediaType ->
+                        startActivity(MainActivity.intentOpenTitle(this, idKp, idTmdb, mediaType, "catalog"))
+                    },
                 )
             }
         }

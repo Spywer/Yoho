@@ -54,8 +54,10 @@ class SearchViewModel : ViewModel() {
         actor: String? = null,
         actorKp: String? = null,
     ) {
-        if (initialApplied) return
-        initialApplied = true
+        searchJob?.cancel()
+        val snapshot = _state.value
+        val filtersSet = snapshot.filters.actors.isNotEmpty() || snapshot.filters.genres.isNotEmpty() || snapshot.filters.types.isNotEmpty()
+        if (filtersSet) return
         val genreSlug = genre?.let { genreSlugOf(it) ?: it.trim().takeIf { s -> s.isNotEmpty() } }
         val typeVal = type?.trim()?.takeIf {
             it.isNotEmpty() && it != "all" && DefaultSearchTypes.any { t -> t.value == it }
@@ -124,6 +126,7 @@ class SearchViewModel : ViewModel() {
         searchJob?.cancel()
         _state.update {
             it.copy(
+                query = "",
                 filters = SearchFilterState(),
                 results = emptyList(),
                 total = 0,

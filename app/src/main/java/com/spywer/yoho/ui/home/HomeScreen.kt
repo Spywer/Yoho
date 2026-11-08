@@ -76,6 +76,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
+import com.spywer.yoho.MainActivity
 import com.spywer.yoho.R
 import com.spywer.yoho.data.SessionRepository
 import com.spywer.yoho.data.remote.MeActivityRequest
@@ -94,7 +95,6 @@ import com.spywer.yoho.ui.detail.TitleDetailActivity
 import com.spywer.yoho.ui.layout.HomeMetrics
 import com.spywer.yoho.ui.layout.LocalHomeMetrics
 import com.spywer.yoho.ui.layout.rememberHomeMetrics
-import com.spywer.yoho.ui.search.SearchActivity
 import com.spywer.yoho.ui.search.genreLabelsOf
 import com.spywer.yoho.ui.theme.YohoThemeExtras
 import com.spywer.yoho.ui.trailer.openTrailerPlayer
@@ -130,7 +130,6 @@ fun HomeScreen(
 
     fun openCatalog() {
         onOpenCatalog?.invoke()
-            ?: context.startActivity(SearchActivity.intent(context))
     }
 
     fun openTitle(item: TitleDto) {
@@ -530,14 +529,14 @@ fun HomeScreen(
                             titles = emptyList()
                             persons = emptyList()
                             keyboard?.hide()
-                            context.startActivity(
-                                SearchActivity.intent(
-                                    context,
-                                    actor = name,
-                                    actorKp = kp,
-                                    type = state.filter.trendingNow(),
-                                ),
-                            )
+                            kp?.let { actorKp ->
+                                context.startActivity(
+                                    MainActivity.intentOpenCatalogWithActor(context, name, actorKp),
+                                )
+                            }
+                        },
+                        onPersonSheet = { id ->
+                            selectedPersonId = id
                         },
                         modifier = Modifier
                             .fillMaxSize()
@@ -666,6 +665,7 @@ private fun HomeSearchResults(
     onPickTitle: (SuggestItemDto) -> Unit,
     onToggleFavorite: (SuggestItemDto) -> Unit,
     onPickPerson: (Int) -> Unit,
+    onPersonSheet: (Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val metrics = LocalHomeMetrics.current
@@ -744,6 +744,7 @@ private fun HomeSearchResults(
                                     originalName = person.originalName,
                                     photoUrl = person.photoUrl,
                                     onClick = { onPickPerson(id) },
+                                    onImageClick = { onPersonSheet(id) },
                                 )
                             }
                         }
@@ -937,6 +938,7 @@ private fun SuggestPersonRow(
     originalName: String?,
     photoUrl: String?,
     onClick: () -> Unit,
+    onImageClick: () -> Unit,
 ) {
     val metrics = LocalHomeMetrics.current
     val posterW = if (metrics.isTablet) 84.dp else 48.dp
@@ -958,7 +960,8 @@ private fun SuggestPersonRow(
             modifier = Modifier
                 .size(posterW, posterH)
                 .clip(RoundedCornerShape(if (metrics.isTablet) 10.dp else 6.dp))
-                .background(MaterialTheme.colorScheme.outline.copy(alpha = 0.25f)),
+                .background(MaterialTheme.colorScheme.outline.copy(alpha = 0.25f))
+                .clickable(onClick = onImageClick),
         )
         Spacer(Modifier.width(if (metrics.isTablet) 16.dp else 12.dp))
         Column(Modifier.weight(1f)) {
