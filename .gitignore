@@ -1,4 +1,5 @@
 *.iml
+.gigacode
 .gradle
 .idea
 /local.properties
