@@ -51,6 +51,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -68,7 +69,7 @@ import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
@@ -135,16 +136,17 @@ fun HomeScreen(
     var favoriteIds by remember { mutableStateOf<Set<String>>(emptySet()) }
     var favoriteBusyIds by remember { mutableStateOf<Set<String>>(emptySet()) }
 
+    val trimmedQuery = query.trim()
+
     val searchFocus = remember { FocusRequester() }
     val scope = rememberCoroutineScope()
     val session by SessionRepository.state.collectAsStateWithLifecycle()
     val listState = rememberLazyListState()
-    var headerHeightPx by remember { mutableStateOf(0f) }
-    val headerOffsetPx = remember { mutableStateOf(0f) }
 
-    // NestedScrollConnection: хедер двигается от реальной дельты скролла,
-    // без искусственных скачков при смене firstVisibleItemIndex.
-    val headerNestedScrollConnection = remember(headerHeightPx) {
+    var headerHeightPx by remember { mutableFloatStateOf(0f) }
+    val headerOffsetPx = remember { mutableFloatStateOf(0f) }
+
+    val headerNestedScrollConnection = remember(headerHeightPx, listState) {
         object : NestedScrollConnection {
             override fun onPreScroll(
                 available: Offset,
@@ -156,11 +158,18 @@ fun HomeScreen(
                 val delta = available.y
                 if (delta == 0f) return Offset.Zero
 
-                val oldOffset = headerOffsetPx.value
+                if (!listState.canScrollForward
+                    && !listState.canScrollBackward
+                    && headerOffsetPx.floatValue >= 0f
+                ) {
+                    return Offset.Zero
+                }
+
+                val oldOffset = headerOffsetPx.floatValue
                 val newOffset = (oldOffset + delta).coerceIn(-h, 0f)
                 val consumed = newOffset - oldOffset
 
-                headerOffsetPx.value = newOffset
+                headerOffsetPx.floatValue = newOffset
 
                 return Offset(0f, consumed)
             }
@@ -300,11 +309,11 @@ fun HomeScreen(
 
     LaunchedEffect(state.filter) {
         listState.scrollToItem(0)
-        headerOffsetPx.value = 0f
+        headerOffsetPx.floatValue = 0f
     }
 
     LaunchedEffect(searchActive) {
-        if (searchActive) headerOffsetPx.value = 0f
+        if (searchActive) headerOffsetPx.floatValue = 0f
     }
 
     CompositionLocalProvider(LocalHomeMetrics provides metrics) {
@@ -348,7 +357,7 @@ fun HomeScreen(
                             ContentColumn(metrics) {
                                 val density = LocalDensity.current
                                 val headerTopPadding = with(density) {
-                                    ((headerHeightPx + headerOffsetPx.value).coerceAtLeast(0f)).toDp()
+                                    ((headerHeightPx + headerOffsetPx.floatValue).coerceAtLeast(0f)).toDp()
                                 }
 
                                 LazyColumn(
@@ -493,9 +502,9 @@ fun HomeScreen(
                     }
                 }
 
-                if (searchActive && query.trim().length >= 2) {
+                if (searchActive && trimmedQuery.length >= 2) {
                     val searchOverlayTop = with(LocalDensity.current) {
-                        (headerHeightPx + headerOffsetPx.value).coerceAtLeast(0f).toDp()
+                        (headerHeightPx + headerOffsetPx.floatValue).coerceAtLeast(0f).toDp()
                     }
 
                     HomeSearchResults(
@@ -536,12 +545,6 @@ fun HomeScreen(
 
             // Header
             ContentColumn(metrics) {
-                val headerAlpha = if (headerHeightPx > 0f) {
-                    (1f + headerOffsetPx.value / headerHeightPx).coerceIn(0f, 1f)
-                } else {
-                    1f
-                }
-
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -552,13 +555,17 @@ fun HomeScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .graphicsLayer {
-                                translationY = headerOffsetPx.value
-                                alpha = headerAlpha
+                                translationY = headerOffsetPx.floatValue
+                                alpha = if (headerHeightPx > 0f) {
+                                    (1f + translationY / headerHeightPx).coerceIn(0f, 1f)
+                                } else {
+                                    1f
+                                }
                             }
                             .background(MaterialTheme.colorScheme.background)
                             .statusBarsPadding()
-                            .onGloballyPositioned { coords ->
-                                headerHeightPx = coords.size.height.toFloat()
+                            .onSizeChanged { size ->
+                                headerHeightPx = size.height.toFloat()
                             }
                             .padding(
                                 horizontal = metrics.screenPadding,
@@ -628,7 +635,7 @@ fun HomeScreen(
                             }
                         }
 
-                        val hideChips = searchActive && query.trim().length >= 2
+                        val hideChips = searchActive && trimmedQuery.length >= 2
                         if (!hideChips) {
                             Spacer(Modifier.height(metrics.sectionGap))
                             CategoryChips(
@@ -873,7 +880,9 @@ private fun SuggestTitleRow(
     val favHit = if (metrics.isTablet) 56.dp else 36.dp
     val favIcon = if (metrics.isTablet) 36.dp else 24.dp
 
-    val genres = genreLabelsOf(item.genres, limit = if (metrics.isTablet) 4 else 3)
+    val genres = remember(item.genres, metrics.isTablet) {
+        genreLabelsOf(item.genres, limit = if (metrics.isTablet) 4 else 3)
+    }
     val typeYear = listOfNotNull(
         item.typeLabelRu().takeIf { it.isNotBlank() },
         item.year?.takeIf { it.isNotBlank() },
@@ -927,11 +936,14 @@ private fun SuggestTitleRow(
                     fontWeight = FontWeight.SemiBold,
                 )
             } else {
-                Text(
-                    text = buildAnnotatedString {
+                val onBg = MaterialTheme.colorScheme.onBackground
+                val onSurfaceVar = MaterialTheme.colorScheme.onSurfaceVariant
+
+                val annotatedTitle = remember(ruTitle, original, titleSize, onBg, onSurfaceVar) {
+                    buildAnnotatedString {
                         withStyle(
                             SpanStyle(
-                                color = MaterialTheme.colorScheme.onBackground,
+                                color = onBg,
                                 fontWeight = FontWeight.SemiBold,
                                 fontSize = titleSize,
                             ),
@@ -940,7 +952,7 @@ private fun SuggestTitleRow(
                         }
                         withStyle(
                             SpanStyle(
-                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.65f),
+                                color = onSurfaceVar.copy(alpha = 0.65f),
                                 fontWeight = FontWeight.Normal,
                                 fontSize = titleSize,
                             ),
@@ -948,7 +960,11 @@ private fun SuggestTitleRow(
                             append(" — ")
                             append(original)
                         }
-                    },
+                    }
+                }
+
+                Text(
+                    text = annotatedTitle,
                     lineHeight = metrics.lineOf(titleSize),
                     maxLines = 1,
                     softWrap = false,
@@ -1120,8 +1136,9 @@ private fun SuggestRatingChip(
     color: Color,
     fontSize: TextUnit,
 ) {
+    val formatted = remember(value) { "%.1f".format(value) }
     Text(
-        text = "$label ${"%.1f".format(value)}",
+        text = "$label $formatted",
         color = Color.Black,
         fontSize = fontSize,
         fontWeight = FontWeight.Bold,
@@ -1137,20 +1154,13 @@ private fun ContentColumn(
     metrics: HomeMetrics,
     content: @Composable () -> Unit,
 ) {
-    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .then(
-                    if (metrics.contentMaxWidth != Dp.Unspecified) {
-                        Modifier.widthIn(max = metrics.contentMaxWidth)
-                    } else {
-                        Modifier
-                    },
-                ),
-        ) {
-            content()
-        }
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .widthIn(max = metrics.contentMaxWidth),
+        contentAlignment = Alignment.TopCenter,
+    ) {
+        content()
     }
 }
 
