@@ -369,6 +369,9 @@ private fun SearchControlsRow(
     }
 
     val metrics = LocalHomeMetrics.current
+    val typeTextSize = if (metrics.isTablet) metrics.searchTextSize else metrics.chipTextSize
+    val chipHeight = if (metrics.isTablet) 44.dp else 32.dp
+    val menuTextSize = if (metrics.isTablet) metrics.cardMetaSize else metrics.searchTextSize
 
     FlowRow(
         horizontalArrangement = Arrangement.spacedBy(metrics.blockGap),
@@ -381,16 +384,17 @@ private fun SearchControlsRow(
                 label = {
                     Text(
                         text = typeLabel,
-                        fontSize = textSize,
+                        fontSize = typeTextSize,
+                        fontWeight = if (metrics.isTablet) FontWeight.Medium else FontWeight.Normal,
                         maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
+                        softWrap = false,
                     )
                 },
                 trailingIcon = {
                     Icon(
                         Icons.Filled.ArrowDropDown,
                         contentDescription = null,
-                        modifier = Modifier.size(20.dp),
+                        modifier = Modifier.size(if (metrics.isTablet) 22.dp else 18.dp),
                     )
                 },
                 colors = FilterChipDefaults.filterChipColors(
@@ -400,10 +404,12 @@ private fun SearchControlsRow(
                     labelColor = MaterialTheme.colorScheme.onSurfaceVariant,
                 ),
                 border = null,
+                modifier = Modifier.height(chipHeight),
             )
             DropdownMenu(
                 expanded = typeMenu,
                 onDismissRequest = { typeMenu = false },
+                modifier = Modifier.widthIn(min = if (metrics.isTablet) 260.dp else 200.dp),
             ) {
                 types.forEach { opt ->
                     val value = opt.value ?: return@forEach
@@ -416,10 +422,14 @@ private fun SearchControlsRow(
                         onClick = { onToggleType(value) },
                         modifier = Modifier.padding(
                             vertical = if (metrics.isTablet) 6.dp else 4.dp,
-                            horizontal = 16.dp,
                         ),
                         text = {
-                            Text(opt.label ?: value, fontSize = textSize)
+                            Text(
+                                text = opt.label ?: value,
+                                fontSize = menuTextSize,
+                                fontWeight = if (checked) FontWeight.SemiBold else FontWeight.Normal,
+                                color = if (checked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                            )
                         },
                         trailingIcon = {
                             if (checked) {
@@ -427,6 +437,7 @@ private fun SearchControlsRow(
                                     Icons.Filled.Check,
                                     contentDescription = null,
                                     tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(if (metrics.isTablet) 24.dp else 20.dp),
                                 )
                             }
                         },
@@ -461,6 +472,7 @@ private fun SearchControlsRow(
                         selectedLabelColor = MaterialTheme.colorScheme.onPrimary,
                     ),
                     border = null,
+                    modifier = Modifier.height(chipHeight),
                 )
             }
         }
@@ -487,6 +499,7 @@ private fun SearchControlsRow(
                 selectedBorderColor = MaterialTheme.colorScheme.primary,
                 borderWidth = 1.5.dp,
             ),
+            modifier = Modifier.height(chipHeight),
         )
 
         if (filtersActive) {
@@ -512,6 +525,7 @@ private fun SearchControlsRow(
                     selectedBorderColor = MaterialTheme.colorScheme.error,
                     borderWidth = 1.5.dp,
                 ),
+                modifier = Modifier.height(chipHeight),
             )
         }
     }
