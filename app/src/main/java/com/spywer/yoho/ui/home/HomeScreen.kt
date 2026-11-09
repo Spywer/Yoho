@@ -589,8 +589,10 @@ fun HomeScreen(
                                 headerHeightPx = size.height.toFloat()
                             }
                             .padding(
-                                horizontal = metrics.screenPadding,
-                                vertical = metrics.sectionGap,
+                                start = metrics.screenPadding,
+                                top = metrics.sectionGap,
+                                end = metrics.screenPadding,
+                                bottom = 0.dp,
                             ),
                     ) {
                         Text(
