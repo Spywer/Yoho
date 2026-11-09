@@ -153,6 +153,7 @@
     <string name="detail_season_meta">%1$d серий · %2$s</string>
     <string name="detail_episode_n">Серия %d</string>
     <string name="detail_episode_aired">Вышла</string>
+    <string name="detail_episode_unknown_date">Дата неизвестна</string>
     <string name="detail_episode_upcoming">Ожидается</string>
     <string name="detail_episode_upcoming_in">Ожидается через %d дн.</string>
     <string name="detail_next_episode">Следующая серия</string>

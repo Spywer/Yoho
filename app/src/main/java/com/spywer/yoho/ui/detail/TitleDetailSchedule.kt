@@ -386,7 +386,8 @@ internal fun TitleDetailScheduleSection(
         selectedSeasonEpisodes.forEach { ep ->
             val metrics = LocalHomeMetrics.current
             val daysUntil = daysUntilAir(ep.airDate)
-            val aired = daysUntil == null || daysUntil <= 0
+            val unknownDate = ep.airDate.isNullOrBlank()
+            val aired = !unknownDate && (daysUntil == null || daysUntil <= 0)
             val statusColor = if (aired) {
                 Color(0xFF43A047)
             } else {
@@ -407,6 +408,7 @@ internal fun TitleDetailScheduleSection(
                     precision = null,
                     withMsk = false,
                 )
+                unknownDate -> "—"
                 !aired -> formatAirDateTimeMsk(
                     airDate = ep.airDate,
                     airAtMs = when {
@@ -505,6 +507,8 @@ internal fun TitleDetailScheduleSection(
                                 R.string.detail_episode_upcoming_in,
                                 daysUntil.toInt(),
                             )
+                        } else if (unknownDate) {
+                            stringResource(R.string.detail_episode_unknown_date)
                         } else {
                             stringResource(R.string.detail_episode_aired)
                         },

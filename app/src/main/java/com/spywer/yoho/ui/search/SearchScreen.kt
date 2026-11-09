@@ -304,18 +304,19 @@ fun SearchScreen(
                                 onResetFilters = viewModel::clearFilters,
                             )
 
-                            if (state.results.isNotEmpty()) {
-                                Spacer(Modifier.height(metrics.blockGap))
-                                Text(
-                                    text = stringResource(R.string.search_found, state.total),
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    fontSize = metrics.cardMetaSize,
-                                    lineHeight = metrics.lineOf(metrics.cardMetaSize),
-                                    maxLines = 1,
-                                    softWrap = false,
-                                    overflow = TextOverflow.Ellipsis,
-                                )
-                            }
+                            // TODO: hide search_found temporarily
+                            // if (state.results.isNotEmpty()) {
+                            //     Spacer(Modifier.height(metrics.blockGap))
+                            //     Text(
+                            //         text = stringResource(R.string.search_found, state.total),
+                            //         color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            //         fontSize = metrics.cardMetaSize,
+                            //         lineHeight = metrics.lineOf(metrics.cardMetaSize),
+                            //         maxLines = 1,
+                            //         softWrap = false,
+                            //         overflow = TextOverflow.Ellipsis,
+                            //     )
+                            // }
                         }
                     }
                 }
@@ -412,10 +413,14 @@ private fun SearchControlsRow(
                         value in selectedTypes
                     }
                     DropdownMenuItem(
+                        onClick = { onToggleType(value) },
+                        modifier = Modifier.padding(
+                            vertical = if (metrics.isTablet) 8.dp else 4.dp,
+                            horizontal = 16.dp,
+                        ),
                         text = {
                             Text(opt.label ?: value, fontSize = textSize)
                         },
-                        onClick = { onToggleType(value) },
                         trailingIcon = {
                             if (checked) {
                                 Icon(
