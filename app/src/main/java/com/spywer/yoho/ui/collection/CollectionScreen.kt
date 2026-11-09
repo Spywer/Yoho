@@ -1,6 +1,8 @@
 package com.spywer.yoho.ui.collection
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -15,20 +17,23 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.ui.platform.LocalView
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
-import androidx.activity.compose.BackHandler
 import androidx.compose.material.icons.automirrored.outlined.Sort
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.outlined.CheckBox
 import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.DateRange
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.SelectAll
-import androidx.compose.material.icons.outlined.DateRange
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -47,29 +52,37 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.rememberDateRangePickerState
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.rememberDateRangePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.zIndex
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.spywer.yoho.MainActivity
 import com.spywer.yoho.R
 import com.spywer.yoho.data.remote.DiaryEntryDto
 import com.spywer.yoho.data.remote.FavoriteItemDto
@@ -79,7 +92,6 @@ import com.spywer.yoho.ui.components.ContentErrorPlaceholder
 import com.spywer.yoho.ui.components.DiaryStatusDropdownMenu
 import com.spywer.yoho.ui.components.PosterCard
 import com.spywer.yoho.ui.components.YohoBackButton
-import com.spywer.yoho.MainActivity
 import com.spywer.yoho.ui.layout.HomeMetrics
 import com.spywer.yoho.ui.layout.LocalHomeMetrics
 import com.spywer.yoho.ui.layout.rememberHomeMetrics
@@ -100,6 +112,55 @@ fun CollectionScreen(
     val context = LocalContext.current
     val snackbar = remember { SnackbarHostState() }
     var confirmDelete by remember { mutableStateOf(false) }
+
+    val gridState = rememberLazyGridState()
+    var headerHeightPx by remember { mutableFloatStateOf(0f) }
+    val headerOffsetPx = remember { mutableFloatStateOf(0f) }
+
+    // Корректировка смещения при изменении высоты хедера
+    var prevHeaderHeightPx by remember { mutableFloatStateOf(0f) }
+    LaunchedEffect(headerHeightPx) {
+        val oldH = prevHeaderHeightPx
+        val newH = headerHeightPx
+        if (oldH > 0f && newH > 0f && newH != oldH) {
+            val offset = headerOffsetPx.floatValue
+            if (offset <= -oldH + 1f) {
+                headerOffsetPx.floatValue = -newH
+            } else {
+                headerOffsetPx.floatValue = 0f
+            }
+        }
+        prevHeaderHeightPx = newH
+    }
+
+    val headerNestedScrollConnection = remember {
+        object : NestedScrollConnection {
+            override fun onPreScroll(
+                available: Offset,
+                source: NestedScrollSource,
+            ): Offset {
+                val h = headerHeightPx
+                if (h <= 0f) return Offset.Zero
+
+                val delta = available.y
+                if (delta == 0f) return Offset.Zero
+
+                if (!gridState.canScrollForward
+                    && !gridState.canScrollBackward
+                    && headerOffsetPx.floatValue >= 0f
+                ) {
+                    return Offset.Zero
+                }
+
+                val oldOffset = headerOffsetPx.floatValue
+                val newOffset = (oldOffset + delta).coerceIn(-h, 0f)
+                val consumed = newOffset - oldOffset
+                headerOffsetPx.floatValue = newOffset
+                return Offset(0f, consumed)
+            }
+        }
+    }
+
     val titleRes = when (shelf) {
         CollectionShelf.Favorites -> R.string.favorites_section
         CollectionShelf.Diary -> R.string.diary_section
@@ -114,6 +175,20 @@ fun CollectionScreen(
         val msg = state.actionError ?: return@LaunchedEffect
         snackbar.showSnackbar(msg)
         viewModel.consumeActionError()
+    }
+
+    LaunchedEffect(
+        shelf,
+        state.diaryStatusFilter,
+        state.diaryReactionFilter,
+        state.favoritesSort,
+        state.historySort,
+        state.historyDateFromEpochDay,
+        state.historyDateToEpochDay,
+        state.diarySort,
+    ) {
+        gridState.scrollToItem(0)
+        headerOffsetPx.floatValue = 0f
     }
 
     fun openFavorite(item: FavoriteItemDto) {
@@ -161,14 +236,15 @@ fun CollectionScreen(
 
     CompositionLocalProvider(LocalHomeMetrics provides metrics) {
         Box(Modifier.fillMaxSize()) {
-            Column(
-                Modifier
-                    .fillMaxSize()
-                    .statusBarsPadding(),
-            ) {
+            Column(Modifier.fillMaxSize()) {
                 when {
                     state.loading -> {
-                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Box(
+                            Modifier
+                                .fillMaxSize()
+                                .statusBarsPadding(),
+                            contentAlignment = Alignment.Center,
+                        ) {
                             CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
                         }
                     }
@@ -183,6 +259,7 @@ fun CollectionScreen(
                         Column(
                             Modifier
                                 .fillMaxSize()
+                                .statusBarsPadding()
                                 .padding(if (metrics.isTablet) 40.dp else 24.dp),
                             horizontalAlignment = Alignment.CenterHorizontally,
                             verticalArrangement = Arrangement.Center,
@@ -215,280 +292,327 @@ fun CollectionScreen(
                     }
 
                     state.error != null &&
-                        state.favorites.isEmpty() &&
-                        state.history.isEmpty() &&
-                        state.diary.isEmpty() -> {
+                            state.favorites.isEmpty() &&
+                            state.history.isEmpty() &&
+                            state.diary.isEmpty() -> {
                         ContentErrorPlaceholder(
                             onRetry = { viewModel.load() },
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .statusBarsPadding(),
                         )
                     }
 
                     else -> {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = metrics.screenPadding)
-                                .padding(top = metrics.blockGap),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(metrics.blockGap),
-                        ) {
-                            // На телефоне — системная «назад»; кнопка только на планшете
-                            if (onBack != null && metrics.isTablet) {
-                                YohoBackButton(
-                                    onClick = onBack,
-                                    size = 48.dp,
-                                )
-                            }
-                            Text(
-                                text = stringResource(titleRes),
-                                color = MaterialTheme.colorScheme.onBackground,
-                                fontSize = (metrics.sectionTitleSize.value + 2f).sp,
-                                fontWeight = FontWeight.Bold,
-                                modifier = Modifier.weight(1f),
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
+                        val density = LocalDensity.current
+                        val statusBarHeight = with(density) {
+                            ViewCompat.getRootWindowInsets(LocalView.current)
+                                ?.getInsets(WindowInsetsCompat.Type.statusBars())?.top
+                                ?.toFloat() ?: 0f
                         }
-                        ShelfActionsBar(
-                            state = state.copy(shelf = shelf),
-                            metrics = metrics,
-                            onFavoritesSort = viewModel::setFavoritesSort,
-                            onHistorySort = viewModel::setHistorySort,
-                            onHistoryDateRange = viewModel::setHistoryDateRange,
-                            onClearHistoryDateRange = viewModel::clearHistoryDateRange,
-                            onDiarySort = viewModel::setDiarySort,
-                            onEnterSelect = viewModel::startSelectionMode,
-                            onSelectAll = viewModel::selectAllVisible,
-                            onClearSelection = viewModel::clearSelection,
-                            onDelete = { confirmDelete = true },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = metrics.screenPadding)
-                                .padding(vertical = metrics.blockGap),
-                        )
-                        if (shelf == CollectionShelf.Diary) {
-                            DiaryStatusChips(
-                                statusSelected = state.diaryStatusFilter,
-                                reactionSelected = state.diaryReactionFilter,
-                                onStatusSelect = viewModel::setDiaryStatusFilter,
-                                onReactionSelect = viewModel::setDiaryReactionFilter,
-                                metrics = metrics,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(
-                                        horizontal = metrics.screenPadding,
-                                        vertical = metrics.blockGap,
-                                    ),
-                            )
-                        }
-                        Box(
-                            Modifier
-                                .fillMaxSize()
-                                .padding(top = metrics.blockGap),
-                        ) {
-                        key(
-                            shelf,
-                            state.diaryStatusFilter,
-                            state.diaryReactionFilter,
-                            state.favoritesSort,
-                            state.historySort,
-                            state.historyDateFromEpochDay,
-                            state.historyDateToEpochDay,
-                            state.diarySort,
-                        ) {
-                        PullToRefreshBox(
-                            isRefreshing = state.refreshing,
-                            onRefresh = { viewModel.load(refresh = true) },
-                            modifier = Modifier.fillMaxSize(),
-                        ) {
-                            val historyFiltered = state.historyDateFromEpochDay != null ||
-                                state.historyDateToEpochDay != null
-                            val emptyText = when (shelf) {
-                                CollectionShelf.Favorites -> stringResource(R.string.favorites_empty)
-                                CollectionShelf.History -> stringResource(
-                                    if (historyFiltered && state.history.isNotEmpty()) {
-                                        R.string.collection_history_empty_filtered
-                                    } else {
-                                        R.string.history_empty
-                                    },
-                                )
-                                CollectionShelf.Diary -> stringResource(R.string.diary_empty)
-                            }
-                            val shelfEmpty = when (shelf) {
-                                CollectionShelf.Favorites -> state.displayedFavorites.isEmpty()
-                                CollectionShelf.History -> state.displayedHistory.isEmpty()
-                                CollectionShelf.Diary -> state.displayedDiary.isEmpty()
-                            }
-                            if (shelfEmpty) {
-                                val emptySize = if (metrics.isTablet) {
-                                    metrics.cardMetaSize
-                                } else {
-                                    metrics.chipTextSize
-                                }
-                                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                    Text(
-                                        text = emptyText,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        textAlign = TextAlign.Center,
-                                        fontSize = emptySize,
-                                        lineHeight = metrics.lineOf(emptySize),
-                                        fontWeight = if (metrics.isTablet) {
-                                            FontWeight.Medium
-                                        } else {
-                                            FontWeight.Normal
-                                        },
-                                        modifier = Modifier.padding(horizontal = metrics.screenPadding),
-                                    )
-                                }
-                            } else {
-                                val diaryStatusPlaceholder =
-                                    stringResource(R.string.collection_diary_set_status)
-                                LazyVerticalGrid(
-                                    columns = GridCells.Adaptive(minSize = metrics.poster),
-                                    contentPadding = PaddingValues(
-                                        horizontal = metrics.screenPadding,
-                                        vertical = metrics.blockGap,
-                                    ),
-                                    horizontalArrangement = Arrangement.spacedBy(metrics.cardGap),
-                                    verticalArrangement = Arrangement.spacedBy(metrics.cardGap),
-                                    modifier = Modifier.fillMaxSize(),
+                        val headerTopPadding = with(density) {
+                            ((headerHeightPx + headerOffsetPx.floatValue + statusBarHeight).coerceAtLeast(0f)).toDp()
+                        } + metrics.blockGap
+
+                        Box(Modifier.fillMaxSize()) {
+                            key(
+                                shelf,
+                                state.diaryStatusFilter,
+                                state.diaryReactionFilter,
+                                state.favoritesSort,
+                                state.historySort,
+                                state.historyDateFromEpochDay,
+                                state.historyDateToEpochDay,
+                                state.diarySort,
+                            ) {
+                                PullToRefreshBox(
+                                    isRefreshing = state.refreshing,
+                                    onRefresh = { viewModel.load(refresh = true) },
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .nestedScroll(headerNestedScrollConnection),
                                 ) {
-                                    when (shelf) {
-                                        CollectionShelf.Favorites -> {
-                                            items(
-                                                state.displayedFavorites,
-                                                key = { "fav-${it.selectionKey()}" },
-                                            ) { item ->
-                                                val key = item.selectionKey()
-                                                val selected = key in state.selectedIds
-                                                val title = remember(key, item) { item.toTitleDto() }
-                                                PosterCard(
-                                                    item = title,
-                                                    selected = selected,
-                                                    selectionMode = state.selectionMode,
-                                                    onClick = {
-                                                        if (state.selectionMode) {
-                                                            viewModel.toggleSelection(key)
-                                                        } else {
-                                                            openFavorite(item)
+                                    val historyFiltered = state.historyDateFromEpochDay != null ||
+                                            state.historyDateToEpochDay != null
+                                    val emptyText = when (shelf) {
+                                        CollectionShelf.Favorites -> stringResource(R.string.favorites_empty)
+                                        CollectionShelf.History -> stringResource(
+                                            if (historyFiltered && state.history.isNotEmpty()) {
+                                                R.string.collection_history_empty_filtered
+                                            } else {
+                                                R.string.history_empty
+                                            },
+                                        )
+
+                                        CollectionShelf.Diary -> stringResource(R.string.diary_empty)
+                                    }
+                                    val shelfEmpty = when (shelf) {
+                                        CollectionShelf.Favorites -> state.displayedFavorites.isEmpty()
+                                        CollectionShelf.History -> state.displayedHistory.isEmpty()
+                                        CollectionShelf.Diary -> state.displayedDiary.isEmpty()
+                                    }
+
+                                    if (shelfEmpty) {
+                                        val emptySize = if (metrics.isTablet) {
+                                            metrics.cardMetaSize
+                                        } else {
+                                            metrics.chipTextSize
+                                        }
+                                        Box(
+                                            Modifier.fillMaxSize(),
+                                            contentAlignment = Alignment.Center,
+                                        ) {
+                                            Text(
+                                                text = emptyText,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                textAlign = TextAlign.Center,
+                                                fontSize = emptySize,
+                                                lineHeight = metrics.lineOf(emptySize),
+                                                fontWeight = if (metrics.isTablet) {
+                                                    FontWeight.Medium
+                                                } else {
+                                                    FontWeight.Normal
+                                                },
+                                                modifier = Modifier.padding(horizontal = metrics.screenPadding),
+                                            )
+                                        }
+                                    } else {
+                                        val diaryStatusPlaceholder =
+                                            stringResource(R.string.collection_diary_set_status)
+                                        LazyVerticalGrid(
+                                            columns = GridCells.Adaptive(minSize = metrics.poster),
+                                            state = gridState,
+                                            contentPadding = PaddingValues(
+                                                top = headerTopPadding,
+                                                start = metrics.screenPadding,
+                                                end = metrics.screenPadding,
+                                                bottom = metrics.blockGap,
+                                            ),
+                                            horizontalArrangement = Arrangement.spacedBy(metrics.cardGap),
+                                            verticalArrangement = Arrangement.spacedBy(metrics.cardGap),
+                                            modifier = Modifier.fillMaxSize(),
+                                        ) {
+                                            when (shelf) {
+                                                CollectionShelf.Favorites -> {
+                                                    items(
+                                                        state.displayedFavorites,
+                                                        key = { "fav-${it.selectionKey()}" },
+                                                    ) { item ->
+                                                        val key = item.selectionKey()
+                                                        val selected = key in state.selectedIds
+                                                        val title = remember(key, item) { item.toTitleDto() }
+                                                        PosterCard(
+                                                            item = title,
+                                                            selected = selected,
+                                                            selectionMode = state.selectionMode,
+                                                            onClick = {
+                                                                if (state.selectionMode) {
+                                                                    viewModel.toggleSelection(key)
+                                                                } else {
+                                                                    openFavorite(item)
+                                                                }
+                                                            },
+                                                            onLongClick = {
+                                                                viewModel.enterSelection(key)
+                                                            },
+                                                            modifier = Modifier.fillMaxWidth(),
+                                                        )
+                                                    }
+                                                }
+
+                                                CollectionShelf.History -> {
+                                                    items(
+                                                        state.displayedHistory,
+                                                        key = { "hist-${it.id ?: it.contentId}-${it.ts}" },
+                                                    ) { item ->
+                                                        val title = remember(
+                                                            item.id,
+                                                            item.contentId,
+                                                            item.ts,
+                                                            item,
+                                                        ) { item.toTitleDto() }
+                                                        PosterCard(
+                                                            item = title,
+                                                            topStartLabel = formatWatchedTs(item.ts),
+                                                            onClick = { openFavorite(item) },
+                                                            modifier = Modifier.fillMaxWidth(),
+                                                        )
+                                                    }
+                                                }
+
+                                                CollectionShelf.Diary -> {
+                                                    items(
+                                                        state.displayedDiary,
+                                                        key = { "diary-${it.selectionKey()}" },
+                                                    ) { item ->
+                                                        val key = item.selectionKey()
+                                                        val selected = key in state.selectedIds
+                                                        val title = remember(
+                                                            key,
+                                                            item,
+                                                            diaryStatusPlaceholder,
+                                                        ) {
+                                                            item.toTitleDto(diaryStatusPlaceholder)
                                                         }
-                                                    },
-                                                    onLongClick = {
-                                                        viewModel.enterSelection(key)
-                                                    },
-                                                    modifier = Modifier.fillMaxWidth(),
-                                                )
-                                            }
-                                        }
-                                        CollectionShelf.History -> {
-                                            items(
-                                                state.displayedHistory,
-                                                key = { "hist-${it.id ?: it.contentId}-${it.ts}" },
-                                            ) { item ->
-                                                val title = remember(
-                                                    item.id,
-                                                    item.contentId,
-                                                    item.ts,
-                                                    item,
-                                                ) { item.toTitleDto() }
-                                                PosterCard(
-                                                    item = title,
-                                                    topStartLabel = formatWatchedTs(item.ts),
-                                                    onClick = { openFavorite(item) },
-                                                    modifier = Modifier.fillMaxWidth(),
-                                                )
-                                            }
-                                        }
-                                        CollectionShelf.Diary -> {
-                                            items(
-                                                state.displayedDiary,
-                                                key = { "diary-${it.selectionKey()}" },
-                                            ) { item ->
-                                                val key = item.selectionKey()
-                                                val selected = key in state.selectedIds
-                                                val title = remember(key, item, diaryStatusPlaceholder) {
-                                                    item.toTitleDto(diaryStatusPlaceholder)
-                                                }
-                                                var statusMenuOpen by remember(key) {
-                                                    mutableStateOf(false)
-                                                }
-                                                PosterCard(
-                                                    item = title,
-                                                    selected = selected,
-                                                    selectionMode = state.selectionMode,
-                                                    reaction = item.sourceReaction
-                                                        ?.takeIf {
-                                                            it == "like" || it == "dislike"
-                                                        },
-                                                    topStartLabel = formatWatchedDate(
-                                                        item.watchedAt,
-                                                    ),
-                                                    onReasonClick = if (!state.selectionMode) {
-                                                        { statusMenuOpen = true }
-                                                    } else {
-                                                        null
-                                                    },
-                                                    reasonMenu = if (!state.selectionMode) {
-                                                        {
-                                                            DiaryStatusDropdownMenu(
-                                                                expanded = statusMenuOpen,
-                                                                currentStatus = item.statusLabel,
-                                                                busy = state.mutating,
-                                                                metrics = metrics,
-                                                                onDismiss = {
-                                                                    statusMenuOpen = false
+                                                        var statusMenuOpen by remember(key) {
+                                                            mutableStateOf(false)
+                                                        }
+                                                        PosterCard(
+                                                            item = title,
+                                                            selected = selected,
+                                                            selectionMode = state.selectionMode,
+                                                            reaction = item.sourceReaction
+                                                                ?.takeIf {
+                                                                    it == "like" || it == "dislike"
                                                                 },
-                                                                onSelectStatus = { label ->
-                                                                    statusMenuOpen = false
-                                                                    viewModel.changeDiaryStatus(
-                                                                        key,
-                                                                        label,
+                                                            topStartLabel = formatWatchedDate(
+                                                                item.watchedAt,
+                                                            ),
+                                                            onReasonClick = if (!state.selectionMode) {
+                                                                { statusMenuOpen = true }
+                                                            } else {
+                                                                null
+                                                            },
+                                                            reasonMenu = if (!state.selectionMode) {
+                                                                {
+                                                                    DiaryStatusDropdownMenu(
+                                                                        expanded = statusMenuOpen,
+                                                                        currentStatus = item.statusLabel,
+                                                                        busy = state.mutating,
+                                                                        metrics = metrics,
+                                                                        onDismiss = {
+                                                                            statusMenuOpen = false
+                                                                        },
+                                                                        onSelectStatus = { label ->
+                                                                            statusMenuOpen = false
+                                                                            viewModel.changeDiaryStatus(
+                                                                                key,
+                                                                                label,
+                                                                            )
+                                                                        },
+                                                                        onRemove = {
+                                                                            statusMenuOpen = false
+                                                                            viewModel.clearDiaryStatus(key)
+                                                                        },
                                                                     )
-                                                                },
-                                                                onRemove = {
-                                                                    statusMenuOpen = false
-                                                                    viewModel.clearDiaryStatus(key)
-                                                                },
-                                                            )
-                                                        }
-                                                    } else {
-                                                        null
-                                                    },
-                                                    onClick = {
-                                                        if (state.selectionMode) {
-                                                            viewModel.toggleSelection(key)
-                                                        } else {
-                                                            openDiary(item)
-                                                        }
-                                                    },
-                                                    onLongClick = {
-                                                        viewModel.enterSelection(key)
-                                                    },
-                                                    modifier = Modifier.fillMaxWidth(),
-                                                )
+                                                                }
+                                                            } else {
+                                                                null
+                                                            },
+                                                            onClick = {
+                                                                if (state.selectionMode) {
+                                                                    viewModel.toggleSelection(key)
+                                                                } else {
+                                                                    openDiary(item)
+                                                                }
+                                                            },
+                                                            onLongClick = {
+                                                                viewModel.enterSelection(key)
+                                                            },
+                                                            modifier = Modifier.fillMaxWidth(),
+                                                        )
+                                                    }
+                                                }
                                             }
                                         }
                                     }
                                 }
                             }
-                        }
-                        }
-                        if (state.mutating) {
-                            Box(
-                                Modifier
-                                    .fillMaxSize()
-                                    .padding(top = metrics.blockGap),
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                CircularProgressIndicator(
-                                    color = MaterialTheme.colorScheme.primary,
-                                )
+
+                            if (state.mutating) {
+                                Box(
+                                    Modifier.fillMaxSize(),
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    CircularProgressIndicator(
+                                        color = MaterialTheme.colorScheme.primary,
+                                    )
+                                }
                             }
-                        }
+
+                            // Header
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .graphicsLayer {
+                                        translationY = headerOffsetPx.floatValue
+                                        alpha = if (headerHeightPx > 0f) {
+                                            (1f + translationY / headerHeightPx).coerceIn(0f, 1f)
+                                        } else {
+                                            1f
+                                        }
+                                    }
+                                    .background(MaterialTheme.colorScheme.background)
+                                    .statusBarsPadding()
+                                    .onSizeChanged { size ->
+                                        headerHeightPx = size.height.toFloat()
+                                    }
+                                    .zIndex(1f),
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = metrics.screenPadding)
+                                        .padding(top = metrics.blockGap),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(metrics.blockGap),
+                                ) {
+                                    if (onBack != null && metrics.isTablet) {
+                                        YohoBackButton(
+                                            onClick = onBack,
+                                            size = 48.dp,
+                                        )
+                                    }
+                                    Text(
+                                        text = stringResource(titleRes),
+                                        color = MaterialTheme.colorScheme.onBackground,
+                                        fontSize = (metrics.sectionTitleSize.value + 2f).sp,
+                                        fontWeight = FontWeight.Bold,
+                                        modifier = Modifier.weight(1f),
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                }
+
+                                ShelfActionsBar(
+                                    state = state.copy(shelf = shelf),
+                                    metrics = metrics,
+                                    onFavoritesSort = viewModel::setFavoritesSort,
+                                    onHistorySort = viewModel::setHistorySort,
+                                    onHistoryDateRange = viewModel::setHistoryDateRange,
+                                    onClearHistoryDateRange = viewModel::clearHistoryDateRange,
+                                    onDiarySort = viewModel::setDiarySort,
+                                    onEnterSelect = viewModel::startSelectionMode,
+                                    onSelectAll = viewModel::selectAllVisible,
+                                    onClearSelection = viewModel::clearSelection,
+                                    onDelete = { confirmDelete = true },
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = metrics.screenPadding)
+                                        .padding(vertical = metrics.blockGap),
+                                )
+
+                                if (shelf == CollectionShelf.Diary) {
+                                    DiaryStatusChips(
+                                        statusSelected = state.diaryStatusFilter,
+                                        reactionSelected = state.diaryReactionFilter,
+                                        onStatusSelect = viewModel::setDiaryStatusFilter,
+                                        onReactionSelect = viewModel::setDiaryReactionFilter,
+                                        metrics = metrics,
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(
+                                                horizontal = metrics.screenPadding,
+                                                vertical = metrics.blockGap,
+                                            ),
+                                    )
+                                }
+                            }
                         }
                     }
                 }
             }
+
             SnackbarHost(
                 hostState = snackbar,
                 modifier = Modifier
@@ -528,7 +652,6 @@ fun CollectionScreen(
             },
         )
     }
-
 }
 
 @Composable
@@ -548,8 +671,10 @@ private fun ShelfActionsBar(
 ) {
     var sortOpen by remember { mutableStateOf(false) }
     var dateRangeOpen by remember { mutableStateOf(false) }
+
     val historyBar = state.shelf == CollectionShelf.History
     val compactHistory = historyBar && !metrics.isTablet
+
     val textSize = when {
         compactHistory -> metrics.chipTextSize
         metrics.isTablet -> metrics.cardMetaSize
@@ -568,13 +693,12 @@ private fun ShelfActionsBar(
     }
     val menuTextSize = if (metrics.isTablet) metrics.cardMetaSize else metrics.searchTextSize
     val canSelect = state.shelf == CollectionShelf.Favorites ||
-        state.shelf == CollectionShelf.Diary
+            state.shelf == CollectionShelf.Diary
     val historyRangeActive = state.historyDateFromEpochDay != null ||
-        state.historyDateToEpochDay != null
+            state.historyDateToEpochDay != null
     val actionColors = ButtonDefaults.textButtonColors(
         contentColor = MaterialTheme.colorScheme.primary,
     )
-
     val compactSelecting = !metrics.isTablet && state.selectionMode && canSelect
 
     Row(
@@ -582,7 +706,6 @@ private fun ShelfActionsBar(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
-        // Compact + выбор: сортировку прячем — место под счётчик и действия.
         if (compactSelecting) {
             Text(
                 text = stringResource(
@@ -598,187 +721,201 @@ private fun ShelfActionsBar(
                     .padding(end = 4.dp),
             )
         } else {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(if (compactHistory) 0.dp else 4.dp),
-            modifier = Modifier.weight(1f, fill = false),
-        ) {
-        Box {
-            TextButton(
-                onClick = { sortOpen = true },
-                colors = actionColors,
-                contentPadding = actionPad,
-                modifier = Modifier.heightIn(min = actionMin),
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(if (compactHistory) 0.dp else 4.dp),
+                modifier = Modifier.weight(1f, fill = false),
             ) {
-                Icon(
-                    Icons.AutoMirrored.Outlined.Sort,
-                    contentDescription = null,
-                    modifier = Modifier.size(iconSize),
-                )
-                Text(
-                    text = "  " + when (state.shelf) {
-                        CollectionShelf.Favorites -> when (state.favoritesSort) {
-                            FavoritesSort.DateDesc ->
-                                stringResource(R.string.collection_sort_date_desc)
-                            FavoritesSort.DateAsc ->
-                                stringResource(R.string.collection_sort_date_asc)
-                        }
-                        CollectionShelf.History -> when (state.historySort) {
-                            FavoritesSort.DateDesc ->
-                                stringResource(R.string.collection_sort_date_desc)
-                            FavoritesSort.DateAsc ->
-                                stringResource(R.string.collection_sort_date_asc)
-                        }
-                        CollectionShelf.Diary -> when (state.diarySort) {
-                            DiarySort.AddedDesc ->
-                                stringResource(R.string.collection_sort_added_desc)
-                            DiarySort.AddedAsc ->
-                                stringResource(R.string.collection_sort_added_asc)
-                            DiarySort.WatchedDesc ->
-                                stringResource(R.string.collection_sort_watched_desc)
-                            DiarySort.WatchedAsc ->
-                                stringResource(R.string.collection_sort_watched_asc)
-                        }
-                    },
-                    fontSize = textSize,
-                    fontWeight = if (metrics.isTablet) FontWeight.Medium else FontWeight.Normal,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-            val menuItemPadding = PaddingValues(
-                horizontal = 16.dp,
-                vertical = if (metrics.isTablet) 16.dp else 12.dp,
-            )
-            @Composable
-            fun SortMenuItem(
-                label: String,
-                selected: Boolean,
-                onClick: () -> Unit,
-            ) {
-                DropdownMenuItem(
-                    text = {
+                Box {
+                    TextButton(
+                        onClick = { sortOpen = true },
+                        colors = actionColors,
+                        contentPadding = actionPad,
+                        modifier = Modifier.heightIn(min = actionMin),
+                    ) {
+                        Icon(
+                            Icons.AutoMirrored.Outlined.Sort,
+                            contentDescription = null,
+                            modifier = Modifier.size(iconSize),
+                        )
                         Text(
-                            text = label,
-                            fontSize = menuTextSize,
-                            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
-                            color = if (selected) {
-                                MaterialTheme.colorScheme.primary
-                            } else {
-                                MaterialTheme.colorScheme.onSurface
+                            text = "  " + when (state.shelf) {
+                                CollectionShelf.Favorites -> when (state.favoritesSort) {
+                                    FavoritesSort.DateDesc ->
+                                        stringResource(R.string.collection_sort_date_desc)
+
+                                    FavoritesSort.DateAsc ->
+                                        stringResource(R.string.collection_sort_date_asc)
+                                }
+
+                                CollectionShelf.History -> when (state.historySort) {
+                                    FavoritesSort.DateDesc ->
+                                        stringResource(R.string.collection_sort_date_desc)
+
+                                    FavoritesSort.DateAsc ->
+                                        stringResource(R.string.collection_sort_date_asc)
+                                }
+
+                                CollectionShelf.Diary -> when (state.diarySort) {
+                                    DiarySort.AddedDesc ->
+                                        stringResource(R.string.collection_sort_added_desc)
+
+                                    DiarySort.AddedAsc ->
+                                        stringResource(R.string.collection_sort_added_asc)
+
+                                    DiarySort.WatchedDesc ->
+                                        stringResource(R.string.collection_sort_watched_desc)
+
+                                    DiarySort.WatchedAsc ->
+                                        stringResource(R.string.collection_sort_watched_asc)
+                                }
                             },
+                            fontSize = textSize,
+                            fontWeight = if (metrics.isTablet) FontWeight.Medium else FontWeight.Normal,
                             maxLines = 1,
-                            softWrap = false,
                             overflow = TextOverflow.Ellipsis,
                         )
-                    },
-                    onClick = {
-                        onClick()
-                        sortOpen = false
-                    },
-                    trailingIcon = if (selected) {
-                        {
-                            Icon(
-                                Icons.Filled.Check,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(if (metrics.isTablet) 24.dp else 20.dp),
-                            )
+                    }
+
+                    val menuItemPadding = PaddingValues(
+                        horizontal = 16.dp,
+                        vertical = if (metrics.isTablet) 16.dp else 12.dp,
+                    )
+
+                    @Composable
+                    fun SortMenuItem(
+                        label: String,
+                        selected: Boolean,
+                        onClick: () -> Unit,
+                    ) {
+                        DropdownMenuItem(
+                            text = {
+                                Text(
+                                    text = label,
+                                    fontSize = menuTextSize,
+                                    fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+                                    color = if (selected) {
+                                        MaterialTheme.colorScheme.primary
+                                    } else {
+                                        MaterialTheme.colorScheme.onSurface
+                                    },
+                                    maxLines = 1,
+                                    softWrap = false,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            },
+                            onClick = {
+                                onClick()
+                                sortOpen = false
+                            },
+                            trailingIcon = if (selected) {
+                                {
+                                    Icon(
+                                        Icons.Filled.Check,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(if (metrics.isTablet) 24.dp else 20.dp),
+                                    )
+                                }
+                            } else {
+                                null
+                            },
+                            contentPadding = menuItemPadding,
+                        )
+                    }
+
+                    DropdownMenu(
+                        expanded = sortOpen,
+                        onDismissRequest = { sortOpen = false },
+                        modifier = Modifier.widthIn(
+                            min = if (metrics.isTablet) 420.dp else 300.dp,
+                        ),
+                    ) {
+                        when (state.shelf) {
+                            CollectionShelf.Favorites -> {
+                                SortMenuItem(
+                                    label = stringResource(R.string.collection_sort_date_desc),
+                                    selected = state.favoritesSort == FavoritesSort.DateDesc,
+                                    onClick = { onFavoritesSort(FavoritesSort.DateDesc) },
+                                )
+                                SortMenuItem(
+                                    label = stringResource(R.string.collection_sort_date_asc),
+                                    selected = state.favoritesSort == FavoritesSort.DateAsc,
+                                    onClick = { onFavoritesSort(FavoritesSort.DateAsc) },
+                                )
+                            }
+
+                            CollectionShelf.History -> {
+                                SortMenuItem(
+                                    label = stringResource(R.string.collection_sort_date_desc),
+                                    selected = state.historySort == FavoritesSort.DateDesc,
+                                    onClick = { onHistorySort(FavoritesSort.DateDesc) },
+                                )
+                                SortMenuItem(
+                                    label = stringResource(R.string.collection_sort_date_asc),
+                                    selected = state.historySort == FavoritesSort.DateAsc,
+                                    onClick = { onHistorySort(FavoritesSort.DateAsc) },
+                                )
+                            }
+
+                            CollectionShelf.Diary -> {
+                                SortMenuItem(
+                                    label = stringResource(R.string.collection_sort_added_desc),
+                                    selected = state.diarySort == DiarySort.AddedDesc,
+                                    onClick = { onDiarySort(DiarySort.AddedDesc) },
+                                )
+                                SortMenuItem(
+                                    label = stringResource(R.string.collection_sort_added_asc),
+                                    selected = state.diarySort == DiarySort.AddedAsc,
+                                    onClick = { onDiarySort(DiarySort.AddedAsc) },
+                                )
+                                SortMenuItem(
+                                    label = stringResource(R.string.collection_sort_watched_desc),
+                                    selected = state.diarySort == DiarySort.WatchedDesc,
+                                    onClick = { onDiarySort(DiarySort.WatchedDesc) },
+                                )
+                                SortMenuItem(
+                                    label = stringResource(R.string.collection_sort_watched_asc),
+                                    selected = state.diarySort == DiarySort.WatchedAsc,
+                                    onClick = { onDiarySort(DiarySort.WatchedAsc) },
+                                )
+                            }
                         }
-                    } else {
-                        null
-                    },
-                    contentPadding = menuItemPadding,
-                )
-            }
-            DropdownMenu(
-                expanded = sortOpen,
-                onDismissRequest = { sortOpen = false },
-                modifier = Modifier.widthIn(
-                    min = if (metrics.isTablet) 420.dp else 300.dp,
-                ),
-            ) {
-                when (state.shelf) {
-                    CollectionShelf.Favorites -> {
-                        SortMenuItem(
-                            label = stringResource(R.string.collection_sort_date_desc),
-                            selected = state.favoritesSort == FavoritesSort.DateDesc,
-                            onClick = { onFavoritesSort(FavoritesSort.DateDesc) },
-                        )
-                        SortMenuItem(
-                            label = stringResource(R.string.collection_sort_date_asc),
-                            selected = state.favoritesSort == FavoritesSort.DateAsc,
-                            onClick = { onFavoritesSort(FavoritesSort.DateAsc) },
-                        )
                     }
-                    CollectionShelf.History -> {
-                        SortMenuItem(
-                            label = stringResource(R.string.collection_sort_date_desc),
-                            selected = state.historySort == FavoritesSort.DateDesc,
-                            onClick = { onHistorySort(FavoritesSort.DateDesc) },
+                }
+
+                if (historyBar) {
+                    TextButton(
+                        onClick = { dateRangeOpen = true },
+                        colors = actionColors,
+                        contentPadding = actionPad,
+                        modifier = Modifier.heightIn(min = actionMin),
+                    ) {
+                        Icon(
+                            Icons.Outlined.DateRange,
+                            contentDescription = null,
+                            modifier = Modifier.size(iconSize),
                         )
-                        SortMenuItem(
-                            label = stringResource(R.string.collection_sort_date_asc),
-                            selected = state.historySort == FavoritesSort.DateAsc,
-                            onClick = { onHistorySort(FavoritesSort.DateAsc) },
-                        )
-                    }
-                    CollectionShelf.Diary -> {
-                        SortMenuItem(
-                            label = stringResource(R.string.collection_sort_added_desc),
-                            selected = state.diarySort == DiarySort.AddedDesc,
-                            onClick = { onDiarySort(DiarySort.AddedDesc) },
-                        )
-                        SortMenuItem(
-                            label = stringResource(R.string.collection_sort_added_asc),
-                            selected = state.diarySort == DiarySort.AddedAsc,
-                            onClick = { onDiarySort(DiarySort.AddedAsc) },
-                        )
-                        SortMenuItem(
-                            label = stringResource(R.string.collection_sort_watched_desc),
-                            selected = state.diarySort == DiarySort.WatchedDesc,
-                            onClick = { onDiarySort(DiarySort.WatchedDesc) },
-                        )
-                        SortMenuItem(
-                            label = stringResource(R.string.collection_sort_watched_asc),
-                            selected = state.diarySort == DiarySort.WatchedAsc,
-                            onClick = { onDiarySort(DiarySort.WatchedAsc) },
+                        Text(
+                            text = "  " + historyDateRangeLabel(
+                                fromEpochDay = state.historyDateFromEpochDay,
+                                toEpochDay = state.historyDateToEpochDay,
+                                compact = compactHistory,
+                            ),
+                            fontSize = textSize,
+                            fontWeight = if (historyRangeActive || metrics.isTablet) {
+                                FontWeight.Medium
+                            } else {
+                                FontWeight.Normal
+                            },
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
                         )
                     }
                 }
             }
         }
-        if (historyBar) {
-            TextButton(
-                onClick = { dateRangeOpen = true },
-                colors = actionColors,
-                contentPadding = actionPad,
-                modifier = Modifier.heightIn(min = actionMin),
-            ) {
-                Icon(
-                    Icons.Outlined.DateRange,
-                    contentDescription = null,
-                    modifier = Modifier.size(iconSize),
-                )
-                Text(
-                    text = "  " + historyDateRangeLabel(
-                        fromEpochDay = state.historyDateFromEpochDay,
-                        toEpochDay = state.historyDateToEpochDay,
-                        compact = compactHistory,
-                    ),
-                    fontSize = textSize,
-                    fontWeight = if (historyRangeActive || metrics.isTablet) {
-                        FontWeight.Medium
-                    } else {
-                        FontWeight.Normal
-                    },
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-        }
-        }
-        } // end !compactSelecting
+
         if (dateRangeOpen && state.shelf == CollectionShelf.History) {
             HistoryDateRangeDialog(
                 fromEpochDay = state.historyDateFromEpochDay,
@@ -794,7 +931,9 @@ private fun ShelfActionsBar(
                 },
             )
         }
+
         if (!canSelect) return@Row
+
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(if (!metrics.isTablet) 0.dp else 4.dp),
@@ -948,10 +1087,12 @@ private fun DiaryStatusChips(
         DiaryFilterDislike to stringResource(R.string.collection_filter_dislike),
     )
     val reactionLabel = reactionOptions.first { it.first == reactionSelected }.second
+
     val textSize = if (metrics.isTablet) metrics.searchTextSize else metrics.chipTextSize
     val chipHeight = if (metrics.isTablet) 44.dp else 32.dp
     val gap = if (metrics.isTablet) 10.dp else 8.dp
     val menuTextSize = if (metrics.isTablet) metrics.cardMetaSize else metrics.searchTextSize
+
     var reactionOpen by remember { mutableStateOf(false) }
 
     Row(
@@ -1024,6 +1165,7 @@ private fun DiaryStatusChips(
                 }
             }
         }
+
         Row(
             modifier = Modifier
                 .weight(1f)
@@ -1073,12 +1215,18 @@ private fun formatLocalDate(instant: java.time.Instant): String {
 
 private fun formatEpochDay(epochDay: Long): String =
     java.time.LocalDate.ofEpochDay(epochDay).format(
-        java.time.format.DateTimeFormatter.ofPattern("d MMM yyyy", java.util.Locale.forLanguageTag("ru")),
+        java.time.format.DateTimeFormatter.ofPattern(
+            "d MMM yyyy",
+            java.util.Locale.forLanguageTag("ru"),
+        ),
     )
 
 private fun formatEpochDayShort(epochDay: Long): String =
     java.time.LocalDate.ofEpochDay(epochDay).format(
-        java.time.format.DateTimeFormatter.ofPattern("d.MM.yy", java.util.Locale.forLanguageTag("ru")),
+        java.time.format.DateTimeFormatter.ofPattern(
+            "d.MM.yy",
+            java.util.Locale.forLanguageTag("ru"),
+        ),
     )
 
 @Composable
@@ -1094,14 +1242,17 @@ private fun historyDateRangeLabel(
             fmt(fromEpochDay),
             fmt(toEpochDay),
         )
+
         fromEpochDay != null -> stringResource(
             R.string.collection_history_date_from_fmt,
             fmt(fromEpochDay),
         )
+
         toEpochDay != null -> stringResource(
             R.string.collection_history_date_to_fmt,
             fmt(toEpochDay),
         )
+
         else -> stringResource(R.string.collection_history_date_range)
     }
 }
@@ -1132,6 +1283,7 @@ private fun HistoryDateRangeDialog(
         initialSelectedStartDateMillis = fromEpochDay?.let(::epochDayToUtcMillis),
         initialSelectedEndDateMillis = toEpochDay?.let(::epochDayToUtcMillis),
     )
+
     DatePickerDialog(
         onDismissRequest = onDismiss,
         confirmButton = {
@@ -1142,7 +1294,7 @@ private fun HistoryDateRangeDialog(
                     onApply(start, end)
                 },
                 enabled = pickerState.selectedStartDateMillis != null ||
-                    pickerState.selectedEndDateMillis != null,
+                        pickerState.selectedEndDateMillis != null,
             ) {
                 Text(stringResource(R.string.collection_history_date_range_apply))
             }
@@ -1160,30 +1312,36 @@ private fun HistoryDateRangeDialog(
             }
         },
     ) {
-        // headline дат start/end по умолчанию headlineLarge — уменьшаем.
-        val base = MaterialTheme.typography
-        MaterialTheme(
-            colorScheme = MaterialTheme.colorScheme,
-            typography = base.copy(
-                headlineLarge = base.titleMedium,
-                headlineMedium = base.titleSmall,
-            ),
-            shapes = MaterialTheme.shapes,
-        ) {
-            DateRangePicker(
-                state = pickerState,
-                title = {
-                    Text(
-                        text = stringResource(R.string.collection_history_date_range_title),
-                        style = MaterialTheme.typography.titleMedium,
-                        modifier = Modifier.padding(start = 24.dp, end = 12.dp, top = 16.dp),
-                    )
-                },
-                showModeToggle = false,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(460.dp),
-            )
-        }
+        DateRangePicker(
+            state = pickerState,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(460.dp),
+            showModeToggle = false,
+            title = {
+                Text(
+                    text = stringResource(R.string.collection_history_date_range_title),
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.padding(start = 24.dp, end = 12.dp, top = 16.dp),
+                )
+            },
+            headline = {
+                Text(
+                    text = historyDateRangeLabel(
+                        fromEpochDay = pickerState.selectedStartDateMillis?.let(::utcMillisToEpochDay),
+                        toEpochDay = pickerState.selectedEndDateMillis?.let(::utcMillisToEpochDay),
+                    ),
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(
+                        start = 24.dp,
+                        end = 12.dp,
+                        bottom = 12.dp,
+                    ),
+                )
+            },
+        )
     }
 }

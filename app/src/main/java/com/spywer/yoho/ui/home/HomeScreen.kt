@@ -14,6 +14,9 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.ui.platform.LocalView
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -146,7 +149,23 @@ fun HomeScreen(
     var headerHeightPx by remember { mutableFloatStateOf(0f) }
     val headerOffsetPx = remember { mutableFloatStateOf(0f) }
 
-    val headerNestedScrollConnection = remember(headerHeightPx, listState) {
+    // Корректировка смещения при изменении высоты хедера
+    var prevHeaderHeightPx by remember { mutableFloatStateOf(0f) }
+    LaunchedEffect(headerHeightPx) {
+        val oldH = prevHeaderHeightPx
+        val newH = headerHeightPx
+        if (oldH > 0f && newH > 0f && newH != oldH) {
+            val offset = headerOffsetPx.floatValue
+            if (offset <= -oldH + 1f) {
+                headerOffsetPx.floatValue = -newH
+            } else {
+                headerOffsetPx.floatValue = 0f
+            }
+        }
+        prevHeaderHeightPx = newH
+    }
+
+    val headerNestedScrollConnection = remember {
         object : NestedScrollConnection {
             override fun onPreScroll(
                 available: Offset,
@@ -168,9 +187,7 @@ fun HomeScreen(
                 val oldOffset = headerOffsetPx.floatValue
                 val newOffset = (oldOffset + delta).coerceIn(-h, 0f)
                 val consumed = newOffset - oldOffset
-
                 headerOffsetPx.floatValue = newOffset
-
                 return Offset(0f, consumed)
             }
         }
@@ -356,16 +373,20 @@ fun HomeScreen(
                         else -> {
                             ContentColumn(metrics) {
                                 val density = LocalDensity.current
+                                val statusBarHeight = with(density) {
+                                    ViewCompat.getRootWindowInsets(LocalView.current)
+                                        ?.getInsets(WindowInsetsCompat.Type.statusBars())?.top
+                                        ?.toFloat() ?: 0f
+                                }
                                 val headerTopPadding = with(density) {
-                                    ((headerHeightPx + headerOffsetPx.floatValue).coerceAtLeast(0f)).toDp()
+                                    ((headerHeightPx + headerOffsetPx.floatValue + statusBarHeight).coerceAtLeast(0f)).toDp()
                                 }
 
                                 LazyColumn(
                                     state = listState,
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .padding(top = headerTopPadding),
+                                    modifier = Modifier.fillMaxSize(),
                                     contentPadding = PaddingValues(
+                                        top = headerTopPadding,
                                         bottom = if (metrics.isTablet) 32.dp else 20.dp,
                                     ),
                                 ) {

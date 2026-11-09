@@ -2,7 +2,6 @@ package com.spywer.yoho.ui.search
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -13,6 +12,9 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.ui.platform.LocalView
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -20,18 +22,20 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Clear
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -49,6 +53,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -58,9 +63,16 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
@@ -70,7 +82,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import androidx.compose.ui.zIndex
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.spywer.yoho.R
 import com.spywer.yoho.data.remote.TitleDto
@@ -91,7 +103,6 @@ fun SearchScreen(
     onBack: () -> Unit,
     showBack: Boolean = true,
     title: String? = null,
-    /** false, пока поверх каталога открыта карточка тайтла. */
     restoreSearchFocus: Boolean = true,
     onOpenTitle: ((idKp: Int?, idTmdb: Int?, mediaType: String?) -> Unit)? = null,
 ) {
@@ -100,6 +111,54 @@ fun SearchScreen(
     val context = LocalContext.current
     var showFilterSheet by remember { mutableStateOf(false) }
     val searchFocus = remember { FocusRequester() }
+
+    val gridState = rememberLazyGridState()
+    var headerHeightPx by remember { mutableFloatStateOf(0f) }
+    val headerOffsetPx = remember { mutableFloatStateOf(0f) }
+
+    // Корректировка смещения при изменении высоты хедера
+    var prevHeaderHeightPx by remember { mutableFloatStateOf(0f) }
+    LaunchedEffect(headerHeightPx) {
+        val oldH = prevHeaderHeightPx
+        val newH = headerHeightPx
+        if (oldH > 0f && newH > 0f && newH != oldH) {
+            val offset = headerOffsetPx.floatValue
+            if (offset <= -oldH + 1f) {
+                headerOffsetPx.floatValue = -newH
+            } else {
+                headerOffsetPx.floatValue = 0f
+            }
+        }
+        prevHeaderHeightPx = newH
+    }
+
+    val headerNestedScrollConnection = remember {
+        object : NestedScrollConnection {
+            override fun onPreScroll(
+                available: Offset,
+                source: NestedScrollSource,
+            ): Offset {
+                val h = headerHeightPx
+                if (h <= 0f) return Offset.Zero
+
+                val delta = available.y
+                if (delta == 0f) return Offset.Zero
+
+                if (!gridState.canScrollForward
+                    && !gridState.canScrollBackward
+                    && headerOffsetPx.floatValue >= 0f
+                ) {
+                    return Offset.Zero
+                }
+
+                val oldOffset = headerOffsetPx.floatValue
+                val newOffset = (oldOffset + delta).coerceIn(-h, 0f)
+                val consumed = newOffset - oldOffset
+                headerOffsetPx.floatValue = newOffset
+                return Offset(0f, consumed)
+            }
+        }
+    }
 
     BackHandler(enabled = showFilterSheet || showBack) {
         when {
@@ -114,6 +173,11 @@ fun SearchScreen(
         runCatching { searchFocus.requestFocus() }
     }
 
+    LaunchedEffect(state.filters, state.query) {
+        gridState.scrollToItem(0)
+        headerOffsetPx.floatValue = 0f
+    }
+
     fun openTitle(item: TitleDto) {
         if (item.idKp == null && item.idTmdb == null) return
         onOpenTitle?.invoke(item.idKp, item.idTmdb, item.mediaType)
@@ -126,57 +190,6 @@ fun SearchScreen(
         Scaffold(
             containerColor = MaterialTheme.colorScheme.background,
             contentWindowInsets = WindowInsets(0, 0, 0, 0),
-            topBar = {
-                SearchContentColumn(metrics) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .statusBarsPadding()
-                            .background(MaterialTheme.colorScheme.background)
-                            .padding(
-                                horizontal = metrics.screenPadding,
-                                vertical = metrics.sectionGap,
-                            ),
-                    ) {
-                        if (!title.isNullOrBlank() && !showBack) {
-                            Text(
-                                text = title,
-                                color = MaterialTheme.colorScheme.onBackground,
-                                fontSize = metrics.sectionTitleSize,
-                                lineHeight = metrics.lineOf(metrics.sectionTitleSize),
-                                fontWeight = FontWeight.Bold,
-                                modifier = Modifier.padding(bottom = metrics.sectionGap),
-                            )
-                        }
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(metrics.blockGap),
-                        ) {
-                            if (showBack) {
-                                YohoBackButton(onClick = onBack)
-                            }
-                            SearchBar(
-                                query = state.query,
-                                onQueryChange = viewModel::onQueryChange,
-                                onClear = viewModel::clearQuery,
-                                height = metrics.searchHeight,
-                                textSize = metrics.searchTextSize,
-                                focusRequester = searchFocus,
-                                modifier = Modifier.weight(1f),
-                            )
-                        }
-                        Spacer(Modifier.height(metrics.sectionGap))
-                        SearchControlsRow(
-                            state = state,
-                            textSize = metrics.chipTextSize,
-                            onToggleType = viewModel::toggleType,
-                            onRemoveChip = viewModel::removeChip,
-                            onOpenFilters = { showFilterSheet = true },
-                            onResetFilters = viewModel::clearFilters,
-                        )
-                    }
-                }
-            },
         ) { padding ->
             if (showFilterSheet) {
                 FilterSheet(
@@ -188,21 +201,124 @@ fun SearchScreen(
                     onClear = viewModel::clearFilters,
                 )
             }
-            PullToRefreshBox(
-                // Не дублировать синий CircularProgress при пустой выдаче.
-                isRefreshing = state.loading && state.results.isNotEmpty(),
-                onRefresh = viewModel::refresh,
-                modifier = Modifier
+
+            Box(
+                Modifier
                     .fillMaxSize()
                     .padding(padding),
             ) {
-                SearchResultsPane(
-                    state = state,
-                    metrics = metrics,
-                    onLoadMore = viewModel::loadMore,
-                    onRetry = viewModel::refresh,
-                    onOpenTitle = ::openTitle,
-                )
+                val density = LocalDensity.current
+                val statusBarHeight = with(density) {
+                    ViewCompat.getRootWindowInsets(LocalView.current)
+                        ?.getInsets(WindowInsetsCompat.Type.statusBars())?.top
+                        ?.toFloat() ?: 0f
+                }
+                val headerTopPadding = with(density) {
+                    ((headerHeightPx + headerOffsetPx.floatValue + statusBarHeight).coerceAtLeast(0f)).toDp()
+                }
+
+                PullToRefreshBox(
+                    isRefreshing = state.loading && state.results.isNotEmpty(),
+                    onRefresh = viewModel::refresh,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .nestedScroll(headerNestedScrollConnection),
+                ) {
+                    SearchResultsPane(
+                        state = state,
+                        metrics = metrics,
+                        gridState = gridState,
+                        headerTopPadding = headerTopPadding,
+                        onLoadMore = viewModel::loadMore,
+                        onRetry = viewModel::refresh,
+                        onOpenTitle = ::openTitle,
+                    )
+                }
+
+                // Header
+                SearchContentColumn(metrics) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .wrapContentHeight()
+                            .zIndex(1f),
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .graphicsLayer {
+                                    translationY = headerOffsetPx.floatValue
+                                    alpha = if (headerHeightPx > 0f) {
+                                        (1f + translationY / headerHeightPx).coerceIn(0f, 1f)
+                                    } else {
+                                        1f
+                                    }
+                                }
+                                .background(MaterialTheme.colorScheme.background)
+                                .statusBarsPadding()
+                                .onSizeChanged { size ->
+                                    headerHeightPx = size.height.toFloat()
+                                }
+                                .padding(
+                                    horizontal = metrics.screenPadding,
+                                    vertical = metrics.sectionGap,
+                                ),
+                        ) {
+                            if (!title.isNullOrBlank() && !showBack) {
+                                Text(
+                                    text = title,
+                                    color = MaterialTheme.colorScheme.onBackground,
+                                    fontSize = metrics.sectionTitleSize,
+                                    lineHeight = metrics.lineOf(metrics.sectionTitleSize),
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.padding(bottom = metrics.sectionGap),
+                                )
+                            }
+
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(metrics.blockGap),
+                            ) {
+                                if (showBack) {
+                                    YohoBackButton(onClick = onBack)
+                                }
+                                SearchBar(
+                                    query = state.query,
+                                    onQueryChange = viewModel::onQueryChange,
+                                    onClear = viewModel::clearQuery,
+                                    height = metrics.searchHeight,
+                                    textSize = metrics.searchTextSize,
+                                    focusRequester = searchFocus,
+                                    modifier = Modifier.weight(1f),
+                                )
+                            }
+
+                            Spacer(Modifier.height(metrics.sectionGap))
+
+                            SearchControlsRow(
+                                state = state,
+                                textSize = metrics.chipTextSize,
+                                onToggleType = viewModel::toggleType,
+                                onRemoveChip = viewModel::removeChip,
+                                onOpenFilters = { showFilterSheet = true },
+                                onResetFilters = viewModel::clearFilters,
+                            )
+
+                            if (state.results.isNotEmpty()) {
+                                Spacer(Modifier.height(metrics.blockGap))
+                                Text(
+                                    text = stringResource(R.string.search_found, state.total),
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    fontSize = metrics.cardMetaSize,
+                                    lineHeight = metrics.lineOf(metrics.cardMetaSize),
+                                    maxLines = 1,
+                                    softWrap = false,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            }
+                        }
+                    }
+                }
             }
         }
     }
@@ -213,20 +329,13 @@ private fun SearchContentColumn(
     metrics: HomeMetrics,
     content: @Composable () -> Unit,
 ) {
-    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .then(
-                    if (metrics.contentMaxWidth != Dp.Unspecified) {
-                        Modifier.widthIn(max = metrics.contentMaxWidth)
-                    } else {
-                        Modifier
-                    },
-                ),
-        ) {
-            content()
-        }
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .widthIn(max = metrics.contentMaxWidth),
+        contentAlignment = Alignment.TopCenter,
+    ) {
+        content()
     }
 }
 
@@ -249,8 +358,8 @@ private fun SearchControlsRow(
     val selectedTypes = state.filters.types
     val activeGroups = state.filters.activeGroups(state.facets, state.filterCatalog)
     val filtersActive = state.filters.hasAdvanced
-    var typeMenu by remember { mutableStateOf(false) }
 
+    var typeMenu by remember { mutableStateOf(false) }
     val typeLabel = when {
         selectedTypes.isEmpty() -> types.find { it.value == "all" }?.label ?: "Все"
         else -> selectedTypes.mapNotNull { value ->
@@ -259,6 +368,7 @@ private fun SearchControlsRow(
     }
 
     val metrics = LocalHomeMetrics.current
+
     FlowRow(
         horizontalArrangement = Arrangement.spacedBy(metrics.blockGap),
         verticalArrangement = Arrangement.spacedBy(metrics.blockGap),
@@ -319,6 +429,7 @@ private fun SearchControlsRow(
                 }
             }
         }
+
         activeGroups.forEach { group ->
             Text(
                 text = group.title,
@@ -348,6 +459,7 @@ private fun SearchControlsRow(
                 )
             }
         }
+
         FilterChip(
             selected = false,
             onClick = onOpenFilters,
@@ -371,6 +483,7 @@ private fun SearchControlsRow(
                 borderWidth = 1.5.dp,
             ),
         )
+
         if (filtersActive) {
             FilterChip(
                 selected = false,
@@ -403,6 +516,8 @@ private fun SearchControlsRow(
 private fun SearchResultsPane(
     state: SearchUiState,
     metrics: HomeMetrics,
+    gridState: LazyGridState,
+    headerTopPadding: Dp,
     onLoadMore: () -> Unit,
     onRetry: () -> Unit,
     onOpenTitle: (TitleDto) -> Unit,
@@ -424,7 +539,9 @@ private fun SearchResultsPane(
 
             state.results.isEmpty() -> {
                 Column(
-                    Modifier.fillMaxSize().padding(24.dp),
+                    Modifier
+                        .fillMaxSize()
+                        .padding(24.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center,
                 ) {
@@ -437,7 +554,6 @@ private fun SearchResultsPane(
             }
 
             else -> {
-                val gridState = rememberLazyGridState()
                 val shouldLoadMore by remember(state.hasMore, state.loadingMore, state.loading) {
                     derivedStateOf {
                         val info = gridState.layoutInfo
@@ -445,60 +561,55 @@ private fun SearchResultsPane(
                         if (!state.hasMore || state.loadingMore || state.loading || total == 0) {
                             return@derivedStateOf false
                         }
-                        val last = info.visibleItemsInfo.lastOrNull()?.index ?: return@derivedStateOf false
+                        val last = info.visibleItemsInfo.lastOrNull()?.index
+                            ?: return@derivedStateOf false
                         last >= total - 6
                     }
                 }
+
                 LaunchedEffect(shouldLoadMore) {
                     if (shouldLoadMore) onLoadMore()
                 }
-                Column(Modifier.fillMaxSize()) {
-                    Text(
-                        text = stringResource(R.string.search_found, state.total),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        fontSize = metrics.cardMetaSize,
-                        modifier = Modifier.padding(
-                            horizontal = metrics.screenPadding,
-                            vertical = 8.dp,
-                        ),
-                    )
-                    LazyVerticalGrid(
-                        columns = GridCells.Adaptive(metrics.posterLarge),
-                        state = gridState,
-                        contentPadding = PaddingValues(
-                            horizontal = metrics.screenPadding,
-                            vertical = 8.dp,
-                        ),
-                        horizontalArrangement = Arrangement.spacedBy(metrics.cardGap),
-                        verticalArrangement = Arrangement.spacedBy(metrics.cardGap),
-                        modifier = Modifier.fillMaxSize(),
-                    ) {
-                        items(
-                            state.results,
-                            key = { it.idKp ?: it.idTmdb ?: it.hashCode() },
-                        ) { item ->
-                            PosterCard(
-                                item = item,
-                                onClick = { onOpenTitle(item) },
-                            )
-                        }
-                        if (state.hasMore || state.loadingMore) {
-                            item(
-                                key = "search_load_more",
-                                span = { GridItemSpan(maxLineSpan) },
+
+                LazyVerticalGrid(
+                    columns = GridCells.Adaptive(metrics.posterLarge),
+                    state = gridState,
+                    contentPadding = PaddingValues(
+                        top = headerTopPadding,
+                        start = metrics.screenPadding,
+                        end = metrics.screenPadding,
+                        bottom = 8.dp,
+                    ),
+                    horizontalArrangement = Arrangement.spacedBy(metrics.cardGap),
+                    verticalArrangement = Arrangement.spacedBy(metrics.cardGap),
+                    modifier = Modifier.fillMaxSize(),
+                ) {
+                    items(
+                        state.results,
+                        key = { it.idKp ?: it.idTmdb ?: it.hashCode() },
+                    ) { item ->
+                        PosterCard(
+                            item = item,
+                            onClick = { onOpenTitle(item) },
+                        )
+                    }
+
+                    if (state.hasMore || state.loadingMore) {
+                        item(
+                            key = "search_load_more",
+                            span = { GridItemSpan(maxLineSpan) },
+                        ) {
+                            Box(
+                                Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 12.dp),
+                                contentAlignment = Alignment.Center,
                             ) {
-                                Box(
-                                    Modifier
-                                        .fillMaxWidth()
-                                        .padding(vertical = 12.dp),
-                                    contentAlignment = Alignment.Center,
-                                ) {
-                                    if (state.loadingMore) {
-                                        CircularProgressIndicator(
-                                            color = MaterialTheme.colorScheme.primary,
-                                            modifier = Modifier.size(28.dp),
-                                        )
-                                    }
+                                if (state.loadingMore) {
+                                    CircularProgressIndicator(
+                                        color = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(28.dp),
+                                    )
                                 }
                             }
                         }
@@ -522,6 +633,7 @@ private fun SearchBar(
     var focused by remember { mutableStateOf(false) }
     val keyboard = LocalSoftwareKeyboardController.current
     val focusManager = LocalFocusManager.current
+
     Row(
         modifier = modifier
             .height(height)
