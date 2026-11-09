@@ -415,7 +415,7 @@ private fun SearchControlsRow(
                     DropdownMenuItem(
                         onClick = { onToggleType(value) },
                         modifier = Modifier.padding(
-                            vertical = if (metrics.isTablet) 8.dp else 4.dp,
+                            vertical = if (metrics.isTablet) 6.dp else 4.dp,
                             horizontal = 16.dp,
                         ),
                         text = {
