@@ -210,6 +210,8 @@ private fun DetailContent(
     val year = detail.year ?: detail.yearStart
     val titleRu = detail.title?.ru ?: detail.title?.original ?: "Без названия"
     val titleOriginal = detail.title?.original?.takeIf { it != titleRu }
+    var showAllAbout by remember { mutableStateOf(false) }
+    var hasTruncatedValue by remember { mutableStateOf(false) }
     val prequelsTitle = stringResource(R.string.detail_prequels)
     val sequelsTitle = stringResource(R.string.detail_sequels)
     val similarTitle = stringResource(R.string.detail_similar)
@@ -297,6 +299,8 @@ private fun DetailContent(
                 }
                 if (detail.aboutFilm.isNotEmpty()) {
                     detail.aboutFilm.forEach { row ->
+                        val value = row.value
+                        if (value.isNullOrBlank()) return@forEach
                         MetaRow(
                             label = row.label.orEmpty(),
                             value = row.value,
@@ -304,30 +308,59 @@ private fun DetailContent(
                             onOpenPerson = onOpenPerson,
                             linkPartsAsGenres = row.id == "genre",
                             onOpenGenre = { onOpenGenre(it, genreMediaType) },
+                            maxLines = if (showAllAbout) Int.MAX_VALUE else 1,
+                            onTruncated = { if (it) hasTruncatedValue = true },
                         )
                     }
                 } else {
-                    MetaRow("Год", year?.toString())
-                    MetaRow("Страны", detail.countries.joinToString(", ").ifBlank { null })
+                    val ml = if (showAllAbout) Int.MAX_VALUE else 1
+                    MetaRow("Год", year?.toString(), maxLines = ml, onTruncated = { if (it) hasTruncatedValue = true })
+                    MetaRow("Страны", detail.countries.joinToString(", ").ifBlank { null }, maxLines = ml, onTruncated = { if (it) hasTruncatedValue = true })
                     MetaRow(
                         label = "Жанры",
                         value = detail.genres.joinToString(", ").ifBlank { null },
                         linkPartsAsGenres = true,
                         onOpenGenre = { onOpenGenre(it, genreMediaType) },
+                        maxLines = ml,
+                        onTruncated = { if (it) hasTruncatedValue = true },
                     )
                     MetaRow(
                         "Длительность",
                         detail.duration?.formatted
                             ?: detail.duration?.minutes?.let { "$it мин" },
+                        maxLines = ml,
+                        onTruncated = { if (it) hasTruncatedValue = true },
                     )
                     MetaRow(
                         label = "Режиссёр",
                         value = detail.director,
                         personIds = detail.directorPersonIds,
                         onOpenPerson = onOpenPerson,
+                        maxLines = ml,
+                        onTruncated = { if (it) hasTruncatedValue = true },
                     )
-                    MetaRow("Дистрибьютор", detail.production?.distributor)
-                    MetaRow("Бюджет", detail.production?.budget)
+                    MetaRow("Дистрибьютор", detail.production?.distributor, maxLines = ml, onTruncated = { if (it) hasTruncatedValue = true })
+                    MetaRow("Бюджет", detail.production?.budget, maxLines = ml, onTruncated = { if (it) hasTruncatedValue = true })
+                }
+
+                if (hasTruncatedValue) {
+                    Box(
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(top = 4.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        OutlinedButton(
+                            onClick = { showAllAbout = !showAllAbout },
+                        ) {
+                            Text(
+                                text = if (showAllAbout) stringResource(R.string.detail_about_collapse)
+                                else stringResource(R.string.detail_about_show_all),
+                                fontSize = metrics.detailFavTextSize,
+                                fontWeight = FontWeight.SemiBold,
+                            )
+                        }
+                    }
                 }
 
                 if (trailerClips.isNotEmpty()) {

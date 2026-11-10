@@ -207,6 +207,8 @@
     <string name="detail_diary_need_login">Войдите, чтобы добавить в дневник</string>
     <string name="detail_diary_error">Не удалось добавить в дневник</string>
     <string name="detail_watchers">Смотрят</string>
+    <string name="detail_about_show_all">Показать всё</string>
+    <string name="detail_about_collapse">Свернуть</string>
     <string name="person_known_for">Известен по</string>
     <string name="person_birthplace">Место рождения</string>
 </resources>
