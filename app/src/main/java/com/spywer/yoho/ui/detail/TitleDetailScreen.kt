@@ -54,6 +54,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.spywer.yoho.R
+import com.spywer.yoho.data.AppSettings
 import com.spywer.yoho.data.SessionRepository
 import com.spywer.yoho.data.remote.PlayerChoiceItemDto
 import com.spywer.yoho.data.remote.SessionCookieJar
@@ -211,6 +212,7 @@ private fun DetailContent(
     val titleRu = detail.title?.ru ?: detail.title?.original ?: "Без названия"
     val titleOriginal = detail.title?.original?.takeIf { it != titleRu }
     var showAllAbout by remember { mutableStateOf(false) }
+    val hideLongMeta = AppSettings.hideLongMeta(context)
     var hasTruncatedValue by remember { mutableStateOf(false) }
     val prequelsTitle = stringResource(R.string.detail_prequels)
     val sequelsTitle = stringResource(R.string.detail_sequels)
@@ -308,12 +310,12 @@ private fun DetailContent(
                             onOpenPerson = onOpenPerson,
                             linkPartsAsGenres = row.id == "genre",
                             onOpenGenre = { onOpenGenre(it, genreMediaType) },
-                            maxLines = if (showAllAbout) Int.MAX_VALUE else 1,
+                            maxLines = if (showAllAbout) Int.MAX_VALUE else if (hideLongMeta) 1 else Int.MAX_VALUE,
                             onTruncated = { if (it) hasTruncatedValue = true },
                         )
                     }
                 } else {
-                    val ml = if (showAllAbout) Int.MAX_VALUE else 1
+                    val ml = if (showAllAbout) Int.MAX_VALUE else if (hideLongMeta) 1 else Int.MAX_VALUE
                     MetaRow("Год", year?.toString(), maxLines = ml, onTruncated = { if (it) hasTruncatedValue = true })
                     MetaRow("Страны", detail.countries.joinToString(", ").ifBlank { null }, maxLines = ml, onTruncated = { if (it) hasTruncatedValue = true })
                     MetaRow(
@@ -343,7 +345,7 @@ private fun DetailContent(
                     MetaRow("Бюджет", detail.production?.budget, maxLines = ml, onTruncated = { if (it) hasTruncatedValue = true })
                 }
 
-                if (hasTruncatedValue) {
+                if (hasTruncatedValue && hideLongMeta) {
                     Box(
                         Modifier
                             .fillMaxWidth()

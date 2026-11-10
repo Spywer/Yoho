@@ -552,6 +552,9 @@ private fun AccountSettingsPage(
     var pipEnabled by remember {
         mutableStateOf(AppSettings.pipEnabled(context))
     }
+    var hideLongMeta by remember {
+        mutableStateOf(AppSettings.hideLongMeta(context))
+    }
     Column(
         Modifier
             .fillMaxSize()
@@ -602,6 +605,39 @@ private fun AccountSettingsPage(
                 onCheckedChange = { checked ->
                     pipEnabled = checked
                     AppSettings.setPipEnabled(context, checked)
+                },
+            )
+        }
+        Spacer(Modifier.height(metrics.sectionGap))
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(16.dp))
+                .background(MaterialTheme.colorScheme.surfaceVariant)
+                .clickable {
+                    val next = !hideLongMeta
+                    hideLongMeta = next
+                    AppSettings.setHideLongMeta(context, next)
+                }
+                .padding(
+                    horizontal = if (metrics.isTablet) 20.dp else 16.dp,
+                    vertical = if (metrics.isTablet) 20.dp else 16.dp,
+                ),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
+                Text(
+                    text = stringResource(R.string.settings_hide_long_meta),
+                    color = MaterialTheme.colorScheme.onBackground,
+                    fontSize = (bodySize.value + 2f).sp,
+                    fontWeight = FontWeight.SemiBold,
+                )
+            }
+            Switch(
+                checked = hideLongMeta,
+                onCheckedChange = { checked ->
+                    hideLongMeta = checked
+                    AppSettings.setHideLongMeta(context, checked)
                 },
             )
         }
