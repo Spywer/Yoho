@@ -924,11 +924,15 @@ private const val FULLSCREEN_CLOSE_TAG = "yoho_fs_close"
 
 /** Альбом — без крестика; портрет — показать. */
 private fun syncFullscreenCloseVisibility(container: ViewGroup, landscape: Boolean) {
-    val visibility = if (landscape) View.GONE else View.VISIBLE
+    // val visibility = if (landscape) View.GONE else View.VISIBLE
     for (i in 0 until container.childCount) {
         val child = container.getChildAt(i)
-        if (child.tag == FULLSCREEN_CLOSE_TAG && child.visibility != visibility) {
-            child.visibility = visibility
+        //if (child.tag == FULLSCREEN_CLOSE_TAG && child.visibility != visibility) {
+        //    child.visibility = visibility
+        //}
+        // Временно скрываем крестик закрытия
+        if (child.tag == FULLSCREEN_CLOSE_TAG) {
+            child.visibility = View.GONE
         }
     }
 }
@@ -1085,6 +1089,8 @@ private fun PlayerFullscreenEffect(
             setPadding(pad, pad, pad, pad)
             tag = FULLSCREEN_CLOSE_TAG
         }
+        // Временно скрываем крестик закрытия
+        close.visibility = View.GONE
         overlay.addView(
             close,
             FrameLayout.LayoutParams(
