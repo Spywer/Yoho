@@ -376,6 +376,14 @@ class SessionCookieJar private constructor(
     }
 
     private fun importFromWebViewLocked(url: HttpUrl) {
+        // Если в памяти УЖЕ есть живая сессия (даже от другого зеркала),
+        // прерываем импорт. Мы должны доверять миграции свежей сессии,
+        // а не тянуть потенциально протухшие остатки из CookieManager для этого хоста.
+        val now = System.currentTimeMillis()
+        if (memory.values.any { isSessionCookieName(it.name) && it.expiresAt > now }) {
+            return
+        }
+
         val raw = runCatching { CookieManager.getInstance().getCookie(url.toString()) }
             .getOrNull()
             ?.takeIf { it.isNotBlank() }
@@ -391,7 +399,10 @@ class SessionCookieJar private constructor(
                 val value = part.substringAfter('=', missingDelimiterValue = "").trim()
 
                 if (!isSessionCookieName(name) || value.isEmpty()) return@forEach
-                if (memory.values.any { it.name == name && it.value == value }) return@forEach
+
+                // Проверяем наличие куки по домену, а не по точному значению value.
+                // Иначе старое значение из WebView перезапишет свежее, только что загруженное из SharedPreferences.
+                if (memory.values.any { it.name == name && it.matches(url) }) return@forEach
 
                 val cookie = buildCookie(
                     name = name,

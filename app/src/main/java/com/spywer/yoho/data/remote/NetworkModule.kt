@@ -15,8 +15,8 @@ object NetworkModule {
 
     val httpClient: OkHttpClient by lazy {
         OkHttpClient.Builder()
-            .connectTimeout(15, TimeUnit.SECONDS)
-            .readTimeout(25, TimeUnit.SECONDS)
+            .connectTimeout(5, TimeUnit.SECONDS)
+            .readTimeout(10, TimeUnit.SECONDS)
             .cookieJar(SessionCookieJar.get())
             .addInterceptor(SiteHeadersInterceptor)
             .addInterceptor(SiteFailoverInterceptor)
@@ -50,7 +50,8 @@ private object SiteHeadersInterceptor : Interceptor {
 
         val builder = original.newBuilder()
             .header("User-Agent", SiteHttp.USER_AGENT)
-            .header("Accept-Language", "ru,en;q=0.9")
+            // Полный реалистичный заголовок от мобильного Chrome
+            .header("Accept-Language", "ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7")
 
         if (original.header("Referer") == null) {
             builder.header("Referer", SiteHttp.REFERER)

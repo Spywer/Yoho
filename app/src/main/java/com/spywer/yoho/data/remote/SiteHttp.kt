@@ -60,12 +60,10 @@ object SiteHttp {
      * @return новый активный хост или `null`, если переключать некуда / тот же.
      */
     fun failoverFrom(failedHost: String): String? {
-        // Фикс: не обрабатываем сторонние хосты как зеркала сайта.
         if (!isCandidate(failedHost)) return null
 
         synchronized(lock) {
             ensureLoaded()
-
             val now = System.currentTimeMillis()
             pruneExcludedLocked(now)
 
@@ -75,7 +73,9 @@ object SiteHttp {
 
             if (next.equals(activeHostField, ignoreCase = true)) {
                 persistLocked()
-                return null
+                // возвращаем activeHostField вместо null.
+                // Это позволит параллельным запросам продолжить работу на новом зеркале.
+                return activeHostField
             }
 
             activeHostField = next
