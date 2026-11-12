@@ -218,24 +218,18 @@ object SiteHttp {
     private fun buildDeviceUserAgent(): String {
         val androidVersion = Build.VERSION.RELEASE?.takeIf { it.isNotBlank() } ?: "14"
         val model = sanitizeModel(Build.MODEL)
-        val chromeMajor = detectChromeMajor() ?: FALLBACK_CHROME_MAJOR
+        val chromeMajor = detectChromeMajor()
         return "Mozilla/5.0 (Linux; Android $androidVersion; $model) AppleWebKit/537.36 " +
                 "(KHTML, like Gecko) Chrome/$chromeMajor.0.0.0 Mobile Safari/537.36"
     }
 
-    private fun detectChromeMajor(): String? {
+    private fun detectChromeMajor(): String {
         val sdk = Build.VERSION.SDK_INT
         return when {
-            sdk >= 36 -> "133"
-            sdk >= 35 -> "131"
-            sdk >= 34 -> "119"
-            sdk >= 33 -> "111"
-            sdk >= 32 -> "105"
-            sdk >= 31 -> "96"
-            sdk >= 30 -> "89"
-            sdk >= 29 -> "78"
-            sdk >= 28 -> "69"
-            else -> null
+            sdk >= 35 -> "133"
+            sdk >= 34 -> "131"
+            sdk >= 33 -> "128"
+            else -> FALLBACK_CHROME_MAJOR
         }
     }
 

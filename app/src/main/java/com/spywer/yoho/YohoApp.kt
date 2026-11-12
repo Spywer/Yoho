@@ -11,6 +11,8 @@ class YohoApp : Application() {
         super.onCreate()
         AppContext.init(this)
         SiteHttp.ensureLoaded()
+        // Прогрев UA на главном потоке (WebSettings.getDefaultUserAgent)
+        SiteHttp.userAgent(this)
         runCatching {
             CookieManager.getInstance().setAcceptCookie(true)
         }

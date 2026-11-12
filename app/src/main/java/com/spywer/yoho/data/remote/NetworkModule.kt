@@ -98,8 +98,24 @@ private object SiteFailoverInterceptor : Interceptor {
             val response = try {
                 chain.proceed(request)
             } catch (e: IOException) {
-                // Первый вариант: не переключаем зеркало при нестабильном интернете.
-                throw e
+                lastError = e
+
+                val next = SiteHttp.failoverFrom(host)
+                if (next == null || next.lowercase() in tried) {
+                    throw lastError
+                }
+
+                SessionCookieJar.get().migrateSessionTo(
+                    newHost = next,
+                    fromHost = host,
+                )
+
+                if (!canReplay(request)) {
+                    throw lastError
+                }
+
+                request = rewriteToActive(request, forceHost = next)
+                continue
             }
 
             if (response.code !in gatewayCodes) {
