@@ -2,6 +2,7 @@ package com.spywer.yoho.data.remote
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.os.Build
 import android.webkit.WebSettings
 import androidx.core.content.edit
 import okhttp3.Request
@@ -177,6 +178,9 @@ object SiteHttp {
     /**
      * Дефолтный WebView UA без маркера `; wv` / Version/4.0 —
      * ближе к обычному Chrome на Android. Кэшируется (дорогой [WebSettings.getDefaultUserAgent]).
+     *
+     * Если Context недоступен, UA генерируется из [Build] данных устройства,
+     * чтобы каждое устройство выглядело уникально (на основе модели и версии ОС).
      */
     @SuppressLint("SetJavaScriptEnabled")
     fun userAgent(context: Context? = null): String {
@@ -196,16 +200,60 @@ object SiteHttp {
             }
         }
 
-        return FALLBACK_UA
+        // Fallback на основе Build-данных устройства —
+        // уникальный для каждой модели устройства.
+        return buildDeviceUserAgent().also { cachedUserAgent = it }
     }
 
     /** Для OkHttp до готовности Context. */
     val USER_AGENT: String
         get() = userAgent()
 
-    private const val FALLBACK_UA =
-        "Mozilla/5.0 (Linux; Android 14; Mobile) AppleWebKit/537.36 " +
-                "(KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36"
+    /**
+     * Генерирует Chrome-like UA string из реальных параметров устройства.
+     *
+     * Формат: `Mozilla/5.0 (Linux; Android <ver>; <model>) AppleWebKit/537.36
+     *          (KHTML, like Gecko) Chrome/<major>.0.0.0 Mobile Safari/537.36`
+     */
+    private fun buildDeviceUserAgent(): String {
+        val androidVersion = Build.VERSION.RELEASE?.takeIf { it.isNotBlank() } ?: "14"
+        val model = sanitizeModel(Build.MODEL)
+        val chromeMajor = detectChromeMajor() ?: FALLBACK_CHROME_MAJOR
+        return "Mozilla/5.0 (Linux; Android $androidVersion; $model) AppleWebKit/537.36 " +
+                "(KHTML, like Gecko) Chrome/$chromeMajor.0.0.0 Mobile Safari/537.36"
+    }
+
+    private fun detectChromeMajor(): String? {
+        val sdk = Build.VERSION.SDK_INT
+        return when {
+            sdk >= 36 -> "133"
+            sdk >= 35 -> "131"
+            sdk >= 34 -> "119"
+            sdk >= 33 -> "111"
+            sdk >= 32 -> "105"
+            sdk >= 31 -> "96"
+            sdk >= 30 -> "89"
+            sdk >= 29 -> "78"
+            sdk >= 28 -> "69"
+            else -> null
+        }
+    }
+
+    private fun sanitizeModel(raw: String?): String {
+        val cleaned = raw
+            ?.replace(Regex("""[\r\n\t;()]+"""), " ")
+            ?.replace(Regex("""\s+"""), " ")
+            ?.trim()
+            ?.takeIf { it.isNotBlank() }
+
+        if (cleaned != null) return cleaned
+
+        val brand = Build.BRAND?.trim()?.takeIf { it.isNotBlank() }
+        val device = Build.DEVICE?.trim()?.takeIf { it.isNotBlank() }
+        return listOfNotNull(brand, device).joinToString(" ").ifBlank { "Mobile" }
+    }
+
+    private const val FALLBACK_CHROME_MAJOR = "131"
 
     /** Заголовки navigate как у Chrome; для плеера см. [PlayerBrowserProfile.browserHeaders]. */
     fun documentHeaders(context: Context? = null): Map<String, String> =

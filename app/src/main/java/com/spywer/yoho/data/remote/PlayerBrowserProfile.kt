@@ -116,15 +116,26 @@ object PlayerBrowserProfile {
             brand("Chromium", major, full),
             brand("Google Chrome", major, full),
         )
+        val deviceModel = Build.MODEL?.takeIf { it.isNotBlank() }
+            ?: listOfNotNull(
+                Build.BRAND?.takeIf { it.isNotBlank() },
+                Build.DEVICE?.takeIf { it.isNotBlank() },
+            ).joinToString(" ").ifBlank { "Mobile" }
+        val arch = when {
+            Build.SUPPORTED_ABIS.any { it.startsWith("arm64") } -> "arm"
+            Build.SUPPORTED_ABIS.any { it.startsWith("x86_64") } -> "x86"
+            Build.SUPPORTED_ABIS.any { it.startsWith("x86") } -> "x86"
+            else -> "arm"
+        }
         val meta = UserAgentMetadata.Builder()
             .setBrandVersionList(brands)
             .setFullVersion(full)
             .setPlatform("Android")
             .setPlatformVersion(Build.VERSION.RELEASE ?: "14")
-            .setArchitecture("arm")
-            .setModel(Build.MODEL?.takeIf { it.isNotBlank() } ?: "Pixel 7")
+            .setArchitecture(arch)
+            .setModel(deviceModel)
             .setMobile(true)
-            .setBitness(64)
+            .setBitness(if (arch == "arm" || arch == "x86") 64 else 32)
             .build()
         WebSettingsCompat.setUserAgentMetadata(settings, meta)
     }

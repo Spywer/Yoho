@@ -1,9 +1,13 @@
 package com.spywer.yoho.ui.account
 
 import android.annotation.SuppressLint
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.util.Patterns
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -84,6 +88,7 @@ import com.spywer.yoho.BuildConfig
 import com.spywer.yoho.R
 import com.spywer.yoho.data.AppSettings
 import com.spywer.yoho.data.remote.AuthUserDto
+import com.spywer.yoho.data.remote.SiteHttp
 import com.spywer.yoho.ui.components.YohoBackButton
 import com.spywer.yoho.ui.layout.HomeMetrics
 import com.spywer.yoho.ui.layout.rememberHomeMetrics
@@ -549,6 +554,9 @@ private fun AccountSettingsPage(
     onBack: () -> Unit,
 ) {
     val context = LocalContext.current
+    val userAgent = remember { SiteHttp.userAgent(context) }
+    val copiedMessage = stringResource(R.string.settings_user_agent_copied)
+
     var pipEnabled by remember {
         mutableStateOf(AppSettings.pipEnabled(context))
     }
@@ -559,6 +567,7 @@ private fun AccountSettingsPage(
         Modifier
             .fillMaxSize()
             .statusBarsPadding()
+            .verticalScroll(rememberScrollState())
             .padding(horizontal = metrics.screenPadding, vertical = metrics.sectionGap),
     ) {
         AccountSubPageHeader(
@@ -639,6 +648,48 @@ private fun AccountSettingsPage(
                     hideLongMeta = checked
                     AppSettings.setHideLongMeta(context, checked)
                 },
+            )
+        }
+        Spacer(Modifier.height(metrics.sectionGap))
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(16.dp))
+                .background(MaterialTheme.colorScheme.surfaceVariant)
+                .clickable {
+                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+                    clipboard?.setPrimaryClip(ClipData.newPlainText("User-Agent", userAgent))
+                    Toast.makeText(context, copiedMessage, Toast.LENGTH_SHORT).show()
+                }
+                .padding(
+                    horizontal = if (metrics.isTablet) 20.dp else 16.dp,
+                    vertical = if (metrics.isTablet) 20.dp else 16.dp,
+                ),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Text(
+                    text = stringResource(R.string.settings_user_agent),
+                    color = MaterialTheme.colorScheme.onBackground,
+                    fontSize = (bodySize.value + 2f).sp,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Text(
+                    text = stringResource(R.string.settings_user_agent_tap_to_copy),
+                    color = MaterialTheme.colorScheme.primary,
+                    fontSize = metrics.cardMetaSize,
+                    fontWeight = FontWeight.Medium,
+                )
+            }
+            Spacer(Modifier.height(8.dp))
+            Text(
+                text = userAgent,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontSize = (metrics.cardMetaSize.value + 1f).sp,
+                lineHeight = metrics.lineOf((metrics.cardMetaSize.value + 1f).sp),
             )
         }
     }
