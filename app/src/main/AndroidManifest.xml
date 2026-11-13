@@ -34,7 +34,7 @@
             android:value="spywer@mail.ru" />
         <meta-data
             android:name="developer.website"
-            android:value="https://x-iweb.ru" />
+            android:value="https://spywer.ru" />
         <meta-data
             android:name="developer.telegram"
             android:value="Spywer" />
