@@ -333,75 +333,123 @@ private fun PlayerLoginPlaceholder(
     val primary = MaterialTheme.colorScheme.primary
     val onPrimary = MaterialTheme.colorScheme.onPrimary
     val shape = RoundedCornerShape(14.dp)
-
-    Row(
-        modifier = modifier
-            .clip(shape)
-            .background(
-                Brush.horizontalGradient(
-                    colors = listOf(
-                        Color(0xFF1A2D49),
-                        Color(0xFF162338),
-                    ),
+    val cardModifier = modifier
+        .clip(shape)
+        .background(
+            Brush.horizontalGradient(
+                colors = listOf(
+                    Color(0xFF1A2D49),
+                    Color(0xFF162338),
                 ),
-            )
-            .border(
-                width = 1.dp,
-                color = primary.copy(alpha = 0.45f),
-                shape = shape,
-            )
-            .padding(
-                horizontal = if (metrics.isTablet) 20.dp else 14.dp,
-                vertical = if (metrics.isTablet) 16.dp else 12.dp,
             ),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(if (metrics.isTablet) 16.dp else 12.dp),
-    ) {
-        Box(
-            modifier = Modifier
-                .size(if (metrics.isTablet) 44.dp else 36.dp)
-                .clip(CircleShape)
-                .background(primary.copy(alpha = 0.22f)),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(
-                imageVector = Icons.Filled.Lock,
-                contentDescription = null,
-                tint = primary,
-                modifier = Modifier.size(if (metrics.isTablet) 22.dp else 18.dp),
-            )
-        }
-
-        Text(
-            text = stringResource(R.string.detail_player_login_prompt),
-            color = MaterialTheme.colorScheme.onBackground,
-            fontSize = if (metrics.isTablet) metrics.detailBodySize else metrics.detailMetaSize,
-            lineHeight = if (metrics.isTablet) metrics.detailBodyLine else metrics.detailMetaLine,
-            fontWeight = FontWeight.Medium,
-            textAlign = TextAlign.Start,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f),
+        )
+        .border(
+            width = 1.dp,
+            color = primary.copy(alpha = 0.45f),
+            shape = shape,
         )
 
-        Button(
-            onClick = onLoginClick,
-            shape = RoundedCornerShape(10.dp),
-            colors = ButtonDefaults.buttonColors(
-                containerColor = primary,
-                contentColor = onPrimary,
-            ),
-            contentPadding = PaddingValues(
-                horizontal = if (metrics.isTablet) 20.dp else 14.dp,
-                vertical = 0.dp,
-            ),
-            modifier = Modifier.height(if (metrics.isTablet) 42.dp else 36.dp),
+    if (metrics.isTablet) {
+        Row(
+            modifier = cardModifier.padding(horizontal = 20.dp, vertical = 16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
         ) {
+            Box(
+                modifier = Modifier
+                    .size(44.dp)
+                    .clip(CircleShape)
+                    .background(primary.copy(alpha = 0.22f)),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.Lock,
+                    contentDescription = null,
+                    tint = primary,
+                    modifier = Modifier.size(22.dp),
+                )
+            }
+
             Text(
-                text = stringResource(R.string.detail_player_login_button),
-                fontSize = if (metrics.isTablet) metrics.searchTextSize else metrics.chipTextSize,
-                fontWeight = FontWeight.SemiBold,
+                text = stringResource(R.string.detail_player_login_prompt),
+                color = MaterialTheme.colorScheme.onBackground,
+                fontSize = metrics.detailBodySize,
+                lineHeight = metrics.detailBodyLine,
+                fontWeight = FontWeight.Medium,
+                textAlign = TextAlign.Start,
+                modifier = Modifier.weight(1f),
             )
+
+            Button(
+                onClick = onLoginClick,
+                shape = RoundedCornerShape(10.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = primary,
+                    contentColor = onPrimary,
+                ),
+                contentPadding = PaddingValues(horizontal = 20.dp, vertical = 0.dp),
+                modifier = Modifier.height(42.dp),
+            ) {
+                Text(
+                    text = stringResource(R.string.detail_player_login_button),
+                    fontSize = metrics.searchTextSize,
+                    fontWeight = FontWeight.SemiBold,
+                )
+            }
+        }
+    } else {
+        Column(
+            modifier = cardModifier.padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(32.dp)
+                        .clip(CircleShape)
+                        .background(primary.copy(alpha = 0.22f)),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Lock,
+                        contentDescription = null,
+                        tint = primary,
+                        modifier = Modifier.size(16.dp),
+                    )
+                }
+
+                Text(
+                    text = stringResource(R.string.detail_player_login_prompt),
+                    color = MaterialTheme.colorScheme.onBackground,
+                    fontSize = metrics.detailMetaSize,
+                    lineHeight = metrics.detailMetaLine,
+                    fontWeight = FontWeight.Medium,
+                    textAlign = TextAlign.Start,
+                    modifier = Modifier.weight(1f),
+                )
+            }
+
+            Button(
+                onClick = onLoginClick,
+                shape = RoundedCornerShape(10.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = primary,
+                    contentColor = onPrimary,
+                ),
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 0.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(36.dp),
+            ) {
+                Text(
+                    text = stringResource(R.string.detail_player_login_button),
+                    fontSize = metrics.chipTextSize,
+                    fontWeight = FontWeight.SemiBold,
+                )
+            }
         }
     }
 }

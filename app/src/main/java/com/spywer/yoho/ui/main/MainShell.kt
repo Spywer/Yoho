@@ -35,6 +35,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -108,6 +109,33 @@ private data class TitleRoute(
     }
 }
 
+private data class AccountReturnTarget(
+    val tab: MainTab,
+    val shelf: String?,
+    val titles: List<TitleRoute>,
+) {
+    fun encode(): String {
+        val titlesPart = titles.joinToString(";") { it.encode() }
+        return "${tab.name}#${shelf.orEmpty()}#$titlesPart"
+    }
+
+    companion object {
+        fun decode(raw: String): AccountReturnTarget {
+            val parts = raw.split('#', limit = 3)
+            val tab = parts.getOrNull(0)
+                ?.let { runCatching { MainTab.valueOf(it) }.getOrNull() }
+                ?: MainTab.Home
+            val shelf = parts.getOrNull(1)?.takeIf { it.isNotBlank() }
+            val titles = parts.getOrNull(2)
+                ?.takeIf { it.isNotBlank() }
+                ?.split(';')
+                ?.map { TitleRoute.decode(it) }
+                .orEmpty()
+            return AccountReturnTarget(tab = tab, shelf = shelf, titles = titles)
+        }
+    }
+}
+
 @Composable
 fun MainShell(
     initialTab: MainTab? = null,
@@ -135,11 +163,49 @@ fun MainShell(
     ) {
         emptyList<TitleRoute>().toMutableStateList()
     }
+    var accountReturnTarget by rememberSaveable(
+        stateSaver = Saver<AccountReturnTarget?, String>(
+            save = { it?.encode().orEmpty() },
+            restore = { raw ->
+                raw.takeIf { it.isNotEmpty() }?.let { AccountReturnTarget.decode(it) }
+            },
+        ),
+    ) {
+        mutableStateOf<AccountReturnTarget?>(null)
+    }
+
+    fun openAccountFromCurrent() {
+        if (tab != MainTab.Account || titleStack.isNotEmpty()) {
+            accountReturnTarget = AccountReturnTarget(
+                tab = if (tab == MainTab.Account) MainTab.Home else tab,
+                shelf = collectionShelf,
+                titles = titleStack.toList(),
+            )
+        }
+        titleStack.clear()
+        collectionShelf = null
+        tab = MainTab.Account
+    }
+
+    fun returnFromAccount() {
+        val target = accountReturnTarget
+        accountReturnTarget = null
+        if (target != null) {
+            titleStack.clear()
+            titleStack.addAll(target.titles)
+            collectionShelf = target.shelf
+            tab = target.tab
+        } else {
+            tab = MainTab.Home
+        }
+    }
+
     LaunchedEffect(initialTab) {
         if (initialTab != null) tab = initialTab
     }
     LaunchedEffect(openTabRequest) {
         val target = openTabRequest ?: return@LaunchedEffect
+        accountReturnTarget = null
         titleStack.clear()
         collectionShelf = null
         tab = target
@@ -215,6 +281,7 @@ fun MainShell(
         enabled = titleStack.isEmpty() && (collectionShelf != null || tab != MainTab.Home),
     ) {
         when {
+            tab == MainTab.Account -> returnFromAccount()
             collectionShelf != null -> collectionShelf = null
             else -> tab = MainTab.Home
         }
@@ -253,9 +320,16 @@ fun MainShell(
                             NavigationBarItem(
                                 selected = selected,
                                 onClick = {
-                                    titleStack.clear()
-                                    collectionShelf = null
-                                    tab = spec.tab
+                                    if (spec.tab == MainTab.Account) {
+                                        if (tab != MainTab.Account || titleStack.isNotEmpty()) {
+                                            openAccountFromCurrent()
+                                        }
+                                    } else {
+                                        accountReturnTarget = null
+                                        titleStack.clear()
+                                        collectionShelf = null
+                                        tab = spec.tab
+                                    }
                                 },
                                 icon = {
                                     val compactNav = !metrics.isTablet
@@ -340,22 +414,19 @@ fun MainShell(
                                 viewModel = shelfVm,
                                 fixedShelf = shelf,
                                 onBack = { collectionShelf = null },
-                                onNeedLogin = {
-                                    collectionShelf = null
-                                    tab = MainTab.Account
-                                },
+                                onNeedLogin = { openAccountFromCurrent() },
                                 onOpenTitle = ::openTitle,
                             )
                         } else {
                             CollectionHubScreen(
                                 onOpenTitle = ::openTitle,
                                 onOpenShelf = ::openShelf,
-                                onNeedLogin = { tab = MainTab.Account },
+                                onNeedLogin = { openAccountFromCurrent() },
                             )
                         }
                     }
                     MainTab.Account -> AccountScreen(
-                        onBack = { tab = MainTab.Home },
+                        onBack = ::returnFromAccount,
                     )
                 }
             }
@@ -373,11 +444,7 @@ fun MainShell(
                     viewModel = detailVm,
                     onBack = ::closeTitle,
                     onOpenTitle = ::openTitle,
-                    onNeedLogin = {
-                        titleStack.clear()
-                        collectionShelf = null
-                        tab = MainTab.Account
-                    },
+                    onNeedLogin = { openAccountFromCurrent() },
                     onOpenGenre = { genreLabel, mediaType ->
                         val slug = genreSlugOf(genreLabel) ?: return@TitleDetailScreen
                         context.startActivity(

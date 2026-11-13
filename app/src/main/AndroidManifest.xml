@@ -24,7 +24,7 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.Yoho"
         android:usesCleartextTraffic="true"
-        tools:targetApi="29">
+        tools:targetApi="33">
 
         <meta-data
             android:name="developer.name"
@@ -106,6 +106,13 @@
             android:parentActivityName=".MainActivity"
             android:resizeableActivity="true"
             android:theme="@style/Theme.Yoho" />
+        <activity
+            android:name=".ui.account.AccountActivity"
+            android:exported="false"
+            android:parentActivityName=".MainActivity"
+            android:resizeableActivity="true"
+            android:theme="@style/Theme.Yoho"
+            android:windowSoftInputMode="adjustResize" />
     </application>
 
 </manifest>
