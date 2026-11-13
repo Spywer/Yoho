@@ -1321,7 +1321,12 @@ private fun TrailerSection(
             ) { _, item ->
                 TrailerCard(
                     item = item,
-                    modifier = Modifier.width(cardWidth),
+                    // Если после загрузки трейлер оказался всего 1, растягиваем его на ширину
+                    modifier = if (items.size == 1) {
+                        Modifier.fillParentMaxWidth()
+                    } else {
+                        Modifier.width(cardWidth)
+                    },
                     onClick = { onPlayTrailer(item) },
                 )
             }
