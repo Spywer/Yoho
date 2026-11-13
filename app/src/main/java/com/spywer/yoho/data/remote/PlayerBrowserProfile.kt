@@ -25,13 +25,27 @@ object PlayerBrowserProfile {
     /** CSS zoom оболочки embed в fullscreen. */
     const val PLAYER_CSS_ZOOM = "1.35"
 
-    /** Sec-CH / Accept для navigate и OkHttp-прокси. */
+    @Volatile
+    private var cachedHeaders: Map<String, String>? = null
+
+    @Volatile
+    private var cachedHeadersKey: String? = null
+
+    /**
+     * Sec-CH / Accept для navigate и OkHttp-прокси.
+     * Кэш по UA + активному Referer (инвалидируется при failover зеркала).
+     */
     fun browserHeaders(context: android.content.Context? = null): Map<String, String> {
         val ua = SiteHttp.userAgent(context)
+        val referer = SiteHttp.REFERER
+        val key = "$ua|$referer"
+        cachedHeaders?.let { cached ->
+            if (cachedHeadersKey == key) return cached
+        }
         val major = chromeMajor(ua)
-        return mapOf(
+        val headers = mapOf(
             "User-Agent" to ua,
-            "Referer" to SiteHttp.REFERER,
+            "Referer" to referer,
             "Accept" to
                 "text/html,application/xhtml+xml,application/xml;q=0.9," +
                 "image/avif,image/webp,image/apng,*/*;q=0.8," +
@@ -47,6 +61,9 @@ object PlayerBrowserProfile {
             "Sec-CH-UA-Platform" to "\"Android\"",
             "X-Requested-With" to "",
         )
+        cachedHeaders = headers
+        cachedHeadersKey = key
+        return headers
     }
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -99,15 +116,26 @@ object PlayerBrowserProfile {
             brand("Chromium", major, full),
             brand("Google Chrome", major, full),
         )
+        val deviceModel = Build.MODEL?.takeIf { it.isNotBlank() }
+            ?: listOfNotNull(
+                Build.BRAND?.takeIf { it.isNotBlank() },
+                Build.DEVICE?.takeIf { it.isNotBlank() },
+            ).joinToString(" ").ifBlank { "Mobile" }
+        val arch = when {
+            Build.SUPPORTED_ABIS.any { it.startsWith("arm64") } -> "arm"
+            Build.SUPPORTED_ABIS.any { it.startsWith("x86_64") } -> "x86"
+            Build.SUPPORTED_ABIS.any { it.startsWith("x86") } -> "x86"
+            else -> "arm"
+        }
         val meta = UserAgentMetadata.Builder()
             .setBrandVersionList(brands)
             .setFullVersion(full)
             .setPlatform("Android")
             .setPlatformVersion(Build.VERSION.RELEASE ?: "14")
-            .setArchitecture("arm")
-            .setModel(Build.MODEL?.takeIf { it.isNotBlank() } ?: "Pixel 7")
+            .setArchitecture(arch)
+            .setModel(deviceModel)
             .setMobile(true)
-            .setBitness(64)
+            .setBitness(if (arch == "arm" || arch == "x86") 64 else 32)
             .build()
         WebSettingsCompat.setUserAgentMetadata(settings, meta)
     }

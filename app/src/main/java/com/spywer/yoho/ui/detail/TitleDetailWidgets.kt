@@ -22,6 +22,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.SubcomposeLayout
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -109,6 +110,8 @@ internal fun MetaRow(
     onOpenPerson: (Int) -> Unit = {},
     linkPartsAsGenres: Boolean = false,
     onOpenGenre: (String) -> Unit = {},
+    maxLines: Int = 1,
+    onTruncated: (Boolean) -> Unit = {},
 ) {
     if (value.isNullOrBlank()) return
     val metrics = LocalHomeMetrics.current
@@ -140,40 +143,147 @@ internal fun MetaRow(
                 color = MaterialTheme.colorScheme.onBackground,
                 fontSize = metaSize,
                 lineHeight = metaLine,
+                maxLines = maxLines,
+                overflow = if (maxLines == 1) TextOverflow.Ellipsis else TextOverflow.Clip,
+                onTextLayout = { if (maxLines == 1) onTruncated(it.hasVisualOverflow) },
                 modifier = Modifier.weight(1f),
             )
         } else {
             val parts = value.split(',').map { it.trim() }.filter { it.isNotEmpty() }
-            FlowRow(
-                Modifier.weight(1f),
-                horizontalArrangement = Arrangement.spacedBy(0.dp),
-                verticalArrangement = Arrangement.spacedBy(metrics.blockGap),
-            ) {
-                parts.forEachIndexed { index, name ->
-                    val personId = personIds[name]?.takeIf { it > 0 }
-                    val asGenre = linkPartsAsGenres && genreSlugOf(name) != null
-                    Text(
-                        text = name,
-                        color = if (personId != null || asGenre) {
-                            MaterialTheme.colorScheme.primary
-                        } else {
-                            MaterialTheme.colorScheme.onBackground
-                        },
-                        fontSize = metaSize,
-                        lineHeight = metaLine,
-                        modifier = when {
-                            personId != null -> Modifier.clickable { onOpenPerson(personId) }
-                            asGenre -> Modifier.clickable { onOpenGenre(name) }
-                            else -> Modifier
-                        },
-                    )
-                    if (index < parts.lastIndex) {
+            val hasLinks = personIds.isNotEmpty() || linkPartsAsGenres
+
+            if (!hasLinks) {
+                Text(
+                    text = value,
+                    color = MaterialTheme.colorScheme.onBackground,
+                    fontSize = metaSize,
+                    lineHeight = metaLine,
+                    maxLines = maxLines,
+                    overflow = if (maxLines == 1) TextOverflow.Ellipsis else TextOverflow.Clip,
+                    onTextLayout = { if (maxLines == 1) onTruncated(it.hasVisualOverflow) },
+                    modifier = Modifier.weight(1f),
+                )
+            } else if (maxLines > 1) {
+                FlowRow(
+                    Modifier.weight(1f),
+                    horizontalArrangement = Arrangement.spacedBy(0.dp),
+                    verticalArrangement = Arrangement.spacedBy(metrics.blockGap),
+                ) {
+                    parts.forEachIndexed { index, name ->
+                        val personId = personIds[name]?.takeIf { it > 0 }
+                        val asGenre = linkPartsAsGenres && genreSlugOf(name) != null
                         Text(
-                            text = ", ",
-                            color = MaterialTheme.colorScheme.onBackground,
+                            text = name,
+                            color = if (personId != null || asGenre) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.onBackground
+                            },
                             fontSize = metaSize,
                             lineHeight = metaLine,
+                            modifier = when {
+                                personId != null -> Modifier.clickable { onOpenPerson(personId) }
+                                asGenre -> Modifier.clickable { onOpenGenre(name) }
+                                else -> Modifier
+                            },
                         )
+                        if (index < parts.lastIndex) {
+                            Text(
+                                text = ", ",
+                                color = MaterialTheme.colorScheme.onBackground,
+                                fontSize = metaSize,
+                                lineHeight = metaLine,
+                            )
+                        }
+                    }
+                }
+            } else {
+                SubcomposeLayout(Modifier.weight(1f)) { constraints ->
+                    val linePx = metaLine.roundToPx()
+                    val flowPlaceable = subcompose("flow", {
+                        FlowRow(
+                            horizontalArrangement = Arrangement.spacedBy(0.dp),
+                            verticalArrangement = Arrangement.spacedBy(metrics.blockGap),
+                        ) {
+                            parts.forEachIndexed { index, name ->
+                                val personId = personIds[name]?.takeIf { it > 0 }
+                                val asGenre = linkPartsAsGenres && genreSlugOf(name) != null
+                                Text(
+                                    text = name,
+                                    color = if (personId != null || asGenre) {
+                                        MaterialTheme.colorScheme.primary
+                                    } else {
+                                        MaterialTheme.colorScheme.onBackground
+                                    },
+                                    fontSize = metaSize,
+                                    lineHeight = metaLine,
+                                    maxLines = 1,
+                                )
+                                if (index < parts.lastIndex) {
+                                    Text(
+                                        text = ", ",
+                                        color = MaterialTheme.colorScheme.onBackground,
+                                        fontSize = metaSize,
+                                        lineHeight = metaLine,
+                                        maxLines = 1,
+                                    )
+                                }
+                            }
+                        }
+                    }).first().measure(constraints)
+                    val fitsInOneLine = flowPlaceable.height <= linePx
+                    onTruncated(!fitsInOneLine)
+
+                    val placeable = if (fitsInOneLine) {
+                        subcompose("main", {
+                            FlowRow(
+                                horizontalArrangement = Arrangement.spacedBy(0.dp),
+                                verticalArrangement = Arrangement.spacedBy(metrics.blockGap),
+                            ) {
+                                parts.forEachIndexed { index, name ->
+                                    val personId = personIds[name]?.takeIf { it > 0 }
+                                    val asGenre = linkPartsAsGenres && genreSlugOf(name) != null
+                                    Text(
+                                        text = name,
+                                        color = if (personId != null || asGenre) {
+                                            MaterialTheme.colorScheme.primary
+                                        } else {
+                                            MaterialTheme.colorScheme.onBackground
+                                        },
+                                        fontSize = metaSize,
+                                        lineHeight = metaLine,
+                                        modifier = when {
+                                            personId != null -> Modifier.clickable { onOpenPerson(personId) }
+                                            asGenre -> Modifier.clickable { onOpenGenre(name) }
+                                            else -> Modifier
+                                        },
+                                    )
+                                    if (index < parts.lastIndex) {
+                                        Text(
+                                            text = ", ",
+                                            color = MaterialTheme.colorScheme.onBackground,
+                                            fontSize = metaSize,
+                                            lineHeight = metaLine,
+                                        )
+                                    }
+                                }
+                            }
+                        }).first().measure(constraints)
+                    } else {
+                        subcompose("main", {
+                            Text(
+                                text = value,
+                                color = MaterialTheme.colorScheme.onBackground,
+                                fontSize = metaSize,
+                                lineHeight = metaLine,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }).first().measure(constraints)
+                    }
+
+                    layout(placeable.width, placeable.height) {
+                        placeable.place(0, 0)
                     }
                 }
             }

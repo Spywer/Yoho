@@ -72,40 +72,45 @@ object PlayerWebViewHttp {
 
             val http = if (useHttp1) http1Client else client
             val response = http.newCall(builder.build()).execute()
-            val body = response.body
-            val contentType = response.header("Content-Type").orEmpty()
-            val mime = contentType.substringBefore(';').trim()
-                .ifBlank { guessMime(httpUrl.encodedPath) }
-            val charset = contentType.substringAfter("charset=", "").substringBefore(';').trim()
-                .takeIf { it.isNotBlank() && !isMediaPath(httpUrl.encodedPath) }
+            try {
+                val body = response.body
+                val contentType = response.header("Content-Type").orEmpty()
+                val mime = contentType.substringBefore(';').trim()
+                    .ifBlank { guessMime(httpUrl.encodedPath) }
+                val charset = contentType.substringAfter("charset=", "").substringBefore(';').trim()
+                    .takeIf { it.isNotBlank() && !isMediaPath(httpUrl.encodedPath) }
 
-            val outHeaders = LinkedHashMap<String, String>()
-            for (name in listOf(
-                "Content-Type", "Cache-Control", "Accept-Ranges", "Content-Range",
-                "Access-Control-Allow-Origin", "Access-Control-Allow-Credentials",
-            )) {
-                response.header(name)?.let { outHeaders[name] = it }
-            }
+                val outHeaders = LinkedHashMap<String, String>()
+                for (name in listOf(
+                    "Content-Type", "Cache-Control", "Accept-Ranges", "Content-Range",
+                    "Access-Control-Allow-Origin", "Access-Control-Allow-Credentials",
+                )) {
+                    response.header(name)?.let { outHeaders[name] = it }
+                }
 
-            // Закрываем OkHttp Response вместе с потоком WebView.
-            val stream: InputStream = object : FilterInputStream(body.byteStream()) {
-                override fun close() {
-                    try {
-                        super.close()
-                    } finally {
-                        response.close()
+                // Закрываем OkHttp Response вместе с потоком WebView.
+                val stream: InputStream = object : FilterInputStream(body.byteStream()) {
+                    override fun close() {
+                        try {
+                            super.close()
+                        } finally {
+                            response.close()
+                        }
                     }
                 }
-            }
 
-            WebResourceResponse(
-                mime,
-                charset,
-                response.code,
-                response.message.ifBlank { "OK" },
-                outHeaders,
-                stream,
-            )
+                WebResourceResponse(
+                    mime,
+                    charset,
+                    response.code,
+                    response.message.ifBlank { "OK" },
+                    outHeaders,
+                    stream,
+                )
+            } catch (t: Throwable) {
+                response.close()
+                throw t
+            }
         }.getOrNull()
     }
 

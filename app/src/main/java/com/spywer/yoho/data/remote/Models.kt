@@ -1,7 +1,6 @@
 package com.spywer.yoho.data.remote
 
 import com.google.gson.annotations.SerializedName
-import com.spywer.yoho.BuildConfig
 import kotlin.jvm.Transient
 
 data class TrendingResponse(
@@ -234,6 +233,14 @@ data class DiaryResponseDto(
     val entry: DiaryEntryDto? = null,
 )
 
+/** GET /api/diary?page=&limit= → { entries, total, page, pageSize } */
+data class DiaryListResponseDto(
+    val entries: List<DiaryEntryDto> = emptyList(),
+    val total: Int = 0,
+    val page: Int = 1,
+    val pageSize: Int = 50,
+)
+
 data class DiaryEntryDto(
     val id: String? = null,
     val itemId: String? = null,
@@ -242,6 +249,146 @@ data class DiaryEntryDto(
     val year: String? = null,
     val mediaType: String? = null,
     val statusLabel: String? = null,
+    val sourceReaction: String? = null,
+    val posterUrl: String? = null,
+    val kinopoiskId: String? = null,
+    val tmdbId: Int? = null,
+    @SerializedName(value = "kpRating", alternate = ["kp"])
+    val kpRating: Double? = null,
+    @SerializedName(value = "imdbRating", alternate = ["imdb"])
+    val imdbRating: Double? = null,
+    val watchedAt: String? = null,
+    val createdAt: String? = null,
+    val updatedAt: String? = null,
+) {
+    fun resolvedKp(): Int? =
+        kinopoiskId?.toIntOrNull()
+            ?: itemId?.removePrefix("kp:")?.toIntOrNull()
+            ?: href?.substringAfterLast('/')?.substringBefore('?')?.toIntOrNull()
+
+    fun selectionKey(): String =
+        id ?: itemId ?: "kp:${resolvedKp()}"
+
+    /** posterUrl с API часто null — fallback на kp_small. */
+    fun resolvedPoster(): String? {
+        posterUrl.absMediaUrl()?.let { return it }
+        val kp = resolvedKp() ?: return null
+        return "/api/img/kp/posters/kp_small/$kp.jpg".absMediaUrl()
+    }
+
+    fun displayStatus(): String? =
+        statusLabel?.takeIf { it.isNotBlank() }
+            ?: when (sourceReaction) {
+                "like" -> "Нравится"
+                "dislike" -> "Не нравится"
+                else -> null
+            }
+
+    fun addedMillis(): Long =
+        parseIsoMillis(createdAt) ?: parseIsoMillis(updatedAt) ?: 0L
+
+    fun watchedMillis(): Long =
+        parseIsoMillis(watchedAt) ?: 0L
+
+    /**
+     * Лайк/дизлайк ([sourceReaction]) и [statusLabel] независимы и могут быть вместе.
+     * При смене статуса сохраняем like/dislike.
+     */
+    fun toDiaryRequest(statusLabel: String): DiaryRequestDto? {
+        val kp = resolvedKp() ?: return null
+        val item = itemId?.takeIf { it.isNotBlank() } ?: "kp:$kp"
+        val media = mediaType?.takeIf { it.isNotBlank() } ?: "movie"
+        val link = href?.takeIf { it.isNotBlank() } ?: when (media) {
+            "tv", "anime" -> "/series/$kp"
+            else -> "/film/$kp"
+        }
+        val titleText = title?.takeIf { it.isNotBlank() } ?: return null
+        val reaction = when (sourceReaction) {
+            "like", "dislike" -> sourceReaction
+            else -> "manual"
+        }
+        return DiaryRequestDto(
+            itemId = item,
+            href = link,
+            title = titleText,
+            year = year,
+            mediaType = media,
+            sourceReaction = reaction,
+            statusLabel = statusLabel,
+            updateStatusIfItemExists = true,
+        )
+    }
+
+    fun hasLikeOrDislike(): Boolean =
+        sourceReaction == "like" || sourceReaction == "dislike"
+}
+
+private fun parseIsoMillis(raw: String?): Long? {
+    if (raw.isNullOrBlank()) return null
+    return runCatching { java.time.Instant.parse(raw).toEpochMilli() }.getOrNull()
+}
+
+/**
+ * Тайл из /{username}/films (SSR/API).
+ * Ответ бывает массивом или обёрткой `{ films|entries|items: [...] }`.
+ */
+data class ProfileFilmDto(
+    val itemId: String? = null,
+    val href: String? = null,
+    val title: String? = null,
+    val year: String? = null,
+    val posterUrl: String? = null,
+    val mediaType: String? = null,
+    val tmdbId: Int? = null,
+    val kp: Double? = null,
+    val imdb: Double? = null,
+    val status: String? = null,
+    val watchedAt: String? = null,
+) {
+    fun resolvedKp(): Int? =
+        itemId?.removePrefix("kp:")?.toIntOrNull()
+            ?: href?.substringAfterLast('/')?.substringBefore('?')?.toIntOrNull()
+
+    fun resolvedPoster(): String? {
+        posterUrl.absMediaUrl()?.let { return it }
+        val kpId = resolvedKp() ?: return null
+        return "/api/img/kp/posters/kp_small/$kpId.jpg".absMediaUrl()
+    }
+
+    fun titleWithYear(): String {
+        val base = title?.takeIf { it.isNotBlank() } ?: return ""
+        val y = year?.takeIf { it.isNotBlank() }
+        return if (y != null) "$base ($y)" else base
+    }
+}
+
+data class ProfileFilmsResponseDto(
+    val films: List<ProfileFilmDto>? = null,
+    val entries: List<ProfileFilmDto>? = null,
+    val items: List<ProfileFilmDto>? = null,
+) {
+    fun resolved(): List<ProfileFilmDto> =
+        films ?: entries ?: items ?: emptyList()
+}
+
+/** POST /api/posters/resolve → { posters: { "kp:…": "/api/img/…" } } */
+data class PostersResolveRequest(
+    val items: List<PostersResolveItem> = emptyList(),
+)
+
+data class PostersResolveItem(
+    val id: String,
+    val href: String? = null,
+    val title: String? = null,
+    val year: String? = null,
+    val mediaType: String? = null,
+    val tmdbId: Int? = null,
+)
+
+data class PostersResolveResponse(
+    val posters: Map<String, String> = emptyMap(),
+    val titles: Map<String, String> = emptyMap(),
+    val types: Map<String, String> = emptyMap(),
 )
 
 /** GET /api/diary/contains?itemId=kp:… → { inDiary, statusLabel } */
@@ -301,7 +448,30 @@ data class FavoriteItemDto(
     val mediaType: String? = null,
     val ts: Long? = null,
     val tmdbTvId: Int? = null,
-)
+) {
+    fun selectionKey(): String =
+        id ?: contentId?.let { "kp:$it" } ?: "unknown-${title.hashCode()}"
+
+    fun toActivityItem(): MeActivityItemDto? {
+        val kp = contentId ?: id?.removePrefix("kp:")?.toIntOrNull()
+        val itemId = id ?: kp?.let { "kp:$it" } ?: return null
+        val titleText = title?.takeIf { it.isNotBlank() } ?: return null
+        val media = mediaType ?: contentType ?: "movie"
+        val link = href?.takeIf { it.isNotBlank() } ?: when (media) {
+            "tv", "anime" -> if (kp != null) "/series/$kp" else return null
+            else -> if (kp != null) "/film/$kp" else return null
+        }
+        return MeActivityItemDto(
+            id = itemId,
+            href = link,
+            title = titleText,
+            year = year,
+            posterUrl = posterUrl.toFavoritePosterPath(),
+            mediaType = media,
+            ts = ts ?: System.currentTimeMillis(),
+        )
+    }
+}
 
 /** GET /api/sync — избранное и история просмотров */
 data class SyncResponseDto(
@@ -365,6 +535,8 @@ data class AuthUserDto(
     @SerializedName("avatar_source") val avatarSource: String? = null,
     @SerializedName("registered_at") val registeredAt: String? = null,
     @SerializedName("is_private") val isPrivate: Boolean? = null,
+    @SerializedName("followers_count") val followersCount: Int? = null,
+    @SerializedName("following_count") val followingCount: Int? = null,
 ) {
     fun resolvedDisplayName(): String? =
         displayName?.takeIf { it.isNotBlank() }
@@ -373,7 +545,19 @@ data class AuthUserDto(
 
     fun resolvedAvatar(): String? =
         avatar?.takeIf { it.isNotBlank() } ?: image?.takeIf { it.isNotBlank() }
+
+    fun resolvedUserCode(): String? {
+        val raw = userCode?.trim()?.takeIf { it.isNotBlank() } ?: return null
+        return if (raw.startsWith("#")) raw else "#$raw"
+    }
 }
+
+/** GET /api/profile/me — обогащает сессию (роль, код, подписки). */
+data class ProfileMeResponseDto(
+    val user: AuthUserDto? = null,
+    @SerializedName("followers_count") val followersCount: Int? = null,
+    @SerializedName("following_count") val followingCount: Int? = null,
+)
 
 data class AuthSessionDto(
     val id: String? = null,
@@ -619,7 +803,7 @@ private fun PlayerTurboDto.toEmbedUrl(): String? =
     baseUrl?.takeIf { it.isNotBlank() }?.ensureAbsHttpUrl()?.withQueryParam("api", "1")
 
 private fun String.toCollapsEmbedUrl(): String =
-    ensureAbsHttpUrl().withQueryParam("host", "reyoho.com")
+    ensureAbsHttpUrl().withQueryParam("host", SiteHttp.HOST)
 
 private fun PlayerVideoseedDto.toEmbedUrl(): String? =
     baseUrl?.takeIf { it.isNotBlank() }?.ensureAbsHttpUrl()
@@ -1210,7 +1394,7 @@ fun TitleDto.typeLabel(): String = when (mediaType) {
 fun String?.absMediaUrl(): String? {
     if (isNullOrBlank()) return null
     if (startsWith("http://") || startsWith("https://")) return this
-    val base = BuildConfig.API_BASE_URL.trimEnd('/')
+    val base = SiteHttp.ORIGIN
     return base + if (startsWith("/")) this else "/$this"
 }
 
@@ -1228,7 +1412,7 @@ fun TitleDetailDto.withResolvedMediaUrls(): TitleDetailDto = copy(
 
 fun String?.toRelativeMediaPath(): String? {
     if (isNullOrBlank()) return null
-    val base = BuildConfig.API_BASE_URL.trimEnd('/')
+    val base = SiteHttp.ORIGIN
     return when {
         startsWith(base) -> removePrefix(base).ifBlank { "/" }
         startsWith("http://") || startsWith("https://") -> {
@@ -1275,17 +1459,24 @@ fun TitleDetailDto.toFavoriteActivityItem(): MeActivityItemDto? {
     )
 }
 
-fun TitleDetailDto.toDiaryRequest(statusLabel: String): DiaryRequestDto? {
+fun TitleDetailDto.toDiaryRequest(
+    statusLabel: String,
+    sourceReaction: String = "manual",
+): DiaryRequestDto? {
     val kp = idKp?.takeIf { it > 0 } ?: return null
     val href = siteHref() ?: return null
     val titleText = title?.ru ?: title?.original ?: return null
+    val reaction = when (sourceReaction) {
+        "like", "dislike" -> sourceReaction
+        else -> "manual"
+    }
     return DiaryRequestDto(
         itemId = "kp:$kp",
         href = href,
         title = titleText,
         year = (year ?: yearStart)?.toString(),
         mediaType = normalizedMediaType(),
-        sourceReaction = "manual",
+        sourceReaction = reaction,
         statusLabel = statusLabel,
         updateStatusIfItemExists = true,
     )

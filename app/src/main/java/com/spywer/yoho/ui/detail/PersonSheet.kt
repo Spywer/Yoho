@@ -69,23 +69,14 @@ fun PersonSheet(
         }
     }
 
+    if (loading) return
+
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
         containerColor = MaterialTheme.colorScheme.surface,
     ) {
         when {
-            loading -> {
-                Box(
-                    Modifier
-                        .fillMaxWidth()
-                        .height(200.dp),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
-                }
-            }
-
             error != null && person == null -> {
                 Text(
                     text = error.orEmpty(),

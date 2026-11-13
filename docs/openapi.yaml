@@ -4,6 +4,7 @@ info:
   description: |
     Программный интерфейс каталога аудиовизуального контента YoHo.
     База: более 1 677 921 единицы контента с метаданными из Kinopoisk, TMDB, IMDb, Rotten Tomatoes.
+    Коллекция (клиент): GET /api/diary, POST /api/posters/resolve, медиатека profile/{username}/films.
   version: 0.1.42
   contact:
     name: YoHo API Support
@@ -261,7 +262,10 @@ paths:
   /api/profile/{username}/films:
     get:
       tags: [profile]
-      summary: Оценки пользователя
+      summary: Медиатека профиля (дневник ∪ избранное)
+      description: |
+        Как страница `/{username}/films`: объединение дневника и избранного
+        с рейтингами КП/IMDb. Ответ — массив или обёртка `{ films|entries|items }`.
       operationId: getUserFilms
       parameters:
         - name: username
@@ -274,8 +278,10 @@ paths:
           content:
             application/json:
               schema:
-                type: array
-                items: { $ref: '#/components/schemas/UserRating' }
+                oneOf:
+                  - type: array
+                    items: { $ref: '#/components/schemas/ProfileFilm' }
+                  - $ref: '#/components/schemas/ProfileFilmsResponse'
 
   /api/profile/{username}/diary:
     get:
@@ -1094,9 +1100,32 @@ paths:
   # DIARY (reyoho.com — statusLabel на русском)
   # ============================================================
   /api/diary:
+    get:
+      tags: [diary]
+      summary: Список своего дневника
+      description: |
+        Пагинация `page` + `limit`. `sourceReaction` (`manual`|`like`|`dislike`)
+        и `statusLabel` независимы и могут сосуществовать.
+      operationId: listMyDiary
+      parameters:
+        - name: page
+          in: query
+          schema: { type: integer, minimum: 1, default: 1 }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DiaryListResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
     post:
       tags: [diary]
-      summary: Добавить / обновить статус в дневнике
+      summary: Добавить / обновить статус или реакцию
+      description: |
+        Для like/dislike `statusLabel` можно не передавать.
+        При смене только статуса клиент сохраняет like/dislike в `sourceReaction`.
       operationId: addToDiary
       requestBody:
         required: true
@@ -1104,17 +1133,22 @@ paths:
           application/json:
             schema:
               type: object
-              required: [itemId, href, title, mediaType, statusLabel]
+              required: [itemId, href, title, mediaType]
               properties:
                 itemId: { type: string, example: "kp:5512084" }
                 href: { type: string, example: "/series/5512084" }
                 title: { type: string }
                 year: { type: string, example: "2025" }
                 mediaType: { type: string, enum: [movie, tv, anime] }
-                sourceReaction: { type: string, example: manual }
-                statusLabel:
+                sourceReaction:
                   type: string
-                  description: Русская метка статуса UI
+                  enum: [manual, like, dislike]
+                  default: manual
+                  description: Реакция; независима от statusLabel
+                statusLabel:
+                  allOf:
+                    - $ref: '#/components/schemas/DiaryStatusLabel'
+                  description: Русская метка статуса UI (опционально для like/dislike)
                   example: Хочу посмотреть
                 updateStatusIfItemExists: { type: boolean, default: true }
       responses:
@@ -1127,6 +1161,8 @@ paths:
                 properties:
                   entry: { $ref: '#/components/schemas/DiaryEntry' }
         '401': { $ref: '#/components/responses/Unauthorized' }
+        '409':
+          description: Конфликт (например, реакция уже есть)
     delete:
       tags: [diary]
       summary: Убрать из дневника
@@ -1190,6 +1226,23 @@ paths:
       responses:
         '204': { description: OK }
         '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /api/posters/resolve:
+    post:
+      tags: [favorites]
+      summary: Резолв постеров/тайтлов для карточек
+      description: Используется хабом коллекции, когда у записи нет posterUrl.
+      operationId: resolvePosters
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PostersResolveRequest' }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PostersResolveResponse' }
 
   /api/sync:
     get:
@@ -2290,9 +2343,21 @@ components:
         has_next: { type: boolean }
 
     # ==================== USER DATA ====================
+    DiaryListResponse:
+      type: object
+      properties:
+        entries:
+          type: array
+          items: { $ref: '#/components/schemas/DiaryEntry' }
+        total: { type: integer }
+        page: { type: integer }
+        pageSize: { type: integer }
+
     DiaryEntry:
       type: object
-      description: Запись дневника (ответ POST /api/diary → entry)
+      description: |
+        Запись дневника (POST → entry; GET /api/diary → entries[]).
+        sourceReaction и statusLabel независимы.
       properties:
         id: { type: string }
         itemId: { type: string, example: "kp:5512084" }
@@ -2303,12 +2368,82 @@ components:
         tmdbId: { type: integer, nullable: true }
         kinopoiskId: { type: string, nullable: true }
         posterUrl: { type: string, nullable: true }
-        sourceReaction: { type: string }
+        sourceReaction:
+          type: string
+          enum: [manual, like, dislike]
         statusLabel: { $ref: '#/components/schemas/DiaryStatusLabel' }
-        kpRating: { type: number, nullable: true }
-        imdbRating: { type: number, nullable: true }
+        kpRating:
+          type: number
+          nullable: true
+          description: Также может прийти как `kp`
+        imdbRating:
+          type: number
+          nullable: true
+          description: Также может прийти как `imdb`
+        watchedAt: { type: string, format: date-time, nullable: true }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
+
+    ProfileFilm:
+      type: object
+      description: Элемент медиатеки профиля (diary ∪ favorites)
+      properties:
+        itemId: { type: string, example: "kp:1048334" }
+        href: { type: string }
+        title: { type: string }
+        year: { type: string }
+        posterUrl: { type: string, nullable: true }
+        mediaType: { type: string, enum: [movie, tv, anime] }
+        tmdbId: { type: integer, nullable: true }
+        kp: { type: number, nullable: true }
+        imdb: { type: number, nullable: true }
+        status: { type: string, nullable: true }
+        watchedAt: { type: string, format: date-time, nullable: true }
+
+    ProfileFilmsResponse:
+      type: object
+      description: Обёртка ответа GET profile/.../films (один из ключей)
+      properties:
+        films:
+          type: array
+          items: { $ref: '#/components/schemas/ProfileFilm' }
+        entries:
+          type: array
+          items: { $ref: '#/components/schemas/ProfileFilm' }
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/ProfileFilm' }
+
+    PostersResolveRequest:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+            required: [id]
+            properties:
+              id: { type: string, example: "kp:1048334" }
+              href: { type: string, example: "/film/1048334" }
+              title: { type: string }
+              year: { type: string }
+              mediaType: { type: string, enum: [movie, tv, anime] }
+              tmdbId: { type: integer, nullable: true }
+
+    PostersResolveResponse:
+      type: object
+      properties:
+        posters:
+          type: object
+          additionalProperties: { type: string }
+          example: { "kp:1048334": "/api/img/t/p/w185/….jpg" }
+        titles:
+          type: object
+          additionalProperties: { type: string }
+        types:
+          type: object
+          additionalProperties: { type: string }
 
     ActivityItem:
       type: object

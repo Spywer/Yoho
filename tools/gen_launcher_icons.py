@@ -16,9 +16,14 @@ WHITE = (255, 255, 255, 255)
 
 def load_font(size: int) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
     for path in (
-        r"C:\Windows\Fonts\arialbd.ttf",
+        r"C:\Windows\Fonts\GoogleSans\fonts\Android\GoogleSans-Regular.ttf",
+        r"C:\Windows\Fonts\GoogleSans\fonts\Android\GoogleSans-Bold.ttf",
+        r"C:\Windows\Fonts\GoogleSans\fonts\Desktop\GoogleSans-Regular.ttf",
+        r"C:\Windows\Fonts\GoogleSans\fonts\Desktop\GoogleSans-Bold.ttf",
+        r"C:\Windows\Fonts\segoeui.ttf",
         r"C:\Windows\Fonts\segoeuib.ttf",
         r"C:\Windows\Fonts\arial.ttf",
+        r"C:\Windows\Fonts\arialbd.ttf",
     ):
         if os.path.exists(path):
             return ImageFont.truetype(path, size)
@@ -27,7 +32,18 @@ def load_font(size: int) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
 
 def draw_yh(canvas: Image.Image, font_size: int, fill=WHITE) -> None:
     draw = ImageDraw.Draw(canvas)
-    font = load_font(font_size)
+    # Bold
+    for path in (
+        r"C:\Windows\Fonts\GoogleSans\fonts\Android\GoogleSans-Bold.ttf",
+        r"C:\Windows\Fonts\GoogleSans\fonts\Desktop\GoogleSans-Bold.ttf",
+        r"C:\Windows\Fonts\segoeuib.ttf",
+        r"C:\Windows\Fonts\arialbd.ttf",
+    ):
+        if os.path.exists(path):
+            font = ImageFont.truetype(path, font_size)
+            break
+    else:
+        font = load_font(font_size)
     text = "YH"
     bbox = draw.textbbox((0, 0), text, font=font)
     tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
@@ -39,7 +55,7 @@ def draw_yh(canvas: Image.Image, font_size: int, fill=WHITE) -> None:
 # Full icons for pre-26 / legacy mipmaps
 base = 512
 full = Image.new("RGBA", (base, base), BG)
-draw_yh(full, 180)
+draw_yh(full, 200)
 
 for folder, size in sizes.items():
     out_dir = os.path.join(res, folder)
@@ -51,23 +67,23 @@ for folder, size in sizes.items():
 # Adaptive foreground: 108dp @ xxxhdpi = 432px, transparent + YH in safe zone
 fg_size = 432
 fg = Image.new("RGBA", (fg_size, fg_size), (0, 0, 0, 0))
-draw_yh(fg, 138)
-fg_path = os.path.join(res, "drawable-xxxhdpi")
+draw_yh(fg, 150)
+fg_path = os.path.join(res, "drawable")
 os.makedirs(fg_path, exist_ok=True)
-fg.save(os.path.join(fg_path, "ic_launcher_foreground.png"), "PNG")
+fg.save(os.path.join(fg_path, "ic_launcher_fg.png"), "PNG")
 
 # Lower densities for foreground
 for dens, size, font_sz in (
-    ("drawable-mdpi", 108, 34),
-    ("drawable-hdpi", 162, 52),
-    ("drawable-xhdpi", 216, 69),
-    ("drawable-xxhdpi", 324, 104),
+    ("drawable-mdpi", 108, 37),
+    ("drawable-hdpi", 162, 56),
+    ("drawable-xhdpi", 216, 75),
+    ("drawable-xxhdpi", 324, 113),
 ):
     layer = Image.new("RGBA", (size, size), (0, 0, 0, 0))
     draw_yh(layer, font_sz)
     out = os.path.join(res, dens)
     os.makedirs(out, exist_ok=True)
-    layer.save(os.path.join(out, "ic_launcher_foreground.png"), "PNG")
+    layer.save(os.path.join(out, "ic_launcher_fg.png"), "PNG")
 
 preview = os.path.join(os.path.dirname(__file__), "launcher_preview.png")
 full.save(preview, "PNG")

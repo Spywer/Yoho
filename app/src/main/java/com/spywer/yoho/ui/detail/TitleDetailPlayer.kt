@@ -9,6 +9,7 @@ import android.content.res.Configuration
 import android.os.Message
 import android.view.View
 import android.view.ViewGroup
+import android.view.WindowManager
 import android.webkit.CookieManager
 import android.webkit.PermissionRequest
 import android.webkit.WebChromeClient
@@ -38,25 +39,26 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.PlaylistAdd
 import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material.icons.filled.Groups
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.ThumbDown
 import androidx.compose.material.icons.filled.ThumbUp
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import com.spywer.yoho.ui.components.DiaryStatusDropdownMenu
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableState
@@ -68,12 +70,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
@@ -111,6 +115,7 @@ internal fun PlayerBlock(
     onRemoveFromDiary: () -> Unit,
     onConsumeDiaryNotify: () -> Unit,
     onPlayerReaction: (String) -> Unit,
+    onLoginClick: () -> Unit,
     padding: androidx.compose.ui.unit.Dp,
     metaSize: androidx.compose.ui.unit.TextUnit,
     /** Holder с экрана — общий lifecycle WebView на время деталки. */
@@ -118,7 +123,7 @@ internal fun PlayerBlock(
     modifier: Modifier = Modifier,
 ) {
     val playUrl = remember(iframeUrl) { normalizePlayerUrl(iframeUrl) }
-    val hasPlayer = !playUrl.isNullOrBlank() || !embedHtml.isNullOrBlank()
+    val hasPlayer = !needsLogin && (!playUrl.isNullOrBlank() || !embedHtml.isNullOrBlank())
     // Заглушка «нет источников» — без учёта player-choice (чипы).
     val noSources = !needsLogin && !hasPlayer
     val context = LocalContext.current
@@ -165,6 +170,7 @@ internal fun PlayerBlock(
     DetailPipEligibilityEffect(eligible = hasPlayer)
     DetailPipWebViewBindEffect(webView = webHolder.webView)
     PlayerSystemBarsEffect(hidden = fsActive)
+    PlayerKeepScreenOnEffect(enabled = fsActive)
     PlayerFullscreenOrientationEffect(active = fsActive)
     // Detach только через exitCinema/крестик — не по enabled=false.
     PlayerFullscreenEffect(
@@ -184,7 +190,7 @@ internal fun PlayerBlock(
             .padding(horizontal = padding)
             .padding(top = 8.dp, bottom = 8.dp),
     ) {
-            if (choices.isNotEmpty() && !loading) {
+            if (choices.isNotEmpty() && !loading && !needsLogin) {
                 Row(
                     Modifier
                         .horizontalScroll(rememberScrollState())
@@ -205,70 +211,74 @@ internal fun PlayerBlock(
                 Spacer(Modifier.height(LocalHomeMetrics.current.blockGap))
             }
 
-            Box(
-                Modifier
-                    .fillMaxWidth()
-                    .aspectRatio(16f / 9f)
-                    .clip(RoundedCornerShape(14.dp))
-                    .background(Color.Black),
-                contentAlignment = Alignment.Center,
-            ) {
-                when {
-                    // Не снимать WebView на время loading — иначе первый loadUrl до attach
-                    // иногда даёт пустой кадр до ручного переключения источника.
-                    hasPlayer -> {
-                        PlayerWebView(
-                            url = playUrl,
-                            embedHtml = embedHtml,
-                            source = selectedSource,
-                            holder = webHolder,
-                            modifier = Modifier.fillMaxSize(),
-                        )
-                        if (fullscreen) {
-                            Text(
-                                text = stringResource(R.string.detail_player_fullscreen_hint),
-                                color = Color.White.copy(alpha = 0.7f),
-                                fontSize = metaSize,
-                                textAlign = TextAlign.Center,
-                                modifier = Modifier.padding(16.dp),
+            if (needsLogin && !loading && !hasPlayer) {
+                PlayerLoginPlaceholder(
+                    onLoginClick = onLoginClick,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            } else {
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .aspectRatio(16f / 9f)
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(Color.Black),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    when {
+                        // Не снимать WebView на время loading — иначе первый loadUrl до attach
+                        // иногда даёт пустой кадр до ручного переключения источника.
+                        hasPlayer -> {
+                            PlayerWebView(
+                                url = playUrl,
+                                embedHtml = embedHtml,
+                                source = selectedSource,
+                                holder = webHolder,
+                                modifier = Modifier.fillMaxSize(),
+                            )
+                            if (fullscreen) {
+                                Text(
+                                    text = stringResource(R.string.detail_player_fullscreen_hint),
+                                    color = Color.White.copy(alpha = 0.7f),
+                                    fontSize = metaSize,
+                                    textAlign = TextAlign.Center,
+                                    modifier = Modifier.padding(16.dp),
+                                )
+                            }
+                        }
+                        loading -> Unit
+                        noSources -> {
+                            NoSourcesPlaceholder(
+                                mediaType = mediaType,
+                                diaryStatusLabel = diaryStatusLabel,
+                                diaryBusy = diaryBusy,
+                                onSetDiaryStatus = onSetDiaryStatus,
+                                onRemoveFromDiary = onRemoveFromDiary,
+                                metaSize = metaSize,
                             )
                         }
-                    }
-                    loading -> Unit
-                    noSources -> {
-                        NoSourcesPlaceholder(
-                            mediaType = mediaType,
-                            diaryStatusLabel = diaryStatusLabel,
-                            diaryBusy = diaryBusy,
-                            onSetDiaryStatus = onSetDiaryStatus,
-                            onRemoveFromDiary = onRemoveFromDiary,
-                            metaSize = metaSize,
-                        )
-                    }
-                    else -> {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            modifier = Modifier.padding(horizontal = 16.dp),
-                        ) {
-                            Icon(
-                                Icons.Filled.PlayArrow,
-                                contentDescription = null,
-                                tint = Color.White.copy(alpha = 0.7f),
-                                modifier = Modifier.size(48.dp),
-                            )
-                            Text(
-                                text = when {
-                                    needsLogin -> stringResource(R.string.detail_player_needs_login)
-                                    selectedSource != null ->
+                        else -> {
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                modifier = Modifier.padding(horizontal = 16.dp),
+                            ) {
+                                Icon(
+                                    Icons.Filled.PlayArrow,
+                                    contentDescription = null,
+                                    tint = Color.White.copy(alpha = 0.7f),
+                                    modifier = Modifier.size(48.dp),
+                                )
+                                Text(
+                                    text = if (selectedSource != null) {
                                         "Источник: ${displayPlayerSourceName(selectedSource)}"
-                                    else -> stringResource(R.string.detail_player_pick)
-                                },
-                                color = Color.White.copy(alpha = 0.85f),
-                                fontSize = metaSize,
-                                textAlign = TextAlign.Center,
-                                modifier = Modifier.padding(top = 8.dp),
-                            )
-                            if (!needsLogin) {
+                                    } else {
+                                        stringResource(R.string.detail_player_pick)
+                                    },
+                                    color = Color.White.copy(alpha = 0.85f),
+                                    fontSize = metaSize,
+                                    textAlign = TextAlign.Center,
+                                    modifier = Modifier.padding(top = 8.dp),
+                                )
                                 Text(
                                     text = stringResource(R.string.detail_player_no_iframe),
                                     color = Color.White.copy(alpha = 0.55f),
@@ -279,19 +289,19 @@ internal fun PlayerBlock(
                             }
                         }
                     }
-                }
-                if (loading) {
-                    Box(
-                        Modifier
-                            .fillMaxSize()
-                            .background(Color.Black),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        CircularProgressIndicator(
-                            Modifier.size(28.dp),
-                            color = MaterialTheme.colorScheme.primary,
-                            strokeWidth = 3.dp,
-                        )
+                    if (loading) {
+                        Box(
+                            Modifier
+                                .fillMaxSize()
+                                .background(Color.Black),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            CircularProgressIndicator(
+                                Modifier.size(28.dp),
+                                color = MaterialTheme.colorScheme.primary,
+                                strokeWidth = 3.dp,
+                            )
+                        }
                     }
                 }
             }
@@ -311,6 +321,136 @@ internal fun PlayerBlock(
                     onCinema = { fullscreen = true },
                 )
             }
+    }
+}
+
+@Composable
+private fun PlayerLoginPlaceholder(
+    onLoginClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val metrics = LocalHomeMetrics.current
+    val primary = MaterialTheme.colorScheme.primary
+    val onPrimary = MaterialTheme.colorScheme.onPrimary
+    val shape = RoundedCornerShape(14.dp)
+    val cardModifier = modifier
+        .clip(shape)
+        .background(
+            Brush.horizontalGradient(
+                colors = listOf(
+                    Color(0xFF1A2D49),
+                    Color(0xFF162338),
+                ),
+            ),
+        )
+        .border(
+            width = 1.dp,
+            color = primary.copy(alpha = 0.45f),
+            shape = shape,
+        )
+
+    if (metrics.isTablet) {
+        Row(
+            modifier = cardModifier.padding(horizontal = 20.dp, vertical = 16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(44.dp)
+                    .clip(CircleShape)
+                    .background(primary.copy(alpha = 0.22f)),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.Lock,
+                    contentDescription = null,
+                    tint = primary,
+                    modifier = Modifier.size(22.dp),
+                )
+            }
+
+            Text(
+                text = stringResource(R.string.detail_player_login_prompt),
+                color = MaterialTheme.colorScheme.onBackground,
+                fontSize = metrics.detailBodySize,
+                lineHeight = metrics.detailBodyLine,
+                fontWeight = FontWeight.Medium,
+                textAlign = TextAlign.Start,
+                modifier = Modifier.weight(1f),
+            )
+
+            Button(
+                onClick = onLoginClick,
+                shape = RoundedCornerShape(10.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = primary,
+                    contentColor = onPrimary,
+                ),
+                contentPadding = PaddingValues(horizontal = 20.dp, vertical = 0.dp),
+                modifier = Modifier.height(42.dp),
+            ) {
+                Text(
+                    text = stringResource(R.string.detail_player_login_button),
+                    fontSize = metrics.searchTextSize,
+                    fontWeight = FontWeight.SemiBold,
+                )
+            }
+        }
+    } else {
+        Column(
+            modifier = cardModifier.padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(32.dp)
+                        .clip(CircleShape)
+                        .background(primary.copy(alpha = 0.22f)),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Lock,
+                        contentDescription = null,
+                        tint = primary,
+                        modifier = Modifier.size(16.dp),
+                    )
+                }
+
+                Text(
+                    text = stringResource(R.string.detail_player_login_prompt),
+                    color = MaterialTheme.colorScheme.onBackground,
+                    fontSize = metrics.detailMetaSize,
+                    lineHeight = metrics.detailMetaLine,
+                    fontWeight = FontWeight.Medium,
+                    textAlign = TextAlign.Start,
+                    modifier = Modifier.weight(1f),
+                )
+            }
+
+            Button(
+                onClick = onLoginClick,
+                shape = RoundedCornerShape(10.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = primary,
+                    contentColor = onPrimary,
+                ),
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 0.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(36.dp),
+            ) {
+                Text(
+                    text = stringResource(R.string.detail_player_login_button),
+                    fontSize = metrics.chipTextSize,
+                    fontWeight = FontWeight.SemiBold,
+                )
+            }
+        }
     }
 }
 
@@ -432,15 +572,6 @@ private fun PlayerSourceChip(
     }
 }
 
-private val diaryStatusLabelRes = listOf(
-    R.string.detail_diary_watched,
-    R.string.detail_diary_watching,
-    R.string.detail_diary_want,
-    R.string.detail_diary_rewatching,
-    R.string.detail_diary_on_hold,
-    R.string.detail_diary_dropped,
-)
-
 @Composable
 private fun PlayerUnderBar(
     diaryStatusLabel: String?,
@@ -508,6 +639,7 @@ private fun PlayerUnderBar(
                     modifier = Modifier.size(iconSize),
                 )
             }
+            // DropdownMenu, не AlertDialog: Dialog ломает surface WebView-плеера.
             Box {
                 IconButton(
                     onClick = { if (!diaryBusy) diaryMenuOpen = true },
@@ -534,101 +666,21 @@ private fun PlayerUnderBar(
                         modifier = Modifier.size(iconSize),
                     )
                 }
-                DropdownMenu(
+                DiaryStatusDropdownMenu(
                     expanded = diaryMenuOpen,
-                    onDismissRequest = { diaryMenuOpen = false },
-                    modifier = Modifier.widthIn(min = if (metrics.isTablet) 340.dp else 180.dp),
-                ) {
-                    Text(
-                        text = stringResource(
-                            if (inDiary) {
-                                R.string.detail_diary_menu_title_active
-                            } else {
-                                R.string.detail_diary_menu_title
-                            },
-                        ).uppercase(),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        fontSize = metrics.diaryMenuTitle,
-                        fontWeight = FontWeight.Medium,
-                        modifier = Modifier.padding(
-                            horizontal = if (metrics.isTablet) 20.dp else 10.dp,
-                            vertical = if (metrics.isTablet) 14.dp else 4.dp,
-                        ),
-                    )
-                    diaryStatusLabelRes.forEach { labelRes ->
-                        val label = stringResource(labelRes)
-                        val selected = diaryStatusLabel == label
-                        DropdownMenuItem(
-                            text = {
-                                Text(
-                                    text = label,
-                                    fontSize = metrics.diaryMenuItem,
-                                    fontWeight = FontWeight.Medium,
-                                    color = if (selected) {
-                                        Color.White
-                                    } else {
-                                        MaterialTheme.colorScheme.onSurface
-                                    },
-                                )
-                            },
-                            onClick = {
-                                diaryMenuOpen = false
-                                if (!selected) onSetDiaryStatus(label)
-                            },
-                            modifier = Modifier
-                                .then(
-                                    if (metrics.isTablet) {
-                                        Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
-                                    } else {
-                                        Modifier
-                                            .padding(horizontal = 4.dp)
-                                            .height(36.dp)
-                                    },
-                                )
-                                .clip(RoundedCornerShape(if (metrics.isTablet) 10.dp else 6.dp))
-                                .then(
-                                    if (selected) {
-                                        Modifier.background(MaterialTheme.colorScheme.primary)
-                                    } else {
-                                        Modifier
-                                    },
-                                ),
-                            contentPadding = PaddingValues(
-                                horizontal = if (metrics.isTablet) 16.dp else 10.dp,
-                                vertical = if (metrics.isTablet) 12.dp else 0.dp,
-                            ),
-                        )
-                    }
-                    if (inDiary) {
-                        HorizontalDivider(
-                            Modifier.padding(vertical = if (metrics.isTablet) 8.dp else 2.dp),
-                            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.4f),
-                        )
-                        DropdownMenuItem(
-                            text = {
-                                Text(
-                                    text = stringResource(R.string.detail_diary_remove),
-                                    fontSize = metrics.diaryMenuItem,
-                                    fontWeight = FontWeight.Medium,
-                                    color = Color(0xFFF87171),
-                                )
-                            },
-                            onClick = {
-                                diaryMenuOpen = false
-                                onRemoveFromDiary()
-                            },
-                            modifier = if (metrics.isTablet) {
-                                Modifier
-                            } else {
-                                Modifier.height(36.dp)
-                            },
-                            contentPadding = PaddingValues(
-                                horizontal = if (metrics.isTablet) 20.dp else 10.dp,
-                                vertical = if (metrics.isTablet) 14.dp else 0.dp,
-                            ),
-                        )
-                    }
-                }
+                    currentStatus = diaryStatusLabel,
+                    busy = diaryBusy,
+                    metrics = metrics,
+                    onDismiss = { diaryMenuOpen = false },
+                    onSelectStatus = { label ->
+                        diaryMenuOpen = false
+                        onSetDiaryStatus(label)
+                    },
+                    onRemove = {
+                        diaryMenuOpen = false
+                        onRemoveFromDiary()
+                    },
+                )
             }
             IconButton(
                 onClick = { if (!reactionBusy) onPlayerReaction("dislike") },
@@ -654,6 +706,21 @@ private fun PlayerUnderBar(
                     modifier = Modifier.size(iconSize),
                 )
             }
+        }
+    }
+}
+
+@Composable
+private fun PlayerKeepScreenOnEffect(enabled: Boolean) {
+    val context = LocalContext.current
+    DisposableEffect(enabled) {
+        val window = context.findActivity()?.window
+        if (window == null || !enabled) {
+            return@DisposableEffect onDispose { }
+        }
+        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        onDispose {
+            window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         }
     }
 }
@@ -714,7 +781,7 @@ internal class PlayerWebViewHolder {
     fun trackPopupCleanup(popup: WebView, cleanup: Runnable) {
         popupCleanups += popup to cleanup
         popup.tag = cleanup
-        popup.postDelayed(cleanup, 15_000L)
+        popup.postDelayed(cleanup, 5_000L)
     }
 
     fun cancelPopupCleanup(popup: WebView) {
@@ -999,11 +1066,15 @@ private const val FULLSCREEN_CLOSE_TAG = "yoho_fs_close"
 
 /** Альбом — без крестика; портрет — показать. */
 private fun syncFullscreenCloseVisibility(container: ViewGroup, landscape: Boolean) {
-    val visibility = if (landscape) View.GONE else View.VISIBLE
+    // val visibility = if (landscape) View.GONE else View.VISIBLE
     for (i in 0 until container.childCount) {
         val child = container.getChildAt(i)
-        if (child.tag == FULLSCREEN_CLOSE_TAG && child.visibility != visibility) {
-            child.visibility = visibility
+        //if (child.tag == FULLSCREEN_CLOSE_TAG && child.visibility != visibility) {
+        //    child.visibility = visibility
+        //}
+        // Временно скрываем крестик закрытия
+        if (child.tag == FULLSCREEN_CLOSE_TAG) {
+            child.visibility = View.GONE
         }
     }
 }
@@ -1160,6 +1231,8 @@ private fun PlayerFullscreenEffect(
             setPadding(pad, pad, pad, pad)
             tag = FULLSCREEN_CLOSE_TAG
         }
+        // Временно скрываем крестик закрытия
+        close.visibility = View.GONE
         overlay.addView(
             close,
             FrameLayout.LayoutParams(

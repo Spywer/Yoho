@@ -1,0 +1,85 @@
+Обращения правообладателей (DMCA)
+
+YoHo — справочно-информационный каталог в виде приложения. Мы не размещаем и не храним аудиовизуальные произведения на своих серверах; просмотр, если доступен, идёт через сторонние плееры. При получении мотивированного обращения мы ограничиваем доступ к спорным материалам в каталоге (карточка, плеер) в разумный срок.
+
+Кому подходит это обращение
+
+• правообладателям и их уполномоченным представителям;
+• уполномоченным государственным органам — при направлении законного требования (в том числе Роскомнадзор, суд);
+• лицам, направляющим обращения по авторскому праву (в том числе в логике DMCA notice-and-takedown).
+
+Что мы можем сделать
+
+По результатам рассмотрения обращения с достаточными основаниями мы можем:
+
+• заблокировать или скрыть карточку тайтла в каталоге YoHo;
+• отключить встраиваемый плеер в карточке;
+• ограничить иные элементы каталога, указанные в обращении.
+
+Срок рассмотрения — обычно до 10 рабочих дней с момента получения полного комплекта сведений; срочные законные требования обрабатываются в приоритетном порядке.
+
+Чего мы не делаем
+
+• не удаляем файлы и потоки на сторонних ресурсах и у операторов плееров — только ограничиваем доступ через приложение YoHo;
+• не проверяем превентивно весь контент всех сторонних источников;
+• не являемся правообладателем произведений в каталоге и не выдаём лицензии на просмотр.
+
+Если нарушение связано непосредственно с видеопотоком на стороннем ресурсе, дополнительно обратитесь к оператору этого ресурса.
+
+Что указать в обращении
+
+Чем конкретнее описание, тем быстрее мы обработаем запрос.
+
+• ФИО или наименование правообладателя, контактный email
+• Подтверждение полномочий, если обращаетесь как представитель
+• Идентификатор карточки в приложении (Kinopoisk ID) и/или точное название тайтла
+• Название произведения, сезон/серию (если применимо)
+• Описание нарушения и документы, подтверждающие права (договор, свидетельство, выписка из реестра)
+• Требуемое действие: ограничить доступ к карточке, отключить плеер и т.п.
+
+Куда направлять
+
+Язык — русский или английский. Письма: reyoho@proton.me. Ответ придёт на указанный вами email.
+
+—
+
+Copyright holder requests
+
+YoHo is a reference catalogue app. We do not host or store audiovisual works on our servers; playback, where available, runs through third-party players. Upon receiving a substantiated request, we restrict access to the disputed material in the catalogue (title page, player) within a reasonable time.
+
+Who this is for
+
+• copyright holders and their authorised representatives;
+• authorised government bodies submitting a lawful demand (including courts and regulators);
+• anyone filing a copyright complaint, including under DMCA notice-and-takedown.
+
+What we can do
+
+If the request is substantiated, we can:
+
+• block or hide the title page in the YoHo catalogue;
+• disable the embedded player on the title screen;
+• restrict other catalogue elements named in the request.
+
+Review normally takes up to 10 business days from the moment we receive a complete set of details; urgent lawful demands are handled with priority.
+
+What we cannot do
+
+• we do not delete files or streams on third-party resources or with player operators — we only restrict access through the YoHo app;
+• we do not pre-screen all content from all third-party sources;
+• we are not the rights holder of the works in the catalogue and do not grant viewing licences.
+
+If the infringement concerns the video stream on a third-party resource itself, please also contact the operator of that resource.
+
+What to include
+
+• Full name or company name of the rights holder and a contact email
+• Proof of authority if you are writing as a representative
+• The Kinopoisk ID used in the app and/or the exact title name
+• Title of the work, season and episode where applicable
+• Description of the infringement and documents confirming your rights
+• The action requested: restrict access to the title, disable the player, and so on
+
+How to send
+
+Write in Russian or English to reyoho@proton.me. We will reply to the email you provide.

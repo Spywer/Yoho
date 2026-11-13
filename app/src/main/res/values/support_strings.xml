@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="support_development">Поддержать разработку</string>
+    <string name="support_project_title">Поддержать разработку</string>
+    <!-- Подставьте имя своего приложения вместо %1$s при желании, или замените текст целиком -->
+    <string name="support_project_message">Поддержка помогает развивать проект дальше. Приложение полностью бесплатное и распространяется как есть — спасибо!</string>
+    <string name="support_project_scan_hint">Сканируйте QR‑код или перейдите по ссылке</string>
+    <string name="support_project_url">https://pay.cloudtips.ru/p/73a0b749</string>
+    <string name="support_qr_description">QR-код для поддержки проекта</string>
+    <string name="support_open_payment">Перейти к оплате</string>
+    <string name="support_close">Закрыть</string>
+</resources>

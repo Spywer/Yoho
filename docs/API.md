@@ -8,6 +8,7 @@
 **Контакты:** reyoho@proton.me
 
 > Актуализация 0.1.42: страница `/anime` (`GET /api/anime`), фильтры discover (preset/collection/age/sort), Android home-layout для аниме.
+> Дополнение (клиент): вкладка Коллекция (хаб + 3 Activity), `GET /api/diary`, like/dislike ∥ statusLabel, `POST /api/posters/resolve`, медиатека diary ∪ favorites.
 
 ---
 
@@ -767,7 +768,7 @@ Content-Type: application/json
 | `GET` | `/api/profile/me` | Профиль текущего пользователя |
 | `PATCH` | `/api/profile/me` | Обновление профиля |
 | `GET` | `/api/profile/{username}` | Публичный профиль |
-| `GET` | `/api/profile/{username}/films` | Оценки пользователя |
+| `GET` | `/api/profile/{username}/films` | Медиатека профиля (как `/{username}/films`: дневник ∪ избранное + рейтинги КП/IM) |
 | `GET` | `/api/profile/{username}/diary` | Дневник пользователя |
 | `GET` | `/api/profile/{username}/activity` | Лента активности |
 | `GET` | `/api/profile/{username}/friends` | Друзья и подписки |
@@ -809,7 +810,20 @@ Cookie: __Secure-better-auth.session_token=…
 - `href`: `/series/{kp}` для `tv`/`anime`, `/film/{kp}` для `movie`
 - **201** → `{ "entry": { "id", "itemId", "statusLabel", "mediaType", … } }`
 
-### 9.2. Проверка «в дневнике»
+### 9.2. Список своего дневника (клиент)
+
+```http
+GET /api/diary?page=1&limit=100
+Cookie: __Secure-better-auth.session_token=…
+```
+
+**200:** `{ "entries": [ … ], "total", "page", "pageSize" }`
+
+Поля записи (важное для Android): `itemId`, `href`, `title`, `year`, `mediaType`, `statusLabel`, `sourceReaction`, `posterUrl`, `kp`/`kpRating`, `imdb`/`imdbRating`, `watchedAt`, `createdAt`.
+
+`sourceReaction`: `manual` \| `like` \| `dislike`. **Лайк/дизлайк и `statusLabel` независимы** (могут быть вместе). При смене только статуса клиент сохраняет like/dislike в `sourceReaction`.
+
+### 9.3. Проверка «в дневнике»
 
 ```http
 GET /api/diary/contains?itemId=kp:5512084
@@ -820,7 +834,7 @@ GET /api/diary/contains?itemId=kp:5512084
 { "inDiary": true, "statusLabel": "Хочу посмотреть" }
 ```
 
-### 9.3. Удаление
+### 9.4. Удаление
 
 ```http
 DELETE /api/diary?itemId=kp:6553387
@@ -831,11 +845,12 @@ DELETE /api/diary?itemId=kp:6553387
 { "ok": true, "removed": true }
 ```
 
-### 9.4. Сводка эндпоинтов
+### 9.5. Сводка эндпоинтов
 
 | Метод | URL | Описание |
 |-------|-----|----------|
-| `POST` | `/api/diary` | Добавить / сменить статус |
+| `GET` | `/api/diary?page=&limit=` | Свой дневник (список) |
+| `POST` | `/api/diary` | Добавить / сменить статус или реакцию |
 | `GET` | `/api/diary/contains?itemId=` | Есть ли в дневнике |
 | `DELETE` | `/api/diary?itemId=` | Убрать из дневника |
 | `GET` | `/api/profile/{username}/diary` | Публичный дневник профиля |
@@ -902,7 +917,38 @@ GET /api/sync
 }
 ```
 
-### 10.3. Вишлист / legacy history
+### 10.3. Резолв постеров (карточки)
+
+```http
+POST /api/posters/resolve
+Content-Type: application/json
+
+{
+  "items": [
+    {
+      "id": "kp:1048334",
+      "href": "/film/1048334",
+      "title": "Джокер",
+      "year": "2019",
+      "mediaType": "movie",
+      "tmdbId": 475557
+    }
+  ]
+}
+```
+
+**200:**
+```json
+{
+  "posters": { "kp:1048334": "/api/img/t/p/w185/….jpg" },
+  "titles": { "kp:1048334": "Джокер" },
+  "types": { "kp:1048334": "movie" }
+}
+```
+
+Используется хабом коллекции, когда у записи нет `posterUrl`.
+
+### 10.4. Вишлист / legacy history
 
 | Метод | URL | Примечание |
 |-------|-----|------------|
@@ -972,29 +1018,32 @@ Content-Type: application/json
 DELETE /api/{type}/{id}/rate
 ```
 
-### 12.1. Все оценки пользователя
+### 12.1. Реакции like/dislike (актуально для Android)
 
 ```http
 GET /api/ratings
+Cookie: __Secure-better-auth.session_token=…
 ```
 
-Возвращает список всех оценок, поставленных текущим авторизованным пользователем. Используется для синхронизации между устройствами и экспорта данных.
+Клиент читает реакции плеера / дневника:
 
-**Ответ:**
 ```json
 {
   "ratings": [
     {
-      "content_id": 111543,
-      "content_type": "movie",
-      "rating": 8.5,
-      "review": "Отличный фильм",
-      "spoiler": false,
-      "created_at": "2026-11-03T15:30:00Z"
+      "id": "kp:1048334",
+      "href": "/film/1048334",
+      "title": "Джокер",
+      "mediaType": "movie",
+      "reaction": "like",
+      "ts": 1794027832990,
+      "aliases": ["kp:1048334"]
     }
   ]
 }
 ```
+
+`reaction`: `like` \| `dislike`. Числовые оценки (`POST …/rate`) — контракт выше. Полка «Фильмы» профиля в приложении: diary ∪ favorites / `profile/…/films`, не этот список.
 
 ---
 
@@ -1521,7 +1570,7 @@ Content-Type: application/json
 | **Коллекции** | `/api/collections/{counters\|movies\|tv\|franchises\|marvel\|anime-top}` |
 | **Социальные** | `/api/{type}/{id}/comments`, `/api/comments/{id}/react`, `/api/{type}/{id}/rate`, `/api/ratings` |
 | **Дневник** | `/api/diary`, `/api/diary/contains` |
-| **Полки** | `/api/me/activity`, `/api/sync`, `/api/wishlist` |
+| **Полки** | `/api/me/activity`, `/api/sync`, `/api/wishlist`, `/api/posters/resolve` |
 | **Марафон** | `/api/marathon`, `/api/marathon/progress`, `/api/marathon/items/{position}/complete` |
 | **Календарь** | `/api/calendar` |
 | **Плееры** | `/api/player/{type}/{id}`, `/api/player-config`, `/api/player-choice` |
@@ -1610,7 +1659,7 @@ Content-Type: application/json
 
 ## 27. Android-клиент (YoHo app)
 
-Пути, которые реально дергает приложение (`app/.../YohoApi.kt`), база из `api.properties` (`API_BASE_URL`):
+Пути, которые реально дергает приложение (`app/.../YohoApi.kt`), база — `SiteHttp` (`https://reyoho.com/`):
 
 | Группа | Методы |
 |--------|--------|
@@ -1620,10 +1669,10 @@ Content-Type: application/json
 | Search | `search/discover`, `facets`, `filters`, `regions`, `recent`, `suggest`, `persons` |
 | Title | `film-info`, `person/{id}`, `tv-last-air`, `tv-schedule` |
 | Player | `player-config`, `player-choice`, `player/{type}/{id}` |
-| Shelves | `me/activity`, `sync` |
-| Diary | `POST diary`, `GET diary/contains`, `DELETE diary?itemId=` |
+| Shelves / Collection | `me/activity`, `sync`, `profile/{username}/films`, `POST posters/resolve`, `GET ratings` |
+| Diary | `GET diary?page&limit`, `POST diary`, `GET diary/contains`, `DELETE diary?itemId=` |
 
-Подробности Android-layout и маппинг фильтров — [ANDROID.md](./ANDROID.md).
+IA коллекции, хаб «Мои фильмы и сериалы», дневник/реакции — [ANDROID.md](./ANDROID.md) → **Коллекция**.
 
 ---
 

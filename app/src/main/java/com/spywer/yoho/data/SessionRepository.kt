@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import retrofit2.Response
+import java.util.concurrent.atomic.AtomicInteger
 
 data class SessionUiState(
     val loading: Boolean = true,
@@ -29,19 +30,29 @@ object SessionRepository {
     private val _state = MutableStateFlow(SessionUiState())
     val state: StateFlow<SessionUiState> = _state.asStateFlow()
 
+    /** Инвалидирует устаревший refresh (гонка с signIn/signUp). */
+    private val generation = AtomicInteger(0)
+
     suspend fun refresh() {
-        _state.update { it.copy(loading = true, error = null) }
+        val gen = generation.get()
+        _state.update { it.copy(loading = it.user == null, error = null) }
         val user = fetchCurrentUser()
-        _state.update {
-            it.copy(
-                loading = false,
-                user = user,
-                error = null,
-            )
+        if (gen != generation.get()) return
+        _state.update { prev ->
+            when {
+                user != null ->
+                    prev.copy(loading = false, user = user, error = null)
+                // Не затирать успешный логин / сессию, если get-session временно пуст.
+                prev.user != null && SessionCookieJar.get().hasSessionCookie() ->
+                    prev.copy(loading = false, error = null)
+                else ->
+                    prev.copy(loading = false, user = null, error = null)
+            }
         }
     }
 
     suspend fun signIn(email: String, password: String): Boolean {
+        generation.incrementAndGet()
         _state.update { it.copy(busy = true, error = null) }
         return runCatching {
             api.signInEmail(SignInEmailRequest(email = email.trim(), password = password))
@@ -65,6 +76,7 @@ object SessionRepository {
         username: String,
         name: String,
     ): Boolean {
+        generation.incrementAndGet()
         _state.update { it.copy(busy = true, error = null) }
         val nick = username.trim()
         val display = name.trim().ifBlank { nick }
@@ -94,6 +106,7 @@ object SessionRepository {
     }
 
     suspend fun signOut() {
+        generation.incrementAndGet()
         _state.update { it.copy(busy = true, error = null) }
         runCatching { api.signOut() }
         clearCookies()
@@ -106,10 +119,11 @@ object SessionRepository {
         val resp = runCatching { api.authGetSession() }.getOrNull() ?: return null
         if (!resp.isSuccessful) return null
         // Better Auth: 200 + null body = нет сессии
-        return resp.body()?.user?.normalized()
+        val sessionUser = resp.body()?.user?.normalized() ?: return null
+        return enrichFromProfile(sessionUser)
     }
 
-    private fun applyAuthResponse(
+    private suspend fun applyAuthResponse(
         resp: Response<AuthSessionResponse>,
         failFallback: String,
     ): Boolean {
@@ -126,10 +140,33 @@ object SessionRepository {
             }
             return false
         }
+        val enriched = enrichFromProfile(user)
         _state.update {
-            it.copy(busy = false, user = user, error = null, loading = false)
+            it.copy(busy = false, user = enriched, error = null, loading = false)
         }
         return true
+    }
+
+    /** Подтянуть роль / код / подписки из /api/profile/me. */
+    private suspend fun enrichFromProfile(user: AuthUserDto): AuthUserDto {
+        val profile = runCatching { api.profileMe() }
+            .getOrNull()
+            ?.takeIf { it.isSuccessful }
+            ?.body()
+            ?: return user
+        val p = profile.user
+        return user.copy(
+            username = p?.username?.takeIf { it.isNotBlank() } ?: user.username,
+            userCode = p?.userCode?.takeIf { it.isNotBlank() } ?: user.userCode,
+            role = p?.role?.takeIf { it.isNotBlank() } ?: user.role,
+            registeredAt = p?.registeredAt?.takeIf { it.isNotBlank() } ?: user.registeredAt,
+            followersCount = p?.followersCount ?: profile.followersCount ?: user.followersCount,
+            followingCount = p?.followingCount ?: profile.followingCount ?: user.followingCount,
+            displayName = p?.resolvedDisplayName() ?: user.displayName,
+            avatar = (p?.resolvedAvatar() ?: user.avatar),
+            name = p?.name ?: user.name,
+            image = p?.image ?: user.image,
+        ).normalized()
     }
 
     private fun clearCookies() {

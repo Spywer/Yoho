@@ -1,6 +1,7 @@
 package com.spywer.yoho.data.remote
 
 import com.google.gson.JsonObject
+import okhttp3.ResponseBody
 import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.DELETE
@@ -22,6 +23,10 @@ interface YohoApi {
     /** Better Auth. Без сессии — 200 + null body. */
     @GET("api/auth/get-session")
     suspend fun authGetSession(): Response<AuthSessionResponse>
+
+    /** Профиль текущего пользователя: роль, код, подписки. */
+    @GET("api/profile/me")
+    suspend fun profileMe(): Response<ProfileMeResponseDto>
 
     /** Персональные рекомендации (нужна сессия). */
     @GET("api/recommendations/latest")
@@ -190,9 +195,32 @@ interface YohoApi {
     @GET("api/sync")
     suspend fun sync(): SyncResponseDto
 
+    /** Свой дневник: GET /api/diary?page=&limit= → { entries, total, page, pageSize } */
+    @GET("api/diary")
+    suspend fun diaryList(
+        @Query("page") page: Int = 1,
+        @Query("limit") limit: Int = 50,
+    ): DiaryListResponseDto
+
+    /**
+     * Фильмы профиля (как /{username}/films):
+     * GET /api/profile/{username}/films
+     */
+    @GET("api/profile/{username}/films")
+    suspend fun profileFilms(
+        @Path("username") username: String,
+        @Query("page") page: Int = 1,
+    ): Response<ResponseBody>
+
     /** Оценки like/dislike текущего пользователя (сессия). */
     @GET("api/ratings")
     suspend fun userRatings(): UserRatingsResponse
+
+    /** Резолв постеров для карточек: POST /api/posters/resolve */
+    @POST("api/posters/resolve")
+    suspend fun resolvePosters(
+        @Body body: PostersResolveRequest,
+    ): Response<PostersResolveResponse>
 
     /** Последняя / следующая серия: /api/tv-last-air?tmdbId= */
     @GET("api/tv-last-air")

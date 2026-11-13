@@ -66,8 +66,8 @@ data class HomeUiState(
 
     val hasContent: Boolean
         get() = recommendations.isNotEmpty() || nowPopular.isNotEmpty() ||
-            trailers.isNotEmpty() || popular.isNotEmpty() || newcomers.isNotEmpty() ||
-            seasonPopular.isNotEmpty() || animeTop.isNotEmpty()
+                trailers.isNotEmpty() || popular.isNotEmpty() || newcomers.isNotEmpty() ||
+                seasonPopular.isNotEmpty() || animeTop.isNotEmpty()
 }
 
 class HomeViewModel : ViewModel() {
@@ -147,17 +147,38 @@ class HomeViewModel : ViewModel() {
         val recD = async { fetchRecommendations() }
         val nowD = async { api.trending(filter.trendingNow()) }
         val popD = async { api.trending(filter.trendingPopular()) }
-        val trailD = async { api.latestTrailers() }
+
+        // Цикл для сбора необходимого числа трейлеров (6 шт.) для заполнения ширины
+        val trailD = async {
+            val requiredItems = 6
+            val result = mutableListOf<TitleDto>()
+            var currentStart = 0
+
+            while (result.size < requiredItems) {
+                val resp = runCatching { api.latestTrailers(start = currentStart) }.getOrNull()
+                    ?: break
+
+                result.addAll(resp.items.map { it.toTitle() })
+
+                if (resp.hasMore == true && resp.nextStart != null) {
+                    currentStart = resp.nextStart
+                } else {
+                    break
+                }
+            }
+            result
+        }
+
         val recentD = async { api.searchRecent() }
         val now = nowD.await()
         val pop = popD.await()
-        val trail = trailD.await()
         val recent = recentD.await()
+
         HomeSections(
             recommendations = recD.await(),
             nowPopular = now.items.map { it.toTitle(now.ratings) },
             popular = pop.items.map { it.toTitle(pop.ratings) },
-            trailers = trail.items.map { it.toTitle() },
+            trailers = trailD.await(),
             newcomers = recent.items.map { it.toTitle() },
         )
     }

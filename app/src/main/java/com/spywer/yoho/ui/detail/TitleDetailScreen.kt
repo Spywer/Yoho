@@ -54,10 +54,14 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.spywer.yoho.R
+import com.spywer.yoho.data.AppSettings
+import com.spywer.yoho.data.SessionRepository
 import com.spywer.yoho.data.remote.PlayerChoiceItemDto
+import com.spywer.yoho.data.remote.SessionCookieJar
 import com.spywer.yoho.data.remote.TitleDetailDto
 import com.spywer.yoho.data.remote.TvLastAirDto
 import com.spywer.yoho.data.remote.TvScheduleDto
+import com.spywer.yoho.ui.components.ContentErrorPlaceholder
 import com.spywer.yoho.ui.layout.LocalHomeMetrics
 import com.spywer.yoho.ui.layout.rememberHomeMetrics
 import com.spywer.yoho.ui.trailer.openTrailerPlayer
@@ -68,10 +72,13 @@ fun TitleDetailScreen(
     onBack: () -> Unit,
     onOpenTitle: (idKp: Int?, idTmdb: Int?, mediaType: String?) -> Unit,
     onOpenGenre: (label: String, mediaType: String?) -> Unit,
+    onNeedLogin: () -> Unit = {},
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val session by SessionRepository.state.collectAsStateWithLifecycle()
     val metrics = rememberHomeMetrics()
     var selectedPersonId by remember { mutableStateOf<Int?>(null) }
+    val playerAllowed = session.isLoggedIn || SessionCookieJar.get().hasSessionCookie()
 
     BackHandler {
         if (selectedPersonId != null) {
@@ -79,6 +86,16 @@ fun TitleDetailScreen(
         } else {
             onBack()
         }
+    }
+
+    // Первый sync делает load(); здесь — только смена сессии (иначе плеер мигает дважды).
+    var playerAllowedSeen by remember { mutableStateOf(false) }
+    LaunchedEffect(playerAllowed) {
+        if (!playerAllowedSeen) {
+            playerAllowedSeen = true
+            return@LaunchedEffect
+        }
+        viewModel.syncPlayerForSession()
     }
 
     val inPip = LocalDetailPip.current?.inPipState?.value == true
@@ -97,23 +114,9 @@ fun TitleDetailScreen(
                 }
 
                 state.error != null && state.detail == null -> {
-                    Column(
-                        Modifier
-                            .fillMaxSize()
-                            .padding(metrics.screenPadding),
-                        verticalArrangement = Arrangement.Center,
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                    ) {
-                        Text(
-                            text = state.error.orEmpty(),
-                            color = MaterialTheme.colorScheme.error,
-                            textAlign = TextAlign.Center,
-                        )
-                        Spacer(Modifier.height(12.dp))
-                        TextButton(onClick = onBack) {
-                            Text(stringResource(R.string.retry))
-                        }
-                    }
+                    ContentErrorPlaceholder(
+                        onRetry = viewModel::retry,
+                    )
                 }
 
                 else -> {
@@ -133,6 +136,7 @@ fun TitleDetailScreen(
                             playerEmbedHtml = state.playerEmbedHtml,
                             playerLoading = state.playerLoading,
                             playerNeedsLogin = state.playerNeedsLogin,
+                            showPlayer = playerAllowed,
                             diaryStatusLabel = state.diaryStatusLabel,
                             diaryBusy = state.diaryBusy,
                             diaryError = state.diaryError,
@@ -151,6 +155,7 @@ fun TitleDetailScreen(
                             onOpenTitle = onOpenTitle,
                             onOpenPerson = { selectedPersonId = it },
                             onOpenGenre = onOpenGenre,
+                            onNeedLogin = onNeedLogin,
                         )
                     }
                 }
@@ -184,6 +189,7 @@ private fun DetailContent(
     playerEmbedHtml: String?,
     playerLoading: Boolean,
     playerNeedsLogin: Boolean,
+    showPlayer: Boolean,
     diaryStatusLabel: String?,
     diaryBusy: Boolean,
     diaryError: String?,
@@ -201,12 +207,16 @@ private fun DetailContent(
     onOpenTitle: (Int?, Int?, String?) -> Unit,
     onOpenPerson: (Int) -> Unit,
     onOpenGenre: (String, String?) -> Unit,
+    onNeedLogin: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val metrics = LocalHomeMetrics.current
     val year = detail.year ?: detail.yearStart
     val titleRu = detail.title?.ru ?: detail.title?.original ?: "Без названия"
     val titleOriginal = detail.title?.original?.takeIf { it != titleRu }
+    var showAllAbout by remember { mutableStateOf(false) }
+    val hideLongMeta = AppSettings.hideLongMeta(context)
+    var hasTruncatedValue by remember { mutableStateOf(false) }
     val prequelsTitle = stringResource(R.string.detail_prequels)
     val sequelsTitle = stringResource(R.string.detail_sequels)
     val similarTitle = stringResource(R.string.detail_similar)
@@ -240,7 +250,8 @@ private fun DetailContent(
             playerHolder.destroy()
         }
     }
-    if (pipMode) {
+    val showLoginWall = !showPlayer || playerNeedsLogin
+    if (pipMode && showPlayer && !showLoginWall) {
         DetailPipEligibilityEffect(eligible = true)
         DetailPipWebViewBindEffect(webView = playerHolder.webView)
         DisposableEffect(playerHolder) {
@@ -294,6 +305,8 @@ private fun DetailContent(
                 }
                 if (detail.aboutFilm.isNotEmpty()) {
                     detail.aboutFilm.forEach { row ->
+                        val value = row.value
+                        if (value.isNullOrBlank()) return@forEach
                         MetaRow(
                             label = row.label.orEmpty(),
                             value = row.value,
@@ -301,30 +314,59 @@ private fun DetailContent(
                             onOpenPerson = onOpenPerson,
                             linkPartsAsGenres = row.id == "genre",
                             onOpenGenre = { onOpenGenre(it, genreMediaType) },
+                            maxLines = if (showAllAbout) Int.MAX_VALUE else if (hideLongMeta) 1 else Int.MAX_VALUE,
+                            onTruncated = { if (it) hasTruncatedValue = true },
                         )
                     }
                 } else {
-                    MetaRow("Год", year?.toString())
-                    MetaRow("Страны", detail.countries.joinToString(", ").ifBlank { null })
+                    val ml = if (showAllAbout) Int.MAX_VALUE else if (hideLongMeta) 1 else Int.MAX_VALUE
+                    MetaRow("Год", year?.toString(), maxLines = ml, onTruncated = { if (it) hasTruncatedValue = true })
+                    MetaRow("Страны", detail.countries.joinToString(", ").ifBlank { null }, maxLines = ml, onTruncated = { if (it) hasTruncatedValue = true })
                     MetaRow(
                         label = "Жанры",
                         value = detail.genres.joinToString(", ").ifBlank { null },
                         linkPartsAsGenres = true,
                         onOpenGenre = { onOpenGenre(it, genreMediaType) },
+                        maxLines = ml,
+                        onTruncated = { if (it) hasTruncatedValue = true },
                     )
                     MetaRow(
                         "Длительность",
                         detail.duration?.formatted
                             ?: detail.duration?.minutes?.let { "$it мин" },
+                        maxLines = ml,
+                        onTruncated = { if (it) hasTruncatedValue = true },
                     )
                     MetaRow(
                         label = "Режиссёр",
                         value = detail.director,
                         personIds = detail.directorPersonIds,
                         onOpenPerson = onOpenPerson,
+                        maxLines = ml,
+                        onTruncated = { if (it) hasTruncatedValue = true },
                     )
-                    MetaRow("Дистрибьютор", detail.production?.distributor)
-                    MetaRow("Бюджет", detail.production?.budget)
+                    MetaRow("Дистрибьютор", detail.production?.distributor, maxLines = ml, onTruncated = { if (it) hasTruncatedValue = true })
+                    MetaRow("Бюджет", detail.production?.budget, maxLines = ml, onTruncated = { if (it) hasTruncatedValue = true })
+                }
+
+                if (hasTruncatedValue && hideLongMeta) {
+                    Box(
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(top = 4.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        OutlinedButton(
+                            onClick = { showAllAbout = !showAllAbout },
+                        ) {
+                            Text(
+                                text = if (showAllAbout) stringResource(R.string.detail_about_collapse)
+                                else stringResource(R.string.detail_about_show_all),
+                                fontSize = metrics.detailFavTextSize,
+                                fontWeight = FontWeight.SemiBold,
+                            )
+                        }
+                    }
                 }
 
                 if (trailerClips.isNotEmpty()) {
@@ -426,7 +468,7 @@ private fun DetailContent(
                 iframeUrl = playerIframeUrl,
                 embedHtml = playerEmbedHtml,
                 loading = playerLoading,
-                needsLogin = playerNeedsLogin,
+                needsLogin = showLoginWall,
                 mediaType = detail.mediaType,
                 diaryStatusLabel = diaryStatusLabel,
                 diaryBusy = diaryBusy,
@@ -439,6 +481,7 @@ private fun DetailContent(
                 onRemoveFromDiary = onRemoveFromDiary,
                 onConsumeDiaryNotify = onConsumeDiaryNotify,
                 onPlayerReaction = onPlayerReaction,
+                onLoginClick = onNeedLogin,
                 padding = metrics.screenPadding,
                 metaSize = metrics.cardMetaSize,
                 webHolder = playerHolder,

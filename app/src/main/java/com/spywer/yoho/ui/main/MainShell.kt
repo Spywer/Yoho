@@ -14,13 +14,13 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.ui.Alignment
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Explore
-import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material.icons.outlined.Explore
-import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Person
+import androidx.compose.material.icons.outlined.VideoLibrary
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
@@ -35,6 +35,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -56,7 +57,10 @@ import com.spywer.yoho.ui.account.AccountScreen
 import com.spywer.yoho.ui.detail.LocalDetailPip
 import com.spywer.yoho.ui.detail.TitleDetailScreen
 import com.spywer.yoho.ui.detail.TitleDetailViewModel
-import com.spywer.yoho.ui.favorites.FavoritesScreen
+import com.spywer.yoho.ui.collection.CollectionHubScreen
+import com.spywer.yoho.ui.collection.CollectionScreen
+import com.spywer.yoho.ui.collection.CollectionShelf
+import com.spywer.yoho.ui.collection.CollectionViewModel
 import com.spywer.yoho.ui.home.HomeScreen
 import com.spywer.yoho.ui.layout.LocalHomeMetrics
 import com.spywer.yoho.ui.layout.rememberHomeMetrics
@@ -71,6 +75,13 @@ enum class MainTab {
     Favorites,
     Account,
 }
+
+/** Внешний запрос открыть деталку (из Diary/Favorites Activity → Main). */
+data class TitleOpenRequest(
+    val idKp: Int?,
+    val idTmdb: Int?,
+    val mediaType: String?,
+)
 
 private data class TabSpec(
     val tab: MainTab,
@@ -98,14 +109,52 @@ private data class TitleRoute(
     }
 }
 
+private data class AccountReturnTarget(
+    val tab: MainTab,
+    val shelf: String?,
+    val titles: List<TitleRoute>,
+) {
+    fun encode(): String {
+        val titlesPart = titles.joinToString(";") { it.encode() }
+        return "${tab.name}#${shelf.orEmpty()}#$titlesPart"
+    }
+
+    companion object {
+        fun decode(raw: String): AccountReturnTarget {
+            val parts = raw.split('#', limit = 3)
+            val tab = parts.getOrNull(0)
+                ?.let { runCatching { MainTab.valueOf(it) }.getOrNull() }
+                ?: MainTab.Home
+            val shelf = parts.getOrNull(1)?.takeIf { it.isNotBlank() }
+            val titles = parts.getOrNull(2)
+                ?.takeIf { it.isNotBlank() }
+                ?.split(';')
+                ?.map { TitleRoute.decode(it) }
+                .orEmpty()
+            return AccountReturnTarget(tab = tab, shelf = shelf, titles = titles)
+        }
+    }
+}
+
 @Composable
-fun MainShell() {
-    var tab by rememberSaveable { mutableStateOf(MainTab.Home) }
+fun MainShell(
+    initialTab: MainTab? = null,
+    openTabRequest: MainTab? = null,
+    onOpenTabConsumed: () -> Unit = {},
+    openTitleRequest: TitleOpenRequest? = null,
+    onOpenTitleConsumed: () -> Unit = {},
+    openShelfRequest: CollectionShelf? = null,
+    onOpenShelfConsumed: () -> Unit = {},
+    openActorRequest: Pair<String, String>? = null,
+    onOpenActorConsumed: () -> Unit = {},
+) {
+    var tab by rememberSaveable { mutableStateOf(initialTab ?: MainTab.Home) }
+    var collectionShelf by rememberSaveable { mutableStateOf<String?>(null) }
+    var lastCatalogTab by remember { mutableStateOf<MainTab?>(null) }
     val catalogVm: SearchViewModel = viewModel()
     val context = LocalContext.current
     val focusManager = LocalFocusManager.current
     val keyboard = LocalSoftwareKeyboardController.current
-
     val titleStack = rememberSaveable(
         saver = listSaver(
             save = { list -> list.map { it.encode() } },
@@ -113,6 +162,62 @@ fun MainShell() {
         ),
     ) {
         emptyList<TitleRoute>().toMutableStateList()
+    }
+    var accountReturnTarget by rememberSaveable(
+        stateSaver = Saver<AccountReturnTarget?, String>(
+            save = { it?.encode().orEmpty() },
+            restore = { raw ->
+                raw.takeIf { it.isNotEmpty() }?.let { AccountReturnTarget.decode(it) }
+            },
+        ),
+    ) {
+        mutableStateOf<AccountReturnTarget?>(null)
+    }
+
+    fun openAccountFromCurrent() {
+        if (tab != MainTab.Account || titleStack.isNotEmpty()) {
+            accountReturnTarget = AccountReturnTarget(
+                tab = if (tab == MainTab.Account) MainTab.Home else tab,
+                shelf = collectionShelf,
+                titles = titleStack.toList(),
+            )
+        }
+        titleStack.clear()
+        collectionShelf = null
+        tab = MainTab.Account
+    }
+
+    fun returnFromAccount() {
+        val target = accountReturnTarget
+        accountReturnTarget = null
+        if (target != null) {
+            titleStack.clear()
+            titleStack.addAll(target.titles)
+            collectionShelf = target.shelf
+            tab = target.tab
+        } else {
+            tab = MainTab.Home
+        }
+    }
+
+    LaunchedEffect(initialTab) {
+        if (initialTab != null) tab = initialTab
+    }
+    LaunchedEffect(openTabRequest) {
+        val target = openTabRequest ?: return@LaunchedEffect
+        accountReturnTarget = null
+        titleStack.clear()
+        collectionShelf = null
+        tab = target
+        onOpenTabConsumed()
+    }
+    LaunchedEffect(openTabRequest, openActorRequest) {
+        if (openTabRequest == MainTab.Catalog) {
+            catalogVm.clearFilters()
+        }
+        val req = openActorRequest ?: return@LaunchedEffect
+        catalogVm.setInitial(actor = req.first, actorKp = req.second)
+        onOpenActorConsumed()
     }
 
     fun openTitle(idKp: Int?, idTmdb: Int?, mediaType: String?) {
@@ -126,29 +231,60 @@ fun MainShell() {
         }
     }
 
+    fun openShelf(shelf: CollectionShelf) {
+        tab = MainTab.Favorites
+        collectionShelf = shelf.name
+    }
+
+    LaunchedEffect(openTitleRequest) {
+        val req = openTitleRequest ?: return@LaunchedEffect
+        openTitle(req.idKp, req.idTmdb, req.mediaType)
+        onOpenTitleConsumed()
+    }
+
+    LaunchedEffect(openShelfRequest) {
+        val shelf = openShelfRequest ?: return@LaunchedEffect
+        openShelf(shelf)
+        onOpenShelfConsumed()
+    }
+
     LaunchedEffect(Unit) {
         SessionRepository.refresh()
     }
 
     // Каталог держит IME; при уходе с вкладки / открытии карточки — закрыть.
+    // При уходе с Catalog — сбросить фильтры, чтобы при возврате каталог был пустым.
+    // lastCatalogTab — отслеживаем, когда пользователь реально переключился с Catalog.
     LaunchedEffect(tab, titleStack.size) {
         if (tab != MainTab.Catalog || titleStack.isNotEmpty()) {
             focusManager.clearFocus(force = true)
             keyboard?.hide()
+        }
+        if (lastCatalogTab == MainTab.Catalog && tab != MainTab.Catalog && titleStack.isEmpty()) {
+            catalogVm.clearFilters()
+        }
+        if (tab == MainTab.Catalog) {
+            lastCatalogTab = MainTab.Catalog
         }
     }
 
     val tabs = listOf(
         TabSpec(MainTab.Home, R.string.nav_home, Icons.Filled.Home, Icons.Outlined.Home),
         TabSpec(MainTab.Catalog, R.string.nav_catalog, Icons.Filled.Explore, Icons.Outlined.Explore),
-        TabSpec(MainTab.Favorites, R.string.nav_favorites, Icons.Filled.Favorite, Icons.Outlined.FavoriteBorder),
+        TabSpec(MainTab.Favorites, R.string.nav_favorites, Icons.Filled.VideoLibrary, Icons.Outlined.VideoLibrary),
         TabSpec(MainTab.Account, R.string.nav_account, Icons.Filled.Person, Icons.Outlined.Person),
     )
     val metrics = rememberHomeMetrics()
 
-    // Каталог / избранное / аккаунт → на главную (карточка тайтла сама перехватывает назад).
-    BackHandler(enabled = titleStack.isEmpty() && tab != MainTab.Home) {
-        tab = MainTab.Home
+    // Полка → хаб; иначе каталог/избранное/аккаунт → главная (деталка сама ловит назад).
+    BackHandler(
+        enabled = titleStack.isEmpty() && (collectionShelf != null || tab != MainTab.Home),
+    ) {
+        when {
+            tab == MainTab.Account -> returnFromAccount()
+            collectionShelf != null -> collectionShelf = null
+            else -> tab = MainTab.Home
+        }
     }
 
     val inPip = LocalDetailPip.current?.inPipState?.value == true
@@ -184,8 +320,16 @@ fun MainShell() {
                             NavigationBarItem(
                                 selected = selected,
                                 onClick = {
-                                    titleStack.clear()
-                                    tab = spec.tab
+                                    if (spec.tab == MainTab.Account) {
+                                        if (tab != MainTab.Account || titleStack.isNotEmpty()) {
+                                            openAccountFromCurrent()
+                                        }
+                                    } else {
+                                        accountReturnTarget = null
+                                        titleStack.clear()
+                                        collectionShelf = null
+                                        tab = spec.tab
+                                    }
                                 },
                                 icon = {
                                     val compactNav = !metrics.isTablet
@@ -254,14 +398,35 @@ fun MainShell() {
                         onBack = { tab = MainTab.Home },
                         showBack = false,
                         title = stringResource(R.string.nav_catalog),
+                        restoreSearchFocus = titleStack.isEmpty(),
                         onOpenTitle = ::openTitle,
                     )
-                    MainTab.Favorites -> FavoritesScreen(
-                        onNeedLogin = { tab = MainTab.Account },
-                        onOpenTitle = ::openTitle,
-                    )
+                    MainTab.Favorites -> {
+                        val shelf = collectionShelf?.let { name ->
+                            runCatching { CollectionShelf.valueOf(name) }.getOrNull()
+                        }
+                        if (shelf != null) {
+                            val shelfVm: CollectionViewModel = viewModel(
+                                key = "collection-shelf-${shelf.name}",
+                                factory = CollectionViewModel.factory(shelf),
+                            )
+                            CollectionScreen(
+                                viewModel = shelfVm,
+                                fixedShelf = shelf,
+                                onBack = { collectionShelf = null },
+                                onNeedLogin = { openAccountFromCurrent() },
+                                onOpenTitle = ::openTitle,
+                            )
+                        } else {
+                            CollectionHubScreen(
+                                onOpenTitle = ::openTitle,
+                                onOpenShelf = ::openShelf,
+                                onNeedLogin = { openAccountFromCurrent() },
+                            )
+                        }
+                    }
                     MainTab.Account -> AccountScreen(
-                        onBack = { tab = MainTab.Home },
+                        onBack = ::returnFromAccount,
                     )
                 }
             }
@@ -279,6 +444,7 @@ fun MainShell() {
                     viewModel = detailVm,
                     onBack = ::closeTitle,
                     onOpenTitle = ::openTitle,
+                    onNeedLogin = { openAccountFromCurrent() },
                     onOpenGenre = { genreLabel, mediaType ->
                         val slug = genreSlugOf(genreLabel) ?: return@TitleDetailScreen
                         context.startActivity(

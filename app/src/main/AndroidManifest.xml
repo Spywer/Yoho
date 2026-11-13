@@ -14,6 +14,7 @@
         android:name=".YohoApp"
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
+        android:enableOnBackInvokedCallback="true"
         android:fullBackupContent="@xml/backup_rules"
         android:hasFragileUserData="true"
         android:icon="@mipmap/ic_launcher"
@@ -23,7 +24,7 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.Yoho"
         android:usesCleartextTraffic="true"
-        tools:targetApi="29">
+        tools:targetApi="33">
 
         <meta-data
             android:name="developer.name"
@@ -33,7 +34,7 @@
             android:value="spywer@mail.ru" />
         <meta-data
             android:name="developer.website"
-            android:value="https://x-iweb.ru" />
+            android:value="https://spywer.ru" />
         <meta-data
             android:name="developer.telegram"
             android:value="Spywer" />
@@ -63,6 +64,27 @@
             android:theme="@style/Theme.Yoho"
             android:windowSoftInputMode="adjustResize" />
         <activity
+            android:name=".ui.collection.FavoritesListActivity"
+            android:exported="false"
+            android:label="@string/favorites_section"
+            android:parentActivityName=".MainActivity"
+            android:resizeableActivity="true"
+            android:theme="@style/Theme.Yoho" />
+        <activity
+            android:name=".ui.collection.DiaryActivity"
+            android:exported="false"
+            android:label="@string/diary_section"
+            android:parentActivityName=".MainActivity"
+            android:resizeableActivity="true"
+            android:theme="@style/Theme.Yoho" />
+        <activity
+            android:name=".ui.collection.HistoryActivity"
+            android:exported="false"
+            android:label="@string/history_section"
+            android:parentActivityName=".MainActivity"
+            android:resizeableActivity="true"
+            android:theme="@style/Theme.Yoho" />
+        <activity
             android:name=".ui.detail.TitleDetailActivity"
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden"
             android:exported="false"
@@ -78,6 +100,19 @@
             android:parentActivityName=".MainActivity"
             android:resizeableActivity="true"
             android:theme="@style/Theme.Yoho" />
+        <activity
+            android:name=".ui.legal.LegalDocumentActivity"
+            android:exported="false"
+            android:parentActivityName=".MainActivity"
+            android:resizeableActivity="true"
+            android:theme="@style/Theme.Yoho" />
+        <activity
+            android:name=".ui.account.AccountActivity"
+            android:exported="false"
+            android:parentActivityName=".MainActivity"
+            android:resizeableActivity="true"
+            android:theme="@style/Theme.Yoho"
+            android:windowSoftInputMode="adjustResize" />
     </application>
 
 </manifest>

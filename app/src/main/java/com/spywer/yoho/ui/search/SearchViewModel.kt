@@ -7,6 +7,7 @@ import com.spywer.yoho.data.remote.SearchFacetsDto
 import com.spywer.yoho.data.remote.SearchFiltersCatalogDto
 import com.spywer.yoho.data.remote.TitleDto
 import com.spywer.yoho.data.remote.toTitle
+
 import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
@@ -50,20 +51,30 @@ class SearchViewModel : ViewModel() {
         query: String? = null,
         genre: String? = null,
         type: String? = null,
+        actor: String? = null,
+        actorKp: String? = null,
     ) {
-        if (initialApplied) return
-        initialApplied = true
+        searchJob?.cancel()
+        val snapshot = _state.value
+        val filtersSet = snapshot.filters.actors.isNotEmpty() || snapshot.filters.genres.isNotEmpty() || snapshot.filters.types.isNotEmpty()
+        if (filtersSet) return
         val genreSlug = genre?.let { genreSlugOf(it) ?: it.trim().takeIf { s -> s.isNotEmpty() } }
         val typeVal = type?.trim()?.takeIf {
             it.isNotEmpty() && it != "all" && DefaultSearchTypes.any { t -> t.value == it }
         }
-        if (genreSlug == null && typeVal == null && query.isNullOrBlank()) return
+        val actorRef = actorKp?.toIntOrNull()?.let { kp ->
+            val name = actor?.trim()?.takeIf { it.isNotEmpty() }
+            PersonFilterRef(name ?: "", kp)
+        }
+        val hasInitial = genreSlug != null || typeVal != null || actorRef != null
+        if (!hasInitial && query.isNullOrBlank()) return
         _state.update { s ->
             s.copy(
                 query = query?.trim().orEmpty().ifBlank { s.query },
                 filters = s.filters.copy(
                     genres = if (genreSlug != null) setOf(genreSlug) else s.filters.genres,
                     types = if (typeVal != null) setOf(typeVal) else s.filters.types,
+                    actors = if (actorRef != null) listOf(actorRef) else s.filters.actors,
                 ),
             )
         }
@@ -115,6 +126,7 @@ class SearchViewModel : ViewModel() {
         searchJob?.cancel()
         _state.update {
             it.copy(
+                query = "",
                 filters = SearchFilterState(),
                 results = emptyList(),
                 total = 0,
