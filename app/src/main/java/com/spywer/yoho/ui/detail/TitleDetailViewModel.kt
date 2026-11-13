@@ -437,7 +437,7 @@ class TitleDetailViewModel : ViewModel() {
                 selectedPlayerSource = null,
                 playerIframeUrl = null,
                 playerEmbedHtml = null,
-                playerNeedsLogin = false,
+                playerNeedsLogin = true,
             )
         }
     }

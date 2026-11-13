@@ -29,6 +29,7 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
@@ -39,14 +40,18 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.PlaylistAdd
 import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material.icons.filled.Groups
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.ThumbDown
 import androidx.compose.material.icons.filled.ThumbUp
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -65,12 +70,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
@@ -108,6 +115,7 @@ internal fun PlayerBlock(
     onRemoveFromDiary: () -> Unit,
     onConsumeDiaryNotify: () -> Unit,
     onPlayerReaction: (String) -> Unit,
+    onLoginClick: () -> Unit,
     padding: androidx.compose.ui.unit.Dp,
     metaSize: androidx.compose.ui.unit.TextUnit,
     /** Holder с экрана — общий lifecycle WebView на время деталки. */
@@ -115,7 +123,7 @@ internal fun PlayerBlock(
     modifier: Modifier = Modifier,
 ) {
     val playUrl = remember(iframeUrl) { normalizePlayerUrl(iframeUrl) }
-    val hasPlayer = !playUrl.isNullOrBlank() || !embedHtml.isNullOrBlank()
+    val hasPlayer = !needsLogin && (!playUrl.isNullOrBlank() || !embedHtml.isNullOrBlank())
     // Заглушка «нет источников» — без учёта player-choice (чипы).
     val noSources = !needsLogin && !hasPlayer
     val context = LocalContext.current
@@ -182,7 +190,7 @@ internal fun PlayerBlock(
             .padding(horizontal = padding)
             .padding(top = 8.dp, bottom = 8.dp),
     ) {
-            if (choices.isNotEmpty() && !loading) {
+            if (choices.isNotEmpty() && !loading && !needsLogin) {
                 Row(
                     Modifier
                         .horizontalScroll(rememberScrollState())
@@ -203,70 +211,74 @@ internal fun PlayerBlock(
                 Spacer(Modifier.height(LocalHomeMetrics.current.blockGap))
             }
 
-            Box(
-                Modifier
-                    .fillMaxWidth()
-                    .aspectRatio(16f / 9f)
-                    .clip(RoundedCornerShape(14.dp))
-                    .background(Color.Black),
-                contentAlignment = Alignment.Center,
-            ) {
-                when {
-                    // Не снимать WebView на время loading — иначе первый loadUrl до attach
-                    // иногда даёт пустой кадр до ручного переключения источника.
-                    hasPlayer -> {
-                        PlayerWebView(
-                            url = playUrl,
-                            embedHtml = embedHtml,
-                            source = selectedSource,
-                            holder = webHolder,
-                            modifier = Modifier.fillMaxSize(),
-                        )
-                        if (fullscreen) {
-                            Text(
-                                text = stringResource(R.string.detail_player_fullscreen_hint),
-                                color = Color.White.copy(alpha = 0.7f),
-                                fontSize = metaSize,
-                                textAlign = TextAlign.Center,
-                                modifier = Modifier.padding(16.dp),
+            if (needsLogin && !loading && !hasPlayer) {
+                PlayerLoginPlaceholder(
+                    onLoginClick = onLoginClick,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            } else {
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .aspectRatio(16f / 9f)
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(Color.Black),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    when {
+                        // Не снимать WebView на время loading — иначе первый loadUrl до attach
+                        // иногда даёт пустой кадр до ручного переключения источника.
+                        hasPlayer -> {
+                            PlayerWebView(
+                                url = playUrl,
+                                embedHtml = embedHtml,
+                                source = selectedSource,
+                                holder = webHolder,
+                                modifier = Modifier.fillMaxSize(),
+                            )
+                            if (fullscreen) {
+                                Text(
+                                    text = stringResource(R.string.detail_player_fullscreen_hint),
+                                    color = Color.White.copy(alpha = 0.7f),
+                                    fontSize = metaSize,
+                                    textAlign = TextAlign.Center,
+                                    modifier = Modifier.padding(16.dp),
+                                )
+                            }
+                        }
+                        loading -> Unit
+                        noSources -> {
+                            NoSourcesPlaceholder(
+                                mediaType = mediaType,
+                                diaryStatusLabel = diaryStatusLabel,
+                                diaryBusy = diaryBusy,
+                                onSetDiaryStatus = onSetDiaryStatus,
+                                onRemoveFromDiary = onRemoveFromDiary,
+                                metaSize = metaSize,
                             )
                         }
-                    }
-                    loading -> Unit
-                    noSources -> {
-                        NoSourcesPlaceholder(
-                            mediaType = mediaType,
-                            diaryStatusLabel = diaryStatusLabel,
-                            diaryBusy = diaryBusy,
-                            onSetDiaryStatus = onSetDiaryStatus,
-                            onRemoveFromDiary = onRemoveFromDiary,
-                            metaSize = metaSize,
-                        )
-                    }
-                    else -> {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            modifier = Modifier.padding(horizontal = 16.dp),
-                        ) {
-                            Icon(
-                                Icons.Filled.PlayArrow,
-                                contentDescription = null,
-                                tint = Color.White.copy(alpha = 0.7f),
-                                modifier = Modifier.size(48.dp),
-                            )
-                            Text(
-                                text = when {
-                                    needsLogin -> stringResource(R.string.detail_player_needs_login)
-                                    selectedSource != null ->
+                        else -> {
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                modifier = Modifier.padding(horizontal = 16.dp),
+                            ) {
+                                Icon(
+                                    Icons.Filled.PlayArrow,
+                                    contentDescription = null,
+                                    tint = Color.White.copy(alpha = 0.7f),
+                                    modifier = Modifier.size(48.dp),
+                                )
+                                Text(
+                                    text = if (selectedSource != null) {
                                         "Источник: ${displayPlayerSourceName(selectedSource)}"
-                                    else -> stringResource(R.string.detail_player_pick)
-                                },
-                                color = Color.White.copy(alpha = 0.85f),
-                                fontSize = metaSize,
-                                textAlign = TextAlign.Center,
-                                modifier = Modifier.padding(top = 8.dp),
-                            )
-                            if (!needsLogin) {
+                                    } else {
+                                        stringResource(R.string.detail_player_pick)
+                                    },
+                                    color = Color.White.copy(alpha = 0.85f),
+                                    fontSize = metaSize,
+                                    textAlign = TextAlign.Center,
+                                    modifier = Modifier.padding(top = 8.dp),
+                                )
                                 Text(
                                     text = stringResource(R.string.detail_player_no_iframe),
                                     color = Color.White.copy(alpha = 0.55f),
@@ -277,19 +289,19 @@ internal fun PlayerBlock(
                             }
                         }
                     }
-                }
-                if (loading) {
-                    Box(
-                        Modifier
-                            .fillMaxSize()
-                            .background(Color.Black),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        CircularProgressIndicator(
-                            Modifier.size(28.dp),
-                            color = MaterialTheme.colorScheme.primary,
-                            strokeWidth = 3.dp,
-                        )
+                    if (loading) {
+                        Box(
+                            Modifier
+                                .fillMaxSize()
+                                .background(Color.Black),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            CircularProgressIndicator(
+                                Modifier.size(28.dp),
+                                color = MaterialTheme.colorScheme.primary,
+                                strokeWidth = 3.dp,
+                            )
+                        }
                     }
                 }
             }
@@ -309,6 +321,88 @@ internal fun PlayerBlock(
                     onCinema = { fullscreen = true },
                 )
             }
+    }
+}
+
+@Composable
+private fun PlayerLoginPlaceholder(
+    onLoginClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val metrics = LocalHomeMetrics.current
+    val primary = MaterialTheme.colorScheme.primary
+    val onPrimary = MaterialTheme.colorScheme.onPrimary
+    val shape = RoundedCornerShape(14.dp)
+
+    Row(
+        modifier = modifier
+            .clip(shape)
+            .background(
+                Brush.horizontalGradient(
+                    colors = listOf(
+                        Color(0xFF1A2D49),
+                        Color(0xFF162338),
+                    ),
+                ),
+            )
+            .border(
+                width = 1.dp,
+                color = primary.copy(alpha = 0.45f),
+                shape = shape,
+            )
+            .padding(
+                horizontal = if (metrics.isTablet) 20.dp else 14.dp,
+                vertical = if (metrics.isTablet) 16.dp else 12.dp,
+            ),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(if (metrics.isTablet) 16.dp else 12.dp),
+    ) {
+        Box(
+            modifier = Modifier
+                .size(if (metrics.isTablet) 44.dp else 36.dp)
+                .clip(CircleShape)
+                .background(primary.copy(alpha = 0.22f)),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                imageVector = Icons.Filled.Lock,
+                contentDescription = null,
+                tint = primary,
+                modifier = Modifier.size(if (metrics.isTablet) 22.dp else 18.dp),
+            )
+        }
+
+        Text(
+            text = stringResource(R.string.detail_player_login_prompt),
+            color = MaterialTheme.colorScheme.onBackground,
+            fontSize = if (metrics.isTablet) metrics.detailBodySize else metrics.detailMetaSize,
+            lineHeight = if (metrics.isTablet) metrics.detailBodyLine else metrics.detailMetaLine,
+            fontWeight = FontWeight.Medium,
+            textAlign = TextAlign.Start,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f),
+        )
+
+        Button(
+            onClick = onLoginClick,
+            shape = RoundedCornerShape(10.dp),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = primary,
+                contentColor = onPrimary,
+            ),
+            contentPadding = PaddingValues(
+                horizontal = if (metrics.isTablet) 20.dp else 14.dp,
+                vertical = 0.dp,
+            ),
+            modifier = Modifier.height(if (metrics.isTablet) 42.dp else 36.dp),
+        ) {
+            Text(
+                text = stringResource(R.string.detail_player_login_button),
+                fontSize = if (metrics.isTablet) metrics.searchTextSize else metrics.chipTextSize,
+                fontWeight = FontWeight.SemiBold,
+            )
+        }
     }
 }
 

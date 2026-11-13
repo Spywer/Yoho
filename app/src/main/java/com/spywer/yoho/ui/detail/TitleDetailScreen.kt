@@ -72,6 +72,7 @@ fun TitleDetailScreen(
     onBack: () -> Unit,
     onOpenTitle: (idKp: Int?, idTmdb: Int?, mediaType: String?) -> Unit,
     onOpenGenre: (label: String, mediaType: String?) -> Unit,
+    onNeedLogin: () -> Unit = {},
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val session by SessionRepository.state.collectAsStateWithLifecycle()
@@ -154,6 +155,7 @@ fun TitleDetailScreen(
                             onOpenTitle = onOpenTitle,
                             onOpenPerson = { selectedPersonId = it },
                             onOpenGenre = onOpenGenre,
+                            onNeedLogin = onNeedLogin,
                         )
                     }
                 }
@@ -205,6 +207,7 @@ private fun DetailContent(
     onOpenTitle: (Int?, Int?, String?) -> Unit,
     onOpenPerson: (Int) -> Unit,
     onOpenGenre: (String, String?) -> Unit,
+    onNeedLogin: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val metrics = LocalHomeMetrics.current
@@ -247,7 +250,8 @@ private fun DetailContent(
             playerHolder.destroy()
         }
     }
-    if (pipMode && showPlayer) {
+    val showLoginWall = !showPlayer || playerNeedsLogin
+    if (pipMode && showPlayer && !showLoginWall) {
         DetailPipEligibilityEffect(eligible = true)
         DetailPipWebViewBindEffect(webView = playerHolder.webView)
         DisposableEffect(playerHolder) {
@@ -458,32 +462,31 @@ private fun DetailContent(
                 }
             }
 
-            if (showPlayer) {
-                PlayerBlock(
-                    choices = playerChoices,
-                    selectedSource = selectedPlayerSource,
-                    iframeUrl = playerIframeUrl,
-                    embedHtml = playerEmbedHtml,
-                    loading = playerLoading,
-                    needsLogin = playerNeedsLogin,
-                    mediaType = detail.mediaType,
-                    diaryStatusLabel = diaryStatusLabel,
-                    diaryBusy = diaryBusy,
-                    diaryError = diaryError,
-                    diaryNotify = diaryNotify,
-                    playerReaction = playerReaction,
-                    reactionBusy = reactionBusy,
-                    onSelectSource = onSelectPlayerSource,
-                    onSetDiaryStatus = onSetDiaryStatus,
-                    onRemoveFromDiary = onRemoveFromDiary,
-                    onConsumeDiaryNotify = onConsumeDiaryNotify,
-                    onPlayerReaction = onPlayerReaction,
-                    padding = metrics.screenPadding,
-                    metaSize = metrics.cardMetaSize,
-                    webHolder = playerHolder,
-                    modifier = Modifier.padding(top = metrics.sectionGap),
-                )
-            }
+            PlayerBlock(
+                choices = playerChoices,
+                selectedSource = selectedPlayerSource,
+                iframeUrl = playerIframeUrl,
+                embedHtml = playerEmbedHtml,
+                loading = playerLoading,
+                needsLogin = showLoginWall,
+                mediaType = detail.mediaType,
+                diaryStatusLabel = diaryStatusLabel,
+                diaryBusy = diaryBusy,
+                diaryError = diaryError,
+                diaryNotify = diaryNotify,
+                playerReaction = playerReaction,
+                reactionBusy = reactionBusy,
+                onSelectSource = onSelectPlayerSource,
+                onSetDiaryStatus = onSetDiaryStatus,
+                onRemoveFromDiary = onRemoveFromDiary,
+                onConsumeDiaryNotify = onConsumeDiaryNotify,
+                onPlayerReaction = onPlayerReaction,
+                onLoginClick = onNeedLogin,
+                padding = metrics.screenPadding,
+                metaSize = metrics.cardMetaSize,
+                webHolder = playerHolder,
+                modifier = Modifier.padding(top = metrics.sectionGap),
+            )
 
         TitleDetailScheduleSection(
             schedule = schedule,

@@ -187,6 +187,8 @@
     <string name="detail_player_no_sources_animation">мультфильма</string>
     <string name="detail_player_no_sources_hint">Плееры ещё не опубликовали этот тайтл – загляните позже</string>
     <string name="detail_player_needs_login">Плеер доступен после входа на YoHo (как на сайте). Нужна сессия yoho_session.</string>
+    <string name="detail_player_login_prompt">Войдите для просмотра видео или добавления его в коллекцию</string>
+    <string name="detail_player_login_button">Войти</string>
     <string name="detail_player_share">%1$d%% · %2$d</string>
     <string name="detail_player_fullscreen">На весь экран</string>
     <string name="detail_player_fullscreen_exit">Свернуть</string>

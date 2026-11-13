@@ -140,6 +140,8 @@ fun MainShell(
     }
     LaunchedEffect(openTabRequest) {
         val target = openTabRequest ?: return@LaunchedEffect
+        titleStack.clear()
+        collectionShelf = null
         tab = target
         onOpenTabConsumed()
     }
@@ -371,6 +373,11 @@ fun MainShell(
                     viewModel = detailVm,
                     onBack = ::closeTitle,
                     onOpenTitle = ::openTitle,
+                    onNeedLogin = {
+                        titleStack.clear()
+                        collectionShelf = null
+                        tab = MainTab.Account
+                    },
                     onOpenGenre = { genreLabel, mediaType ->
                         val slug = genreSlugOf(genreLabel) ?: return@TitleDetailScreen
                         context.startActivity(

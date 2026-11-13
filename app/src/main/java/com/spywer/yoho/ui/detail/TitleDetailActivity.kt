@@ -10,6 +10,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import com.spywer.yoho.MainActivity
 import com.spywer.yoho.ui.search.SearchActivity
 import com.spywer.yoho.ui.search.genreSlugOf
 import com.spywer.yoho.ui.theme.YohoTheme
@@ -37,6 +38,10 @@ class TitleDetailActivity : ComponentActivity() {
                     TitleDetailScreen(
                         viewModel = viewModel,
                         onBack = { finish() },
+                        onNeedLogin = {
+                            startActivity(MainActivity.intentOpenAccount(this@TitleDetailActivity))
+                            finish()
+                        },
                         onOpenTitle = { kp, tmdb, type ->
                             startActivity(intent(this@TitleDetailActivity, kp, tmdb, type))
                         },
